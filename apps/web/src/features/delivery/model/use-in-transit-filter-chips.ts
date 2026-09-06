@@ -1,13 +1,11 @@
 "use client";
 
-import type { Nullable } from "@app/shared";
-
 import { useLocale, useTranslations } from "next-intl";
 
 import type { ActiveFilterChip } from "@/features/books";
 import type { DeliveryReadControllerInTransitListFilter } from "@/shared/api/generated/model";
 
-import { rangeLabel } from "@/features/books/model/filter-chips";
+import { isStorableOrderId, rangeLabel, storableDay } from "@/features/books/model/filter-chips";
 import { formatDate } from "@/lib/format";
 
 import type { DeliveryAdvancedState } from "./in-transit-params";
@@ -16,7 +14,6 @@ import {
   DELIVERY_FILTER_DEFAULT,
   deliveryRangeFlags,
   isDeliveryPrimaryFilter,
-  isStorableDay,
   resolveDeliveryPriceCurrency,
   toDeliveryAttentionReason,
 } from "./in-transit-params";
@@ -39,6 +36,7 @@ export function useInTransitFilterChips({
   const tAdvanced = useTranslations("delivery.advancedFilters");
   const tAttention = useTranslations("delivery.attention.chip");
   const tAge = useTranslations("delivery.statistics.activeAge.buckets");
+  const tState = useTranslations("delivery.statistics.orderStatus");
 
   const chips: ActiveFilterChip[] = [];
   const isInverted = deliveryRangeFlags(state);
@@ -51,6 +49,22 @@ export function useInTransitFilterChips({
       key: "attention",
       label: t("attention", { label: tAttention(attentionReason) }),
       onRemove: () => onFilterChange(DELIVERY_FILTER_DEFAULT),
+    });
+  }
+
+  if (isStorableOrderId(state.orderId)) {
+    chips.push({
+      key: "orderId",
+      label: t("orderId"),
+      onRemove: () => onApplyAdvanced({ ...state, orderId: null }),
+    });
+  }
+
+  if (state.orderState !== null) {
+    chips.push({
+      key: "orderState",
+      label: t("orderState", { value: tState(state.orderState) }),
+      onRemove: () => onApplyAdvanced({ ...state, orderState: null }),
     });
   }
 
@@ -171,8 +185,4 @@ export function useInTransitFilterChips({
   }
 
   return chips;
-}
-
-function storableDay(value: Nullable<string>): Nullable<string> {
-  return isStorableDay(value) ? value : null;
 }

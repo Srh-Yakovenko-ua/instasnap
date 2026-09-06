@@ -6,6 +6,7 @@ import { BookOrderStatisticsCompareModeSchema } from "@app/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useId } from "react";
 
+import { UiIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { LibraryActiveFilters } from "@/features/books/components/library-active-filters";
 
 import type { UseStatisticsParamsResult } from "../../model/use-statistics-params";
 
@@ -25,6 +28,7 @@ import {
   defaultStatisticsCompareMode,
   STATISTICS_PERIOD_PRESETS,
 } from "../../model/statistics-period";
+import { useStatisticsFilterChips } from "../../model/use-statistics-filter-chips";
 import { DeliveryStatisticsFilters } from "../delivery-statistics-filters";
 
 const COMPARE_MODES = BookOrderStatisticsCompareModeSchema.options;
@@ -32,15 +36,22 @@ const COMPARE_MODES = BookOrderStatisticsCompareModeSchema.options;
 export function StatisticsToolbar({
   meta,
   params,
+  stores,
 }: {
   meta: Nullable<BookOrderStatisticsMeta>;
   params: UseStatisticsParamsResult;
+  stores: readonly string[];
 }) {
   const t = useTranslations("delivery.statistics.controls");
   const tPeriod = useTranslations("delivery.statistics.period");
   const locale = useLocale();
-  const cancelledId = useId();
   const compareId = useId();
+  const chips = useStatisticsFilterChips({
+    onIncludeCancelledChange: params.setIncludeCancelled,
+    onPatch: params.setFilters,
+    state: params.state,
+  });
+  const isRangeReversed = isReversedRange({ from: params.state.from, to: params.state.to });
 
   const currentPeriod = meta?.currentPeriod ?? params.periodRange;
   const currentLabel = formatPeriodRange({
@@ -82,26 +93,33 @@ export function StatisticsToolbar({
         </Select>
 
         {params.state.period === "custom" ? (
-          <div className="flex items-center gap-2">
-            <Input
-              aria-label={tPeriod("from")}
-              className="h-9 w-[9.5rem]"
-              onChange={(event) =>
-                params.setCustomRange({ from: event.target.value, to: params.state.to })
-              }
-              type="date"
-              value={params.state.from}
-            />
-            <span className="text-sm text-muted-foreground">–</span>
-            <Input
-              aria-label={tPeriod("to")}
-              className="h-9 w-[9.5rem]"
-              onChange={(event) =>
-                params.setCustomRange({ from: params.state.from, to: event.target.value })
-              }
-              type="date"
-              value={params.state.to}
-            />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label={tPeriod("from")}
+                className="h-9 w-[9.5rem]"
+                onChange={(event) =>
+                  params.setCustomRange({ from: event.target.value, to: params.state.to })
+                }
+                type="date"
+                value={params.state.from}
+              />
+              <span className="text-sm text-muted-foreground">–</span>
+              <Input
+                aria-label={tPeriod("to")}
+                className="h-9 w-[9.5rem]"
+                onChange={(event) =>
+                  params.setCustomRange({ from: params.state.from, to: event.target.value })
+                }
+                type="date"
+                value={params.state.to}
+              />
+            </div>
+            {isRangeReversed ? (
+              <p className="text-xs text-favorite" role="alert">
+                {tPeriod("rangeReversed")}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -113,26 +131,17 @@ export function StatisticsToolbar({
           ) : null}
           <DeliveryStatisticsFilters
             filterCount={params.filterCount}
+            includeCancelled={params.state.includeCancelled}
             onApply={params.setFilters}
+            onIncludeCancelledChange={params.setIncludeCancelled}
             onReset={params.clearFilters}
             state={params.state}
+            stores={stores}
           />
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <label
-          className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-foreground"
-          htmlFor={cancelledId}
-        >
-          <Switch
-            checked={params.state.includeCancelled}
-            id={cancelledId}
-            onCheckedChange={params.setIncludeCancelled}
-          />
-          {t("includeCancelled")}
-        </label>
-
         <label
           className="flex items-center gap-2.5 text-sm font-medium text-foreground data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-muted-foreground"
           data-disabled={!params.canCompare}
@@ -150,6 +159,19 @@ export function StatisticsToolbar({
           />
           {t("compare")}
         </label>
+
+        {params.canCompare ? null : (
+          <Tooltip>
+            <TooltipTrigger
+              aria-label={t("compareUnavailable")}
+              className="text-muted-foreground"
+              type="button"
+            >
+              <UiIcon name="info" size={14} />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-72">{t("compareUnavailable")}</TooltipContent>
+          </Tooltip>
+        )}
 
         {params.compareMode === null ? null : (
           <div className="flex items-center gap-2">
@@ -180,6 +202,8 @@ export function StatisticsToolbar({
         )}
       </div>
 
+      <LibraryActiveFilters chips={chips} onClearAll={params.clearFilters} />
+
       <p className="text-sm text-muted-foreground">
         {currentLabel === null
           ? tPeriod("allTimeCaption")
@@ -190,4 +214,8 @@ export function StatisticsToolbar({
       </p>
     </section>
   );
+}
+
+function isReversedRange({ from, to }: { from: string; to: string }): boolean {
+  return from !== "" && to !== "" && from > to;
 }

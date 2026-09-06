@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 import type { BookOrderStatisticsViewDtoBestValueStoreByCurrencyItemCurrency } from "./bookOrderStatisticsViewDtoBestValueStoreByCurrencyItemCurrency";
+import type { BookOrderStatisticsViewDtoBestValueStoreByCurrencyItemDrilldown } from "./bookOrderStatisticsViewDtoBestValueStoreByCurrencyItemDrilldown";
 
 /**
  * One winner per currency, never across currencies. A candidate needs at least two landed-eligible books; ties break by the most landed-eligible books, then by store name ascending.
@@ -13,10 +14,13 @@ import type { BookOrderStatisticsViewDtoBestValueStoreByCurrencyItemCurrency } f
 export type BookOrderStatisticsViewDtoBestValueStoreByCurrencyItem = {
   averageLandedBookCost: number;
   currency: BookOrderStatisticsViewDtoBestValueStoreByCurrencyItemCurrency;
+  /** Where this store's orders in this currency live. The record itself counts only books whose real cost is known, so this is context navigation and never an exact drill-down. */
+  drilldown: BookOrderStatisticsViewDtoBestValueStoreByCurrencyItemDrilldown;
   /**
    * @minimum 2
    * @maximum 9007199254740991
    */
   eligibleBooksCount: number;
   store: string;
+  storeKey: string;
 };

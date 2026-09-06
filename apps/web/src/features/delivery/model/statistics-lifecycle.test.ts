@@ -84,4 +84,22 @@ describe("lifecycleBreakdown", () => {
     expect(stages.find((row) => row.stage === "received")?.delta).toBe(-2);
     expect(stages.find((row) => row.stage === "active")?.delta).toBe(14);
   });
+
+  it("drops the unreachable partial stages from the books view", () => {
+    expect(lifecycleBreakdown(LIFECYCLE, "books").stages.map((row) => row.stage)).toEqual([
+      "active",
+      "shipped",
+      "received",
+    ]);
+  });
+
+  it("reports the real share of the total next to the peak-based bar", () => {
+    const { stages } = lifecycleBreakdown(LIFECYCLE, "orders");
+    const received = stages.find((row) => row.stage === "received");
+
+    expect({ share: received?.share, totalShare: received?.totalShare }).toEqual({
+      share: 1,
+      totalShare: 20 / 62,
+    });
+  });
 });

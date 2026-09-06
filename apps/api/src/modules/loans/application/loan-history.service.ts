@@ -10,7 +10,7 @@ import type {
   LoanHistoryPersonStats,
   LoanHistoryQuery,
   Nullable,
-  Paginator,
+  PaginatedLoanHistory,
   UpdateLoanHistoryInput,
 } from "@app/shared";
 
@@ -91,8 +91,8 @@ export class LoanHistoryService {
   }: {
     query: LoanHistoryQuery;
     userId: string;
-  }): Promise<Paginator<LoanHistoryListItemView>> {
-    const { items, totalCount } = await this.loanHistoryRepository.listHistory({
+  }): Promise<PaginatedLoanHistory> {
+    const { items, resultCounts, totalCount } = await this.loanHistoryRepository.listHistory({
       ...toHistoryScope({ query, userId }),
       result: query.result,
       search: normalizeSearch(query.search),
@@ -100,12 +100,15 @@ export class LoanHistoryService {
       ...pageSlice({ pageNumber: query.pageNumber, pageSize: query.pageSize }),
     });
 
-    return buildPaginator({
-      items: items.map((loan) => this.toListItemView(loan)),
-      pageNumber: query.pageNumber,
-      pageSize: query.pageSize,
-      totalCount,
-    });
+    return {
+      ...buildPaginator({
+        items: items.map((loan) => this.toListItemView(loan)),
+        pageNumber: query.pageNumber,
+        pageSize: query.pageSize,
+        totalCount,
+      }),
+      resultCounts,
+    };
   }
 
   async overview({
@@ -118,10 +121,16 @@ export class LoanHistoryService {
     const scope = toHistoryScope({ query, userId });
     const [row, topPeople] = await Promise.all([
       this.loanHistoryRepository.overview(scope),
-      this.loanHistoryRepository.topPeople({ ...scope, take: TOP_PEOPLE_LIMIT }),
+      this.loanHistoryRepository.topPeople({
+        ...toHistoryFacetScope({ query, userId }),
+        take: TOP_PEOPLE_LIMIT,
+      }),
     ]);
 
-    const onTimePercent = toPercent({ part: row.onTimeCount, whole: row.totalCompleted });
+    const onTimePercent = toOnTimePercent({
+      lateCount: row.lateCount,
+      onTimeCount: row.onTimeCount,
+    });
     const averageDurationDays = toAverage({
       divisor: row.durationCount,
       sum: row.totalDurationDays,
@@ -143,8 +152,8 @@ export class LoanHistoryService {
         averageDelayDays: toAverage({ divisor: row.lateCount, sum: row.totalDelayDays }),
         averageDurationDays,
         borrowedCount: row.borrowedCount,
+        durationCount: row.durationCount,
         lateCount: row.lateCount,
-        latePercent: toPercent({ part: row.lateCount, whole: row.totalCompleted }),
         lentCount: row.lentCount,
         noDueDateCount: row.noDueDateCount,
         onTimeCount: row.onTimeCount,
@@ -164,7 +173,12 @@ export class LoanHistoryService {
   }): Promise<LoanHistoryPeopleView> {
     const rows = await this.loanHistoryRepository.people({
       limit: query.limit,
+      loanDateFrom: query.loanDateFrom,
+      loanDateTo: query.loanDateTo,
+      returnedFrom: query.returnedFrom,
+      returnedTo: query.returnedTo,
       search: normalizeSearch(query.search),
+      type: query.type,
       userId,
     });
     return { items: rows.map((row) => toPersonOption(row)) };
@@ -256,15 +270,19 @@ function toCorrectedReturnedAt({
   return returnedAt;
 }
 
-function toHistoryScope({
+function toHistoryFacetScope({
   query,
   userId,
 }: {
-  query: Pick<LoanHistoryQuery, "contactId" | "returnedFrom" | "returnedTo" | "type">;
+  query: Pick<
+    LoanHistoryQuery,
+    "loanDateFrom" | "loanDateTo" | "returnedFrom" | "returnedTo" | "type"
+  >;
   userId: string;
-}): LoanHistoryScope {
+}): Omit<LoanHistoryScope, "contactId"> {
   return {
-    contactId: query.contactId,
+    loanDateFrom: query.loanDateFrom,
+    loanDateTo: query.loanDateTo,
     returnedFrom: query.returnedFrom,
     returnedTo: query.returnedTo,
     type: query.type,
@@ -272,8 +290,28 @@ function toHistoryScope({
   };
 }
 
-function toPercent({ part, whole }: { part: number; whole: number }): number {
-  return whole === 0 ? 0 : Math.round((part / whole) * 100);
+function toHistoryScope({
+  query,
+  userId,
+}: {
+  query: Pick<
+    LoanHistoryQuery,
+    "contactId" | "loanDateFrom" | "loanDateTo" | "returnedFrom" | "returnedTo" | "type"
+  >;
+  userId: string;
+}): LoanHistoryScope {
+  return { ...toHistoryFacetScope({ query, userId }), contactId: query.contactId };
+}
+
+function toOnTimePercent({
+  lateCount,
+  onTimeCount,
+}: {
+  lateCount: number;
+  onTimeCount: number;
+}): Nullable<number> {
+  const withDueDateCount = onTimeCount + lateCount;
+  return withDueDateCount === 0 ? null : Math.round((onTimeCount / withDueDateCount) * 100);
 }
 
 function toPersonOption(row: LoanHistoryPersonOptionRow): LoanHistoryPersonOption {

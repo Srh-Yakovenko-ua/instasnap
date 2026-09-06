@@ -9,24 +9,43 @@ import type { BookOrderStatisticsViewDtoLandedCostItemCurrency } from "./bookOrd
 
 export type BookOrderStatisticsViewDtoLandedCostItem = {
   /**
+   * Every book of this currency the period counted, whether or not its cost could be broken down. This is the denominator of coveragePercent.
    * @minimum 0
    * @maximum 9007199254740991
    */
-  countedBooksCount: number;
+  booksInScope: number;
   /**
-   * Share of landed-eligible books that actually received an allocated landed cost. It is 0, never null, when countedBooksCount is 0.
+   * The books whose cost the allocation could actually explain, so they carry a landed cost. This is the numerator of coveragePercent and can never exceed booksInScope.
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  booksWithLandedCost: number;
+  /**
+   * booksWithLandedCost over booksInScope. It is 0, never null, when nothing was in scope.
    * @minimum 0
    * @maximum 100
    */
   coveragePercent: number;
   currency: BookOrderStatisticsViewDtoLandedCostItemCurrency;
   /**
-   * @minimum 0
-   * @maximum 9007199254740991
+   * The part of a book's cost the base price, discount and delivery do not explain: the residual that makes the bridge reconcile with averageLandedBookCost. It is zero whenever the order invariant holds, because an order whose books are all priced may not carry a total that disagrees with them, and an order with an unpriced book is left out of the eligible set entirely. A non-zero value here means a rounding residual, not a real adjustment.
+   * @nullable
    */
-  eligibleBooksCount: number;
+  averageAdjustmentShare: number | null;
+  /** @nullable */
+  averageDeliveryShare: number | null;
+  /** @nullable */
+  averageDiscountShare: number | null;
+  /**
+   * The starting price of exactly the books that received a landed cost, so the bridge from it to averageLandedBookCost compares one population with itself. A book whose price was never recorded contributes zero here and its whole cost shows up in the adjustment stage.
+   * @nullable
+   */
+  averageEligibleRawBookPrice: number | null;
   /** @nullable */
   averageLandedBookCost: number | null;
-  /** @nullable */
-  differenceVsAverageRawBookPrice: number | null;
+  /**
+   * averageLandedBookCost minus averageEligibleRawBookPrice. Negative means a book ended up cheaper than its listed price.
+   * @nullable
+   */
+  deltaFromEligibleRawPrice: number | null;
 };

@@ -66,6 +66,7 @@ function statisticsOf({
 }): ReturnType<typeof computeBookOrderStatistics> {
   return computeBookOrderStatistics({
     activeRecords: activeRecords ?? records,
+    comparisonPeriod: null,
     includeCancelled,
     previousRecords: null,
     records,
@@ -245,19 +246,25 @@ describe("computeBookOrderStatistics by store", () => {
         averageLandedBookCostByCurrency: [],
         averageOrderAmountByCurrency: [],
         booksCount: 2,
+        booksCountByCurrency: [{ count: 2, currency: "UAH" }],
         deliveryTotalByCurrency: [{ currency: "UAH", total: 0 }],
         discountTotalByCurrency: [{ currency: "UAH", total: 0 }],
+        drilldown: {
+          targets: [{ booksCount: 2, destination: "in_transit", ordersCount: 1 }],
+        },
         landedCoverageByCurrency: [
           {
-            countedBooksCount: 2,
+            booksInScope: 2,
+            booksWithLandedCost: 0,
             coveragePercent: 0,
             currency: "UAH",
-            eligibleBooksCount: 0,
           },
         ],
         landedEligibleBooksCountByCurrency: [{ count: 0, currency: "UAH" }],
         ordersCount: 1,
+        ordersCountByCurrency: [{ count: 1, currency: "UAH" }],
         store: "Книгарня Є",
+        storeKey: "книгарня є",
         totalsByCurrency: [],
       },
     ]);
@@ -711,6 +718,9 @@ describe("computeBookOrderStatistics snapshot", () => {
     expect(summary.ordersCount).toBe(0);
     expect(snapshot).toEqual({
       activeBooksCount: 1,
+      activeMoneyCoverageByCurrency: [
+        { currency: "UAH", ordersInScope: 1, ordersWithResolvedAmount: 1 },
+      ],
       activeOrdersCount: 1,
       activeShipmentsCount: 1,
       activeTotalsByCurrency: [{ currency: "UAH", total: 340 }],
@@ -733,6 +743,7 @@ describe("computeBookOrderStatistics snapshot", () => {
     expect(summary.ordersCount).toBe(1);
     expect(snapshot).toEqual({
       activeBooksCount: 0,
+      activeMoneyCoverageByCurrency: [],
       activeOrdersCount: 0,
       activeShipmentsCount: 0,
       activeTotalsByCurrency: [],

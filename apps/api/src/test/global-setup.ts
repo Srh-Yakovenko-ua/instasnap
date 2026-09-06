@@ -14,6 +14,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
     env: { ...process.env, DATABASE_URL: config.templateUrl },
+    shell: true,
     stdio: "inherit",
   });
 

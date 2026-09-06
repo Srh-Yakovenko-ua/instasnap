@@ -63,6 +63,8 @@ model User {
   characterTheories         CharacterTheory[]
   characterRelationships    CharacterRelationship[]
   characterGraphLayouts     CharacterGraphLayout[]
+  readingCycles             BookReadingCycle[]
+  readingHistoryState       UserReadingHistoryState?
   notifications             Notification[]
   readingGoals              ReadingGoal[]
   readingGoalActivities     ReadingGoalActivity[]
@@ -258,6 +260,7 @@ model Book {
   lists                         BookListItem[]
   readingProgress               BookReadingProgress?
   readingEvents                 BookReadingProgressEvent[]
+  readingCycles                 BookReadingCycle[]
   purchaseInfo                  BookPurchaseInfo?
   orderItems                    BookOrderItem[]
   loans                         BookLoan[]
@@ -329,16 +332,54 @@ model BookReadingProgress {
 }
 
 model BookReadingProgressEvent {
-  id        String   @id @default(uuid()) @db.Uuid
-  bookId    String   @map("book_id") @db.Uuid
-  date      DateTime @db.Date
-  page      Int
-  pagesRead Int      @map("pages_read")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  id             String            @id @default(uuid()) @db.Uuid
+  bookId         String            @map("book_id") @db.Uuid
+  readingCycleId String?           @map("reading_cycle_id") @db.Uuid
+  date           DateTime          @db.Date
+  page           Int
+  pagesRead      Int               @map("pages_read")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  book           Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  readingCycle   BookReadingCycle? @relation(fields: [readingCycleId], references: [id], onDelete: SetNull)
 
   @@index([bookId, date])
+  @@index([readingCycleId])
   @@map("book_reading_progress_events")
+}
+
+model BookReadingCycle {
+  id                         String                     @id @default(uuid()) @db.Uuid
+  userId                     String                     @map("user_id") @db.Uuid
+  bookId                     String                     @map("book_id") @db.Uuid
+  state                      String
+  startedAt                  DateTime?                  @map("started_at") @db.Date
+  finishedAt                 DateTime?                  @map("finished_at") @db.Date
+  endedAt                    DateTime?                  @map("ended_at") @db.Date
+  rating                     Float?
+  completionMetadata         Json?                      @map("completion_metadata")
+  firstCompletionReliability String?                    @map("first_completion_reliability")
+  legacySourceKey            String?                    @unique @map("legacy_source_key")
+  createdAt                  DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime                   @updatedAt @map("updated_at") @db.Timestamptz
+  user                       User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book                       Book                       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  events                     BookReadingProgressEvent[]
+  qualifiedGoalBooks         ReadingGoalBook[]
+
+  @@index([userId, finishedAt])
+  @@index([bookId, state])
+  @@map("book_reading_cycles")
+}
+
+model UserReadingHistoryState {
+  userId                String   @id @map("user_id") @db.Uuid
+  activityReliableFrom  DateTime @map("activity_reliable_from") @db.Date
+  cycleHistoryCutoverAt DateTime @map("cycle_history_cutover_at") @db.Timestamptz
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_reading_history_state")
 }
 
 model BookPurchaseInfo {
@@ -443,25 +484,25 @@ model Shipment {
 }
 
 model BookLoan {
-  id                 String       @id @default(uuid()) @db.Uuid
-  userId             String       @map("user_id") @db.Uuid
-  bookId             String       @map("book_id") @db.Uuid
-  loanContactId      String       @map("loan_contact_id") @db.Uuid
+  id                 String      @id @default(uuid()) @db.Uuid
+  userId             String      @map("user_id") @db.Uuid
+  bookId             String      @map("book_id") @db.Uuid
+  loanContactId      String      @map("loan_contact_id") @db.Uuid
   type               String
-  personName         String       @map("person_name")
-  contact            String?      @map("contact")
-  loanDate           DateTime?    @map("loan_date") @db.Date
-  expectedReturnDate DateTime?    @map("expected_return_date") @db.Date
+  personName         String      @map("person_name")
+  contact            String?     @map("contact")
+  loanDate           DateTime?   @map("loan_date") @db.Date
+  expectedReturnDate DateTime?   @map("expected_return_date") @db.Date
   note               String?
-  remindToReturn     Boolean      @default(false) @map("remind_to_return")
-  remindBeforeDays   Int?         @map("remind_before_days")
-  status             String       @default("active")
-  returnedAt         DateTime?    @map("returned_at") @db.Timestamptz
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book               Book         @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  loanContact        LoanContact  @relation(fields: [loanContactId], references: [id], onDelete: Restrict)
+  remindToReturn     Boolean     @default(false) @map("remind_to_return")
+  remindBeforeDays   Int?        @map("remind_before_days")
+  status             String      @default("active")
+  returnedAt         DateTime?   @map("returned_at") @db.Timestamptz
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book               Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  loanContact        LoanContact @relation(fields: [loanContactId], references: [id], onDelete: Restrict)
 
   @@index([bookId])
   @@index([userId, status, returnedAt])
@@ -646,19 +687,22 @@ model ReadingGoal {
 }
 
 model ReadingGoalBook {
-  goalId              String    @map("goal_id") @db.Uuid
-  bookId              String    @map("book_id") @db.Uuid
-  position            Int       @default(0)
-  qualifiedFinishedAt DateTime? @map("qualified_finished_at") @db.Date
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  goalId                  String    @map("goal_id") @db.Uuid
+  bookId                  String    @map("book_id") @db.Uuid
+  position                Int       @default(0)
+  qualifiedFinishedAt     DateTime? @map("qualified_finished_at") @db.Date
+  qualifiedReadingCycleId String?   @map("qualified_reading_cycle_id") @db.Uuid
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  goal ReadingGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  book Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  goal                  ReadingGoal       @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  book                  Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  qualifiedReadingCycle BookReadingCycle? @relation(fields: [qualifiedReadingCycleId], references: [id], onDelete: SetNull)
 
   @@id([goalId, bookId])
   @@index([bookId])
   @@index([goalId, qualifiedFinishedAt])
+  @@index([qualifiedReadingCycleId])
   @@map("reading_goal_books")
 }
 

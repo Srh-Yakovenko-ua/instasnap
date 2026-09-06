@@ -36,7 +36,7 @@ export function buildActiveMoneyAge({
 }: {
   now: Date;
   orders: readonly ClassifiedOrder[];
-}): ActiveMoneyAgeResponse {
+}): Omit<ActiveMoneyAgeResponse, "source"> {
   const buckets = new Map<ActiveMoneyAgeBucket, AgeBucketAccumulator>();
 
   for (const order of orders) {

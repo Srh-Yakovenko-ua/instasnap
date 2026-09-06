@@ -74,6 +74,23 @@ async function readOverview(user: AuthenticatedUser = reader): Promise<BookBudge
   return BookBudgetOverviewSchema.parse(res.body);
 }
 
+function saveBudgets({
+  changes,
+  effectiveFromMonth = currentMonth(),
+  user = reader,
+}: {
+  changes: Record<string, unknown>[];
+  effectiveFromMonth?: string;
+  user?: AuthenticatedUser;
+}) {
+  return postJson({
+    accessToken: user.accessToken,
+    app,
+    body: { changes, effectiveFromMonth },
+    path: ORDER_ROUTES.budgetSave,
+  });
+}
+
 async function seedPastVersion({
   currency = "UAH",
   monthlyAmount,
@@ -123,6 +140,23 @@ async function spendToday({
   if (cancelled) {
     await cancelBooksOfOrder({ ...authed, bookIds: [bookId], view });
   }
+}
+
+function stopBudget({
+  currency = "UAH",
+  effectiveFromMonth = currentMonth(),
+  user = reader,
+}: {
+  currency?: string;
+  effectiveFromMonth?: string;
+  user?: AuthenticatedUser;
+} = {}) {
+  return postJson({
+    accessToken: user.accessToken,
+    app,
+    body: { effectiveFromMonth },
+    path: ORDER_ROUTES.budgetStop(currency),
+  });
 }
 
 function storedVersions(user: AuthenticatedUser = reader): Promise<StoredVersion[]> {
@@ -190,7 +224,7 @@ describe("POST /api/delivery/budgets", () => {
       usedPercent: 10.25,
       validFromMonth: currentMonth(),
     });
-    expect(budget?.scheduled).toBeNull();
+    expect(budget?.upcomingChanges).toEqual([]);
   });
 
   it("keeps each currency on its own budget, never on a shared one", async () => {
@@ -238,11 +272,9 @@ describe("POST /api/delivery/budgets", () => {
 
     const [budget] = BookBudgetOverviewSchema.parse(res.body).budgets;
     expect(budget?.currentMonth?.budget).toBe(8000);
-    expect(budget?.scheduled).toEqual({
-      monthlyAmount: 12000,
-      validFromMonth: monthsFromNow(2),
-      validToMonth: null,
-    });
+    expect(budget?.upcomingChanges).toEqual([
+      { effectiveFromMonth: monthsFromNow(2), kind: "change", monthlyAmount: 12000 },
+    ]);
   });
 
   it("closes the preceding version exactly where the new one begins", async () => {
@@ -301,7 +333,7 @@ describe("DELETE /api/delivery/budgets/:currency/scheduled", () => {
     });
 
     expect(res.status).toBe(HTTP.ok);
-    expect(BookBudgetOverviewSchema.parse(res.body).budgets[0]?.scheduled).toBeNull();
+    expect(BookBudgetOverviewSchema.parse(res.body).budgets[0]?.upcomingChanges).toEqual([]);
     await expect(storedVersions()).resolves.toEqual([
       { monthlyAmount: 8000, validFromMonth: currentMonth(), validToMonth: null },
     ]);
@@ -345,6 +377,82 @@ describe("DELETE /api/delivery/budgets/:currency/scheduled", () => {
       app,
       path: ORDER_ROUTES.budgetScheduled("BTC"),
     });
+
+    expect(res.status).toBe(HTTP.badRequest);
+  });
+});
+
+describe("POST /api/delivery/budgets/:currency/stop", () => {
+  it("takes the currency out of the answer once its budget stops this month", async () => {
+    await upsertBudget({ monthlyAmount: 8000 });
+
+    const res = await stopBudget();
+
+    expect(res.status).toBe(HTTP.ok);
+    expect(BookBudgetOverviewSchema.parse(res.body).budgets).toEqual([]);
+    await expect(storedVersions()).resolves.toEqual([]);
+  });
+
+  it("keeps the months already budgeted and closes the run at the chosen month", async () => {
+    await seedPastVersion({ monthlyAmount: 8000, monthsBack: 3 });
+
+    const res = await stopBudget({ effectiveFromMonth: monthsFromNow(1) });
+
+    expect(res.status).toBe(HTTP.ok);
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 8000, validFromMonth: monthsFromNow(-3), validToMonth: monthsFromNow(1) },
+    ]);
+    expect(BookBudgetOverviewSchema.parse(res.body).budgets[0]?.currentMonth).toMatchObject({
+      budget: 8000,
+      validToMonth: monthsFromNow(1),
+    });
+  });
+
+  it("stops one currency and leaves the others running", async () => {
+    await upsertBudget({ monthlyAmount: 8000 });
+    await upsertBudget({ currency: "USD", monthlyAmount: 80 });
+
+    const res = await stopBudget({ currency: "USD" });
+
+    expect(res.status).toBe(HTTP.ok);
+    expect(BookBudgetOverviewSchema.parse(res.body).budgets.map((entry) => entry.currency)).toEqual(
+      ["UAH"],
+    );
+  });
+
+  it("leaves a version scheduled after the stop month in place", async () => {
+    await upsertBudget({ monthlyAmount: 8000 });
+    await upsertBudget({ effectiveFromMonth: monthsFromNow(2), monthlyAmount: 12000 });
+
+    await stopBudget({ effectiveFromMonth: monthsFromNow(1) });
+
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 8000, validFromMonth: currentMonth(), validToMonth: monthsFromNow(1) },
+      { monthlyAmount: 12000, validFromMonth: monthsFromNow(2), validToMonth: null },
+    ]);
+  });
+
+  it("refuses to stop a month that has already gone by", async () => {
+    await seedPastVersion({ monthlyAmount: 8000, monthsBack: 3 });
+
+    const res = await stopBudget({ effectiveFromMonth: monthsFromNow(-1) });
+
+    expect(res.status).toBe(HTTP.badRequest);
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 8000, validFromMonth: monthsFromNow(-3), validToMonth: null },
+    ]);
+  });
+
+  it("says there is nothing to stop when the currency has no budget that month", async () => {
+    await upsertBudget({ monthlyAmount: 8000 });
+
+    const res = await stopBudget({ currency: "USD" });
+
+    expect(res.status).toBe(HTTP.notFound);
+  });
+
+  it("rejects a currency that is not a currency at all", async () => {
+    const res = await stopBudget({ currency: "BTC" });
 
     expect(res.status).toBe(HTTP.badRequest);
   });
@@ -401,5 +509,143 @@ describe("book budgets across readers", () => {
 
     expect(res.status).toBe(HTTP.notFound);
     await expect(storedVersions(stranger)).resolves.toHaveLength(2);
+  });
+});
+
+describe("POST /api/delivery/budgets/save", () => {
+  it("writes every currency of one dialog save in a single call", async () => {
+    const res = await saveBudgets({
+      changes: [
+        { action: "set", currency: "UAH", monthlyAmount: 25000 },
+        { action: "set", currency: "EUR", monthlyAmount: 60 },
+      ],
+    });
+
+    expect(res.status).toBe(HTTP.ok);
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 60, validFromMonth: currentMonth(), validToMonth: null },
+      { monthlyAmount: 25000, validFromMonth: currentMonth(), validToMonth: null },
+    ]);
+  });
+
+  it("sets one currency and stops another in the same write", async () => {
+    await upsertBudget({ currency: "EUR", monthlyAmount: 60 });
+
+    await saveBudgets({
+      changes: [
+        { action: "set", currency: "UAH", monthlyAmount: 9000 },
+        { action: "stop", currency: "EUR" },
+      ],
+    });
+
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 9000, validFromMonth: currentMonth(), validToMonth: null },
+    ]);
+  });
+
+  it("leaves a currency the dialog never touched exactly as it was", async () => {
+    await upsertBudget({ currency: "USD", monthlyAmount: 80 });
+
+    await saveBudgets({ changes: [{ action: "set", currency: "UAH", monthlyAmount: 9000 }] });
+
+    const overview = await readOverview();
+    expect(overview.budgets.find((entry) => entry.currency === "USD")?.currentMonth?.budget).toBe(
+      80,
+    );
+  });
+
+  it("writes nothing at all when one currency of the save is invalid", async () => {
+    const res = await saveBudgets({
+      changes: [
+        { action: "set", currency: "UAH", monthlyAmount: 9000 },
+        { action: "stop", currency: "EUR" },
+      ],
+    });
+
+    expect(res.status).toBe(HTTP.notFound);
+    await expect(storedVersions()).resolves.toEqual([]);
+  });
+
+  it("refuses two changes for the same currency instead of picking one", async () => {
+    const res = await saveBudgets({
+      changes: [
+        { action: "set", currency: "UAH", monthlyAmount: 9000 },
+        { action: "set", currency: "UAH", monthlyAmount: 1000 },
+      ],
+    });
+
+    expect(res.status).toBe(HTTP.badRequest);
+  });
+
+  it("creates no version for a change that does not change the amount", async () => {
+    await upsertBudget({ monthlyAmount: 25000 });
+
+    await saveBudgets({
+      changes: [{ action: "set", currency: "UAH", monthlyAmount: 25000 }],
+      effectiveFromMonth: monthsFromNow(2),
+    });
+
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 25000, validFromMonth: currentMonth(), validToMonth: null },
+    ]);
+  });
+
+  it("schedules the whole save from a future month without touching this one", async () => {
+    await upsertBudget({ monthlyAmount: 25000 });
+
+    await saveBudgets({
+      changes: [{ action: "set", currency: "UAH", monthlyAmount: 30000 }],
+      effectiveFromMonth: monthsFromNow(1),
+    });
+
+    const overview = await readOverview();
+    expect({
+      current: overview.budgets[0]?.currentMonth?.budget,
+      upcoming: overview.budgets[0]?.upcomingChanges,
+    }).toEqual({
+      current: 25000,
+      upcoming: [{ effectiveFromMonth: monthsFromNow(1), kind: "change", monthlyAmount: 30000 }],
+    });
+  });
+});
+
+describe("DELETE /api/delivery/budgets/:currency/scheduled-stop", () => {
+  it("lets a budget keep running after its scheduled stop is cancelled", async () => {
+    await upsertBudget({ monthlyAmount: 25000 });
+    await stopBudget({ effectiveFromMonth: monthsFromNow(2) });
+
+    const res = await deleteJson({
+      accessToken: reader.accessToken,
+      app,
+      path: ORDER_ROUTES.budgetScheduledStop("UAH"),
+    });
+
+    expect(res.status).toBe(HTTP.ok);
+    await expect(storedVersions()).resolves.toEqual([
+      { monthlyAmount: 25000, validFromMonth: currentMonth(), validToMonth: null },
+    ]);
+  });
+
+  it("reports a scheduled stop among the upcoming changes before it is cancelled", async () => {
+    await upsertBudget({ monthlyAmount: 25000 });
+    await stopBudget({ effectiveFromMonth: monthsFromNow(2) });
+
+    const overview = await readOverview();
+
+    expect(overview.budgets[0]?.upcomingChanges).toEqual([
+      { effectiveFromMonth: monthsFromNow(2), kind: "stop", monthlyAmount: null },
+    ]);
+  });
+
+  it("refuses to cancel a stop that was never scheduled", async () => {
+    await upsertBudget({ monthlyAmount: 25000 });
+
+    const res = await deleteJson({
+      accessToken: reader.accessToken,
+      app,
+      path: ORDER_ROUTES.budgetScheduledStop("UAH"),
+    });
+
+    expect(res.status).toBe(HTTP.notFound);
   });
 });

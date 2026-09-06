@@ -318,7 +318,7 @@ describe("GET /api/loans", () => {
     });
     await createLentLoan(accessToken, { personName: "Ivan" });
 
-    const res = await listLoans(accessToken, "?filter=has_reminder");
+    const res = await listLoans(accessToken, "?reminder=on");
 
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].remindToReturn).toBe(true);
@@ -1366,11 +1366,187 @@ describe("GET /api/loans additional filters", () => {
     );
     await createBorrowedLoan(accessToken, { personName: "Maria" }, "No Date At All");
 
-    const res = await listLoans(accessToken, "?filter=without_reminder");
+    const res = await listLoans(accessToken, "?reminder=off");
 
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].book.title).toBe("No Reminder");
     expect(res.body.items[0].remindToReturn).toBe(false);
+  });
+});
+
+describe("GET /api/loans advanced filters", () => {
+  it("filters by the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(accessToken, { loanDate: isoDay(-20), personName: "Olha" }, "Old");
+    await createBorrowedLoan(accessToken, { loanDate: isoDay(-5), personName: "Olha" }, "Recent");
+
+    const res = await listLoans(
+      accessToken,
+      `?loanDateFrom=${isoDay(-10)}&loanDateTo=${isoDay(0)}`,
+    );
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Recent");
+  });
+
+  it("keeps a loan date range open at one end", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(accessToken, { loanDate: isoDay(-20), personName: "Olha" }, "Old");
+    await createBorrowedLoan(accessToken, { loanDate: isoDay(-5), personName: "Olha" }, "Recent");
+
+    const res = await listLoans(accessToken, `?loanDateFrom=${isoDay(-10)}`);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Recent");
+  });
+
+  it("filters by the expected return date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(
+      accessToken,
+      { expectedReturnDate: isoDay(-9), loanDate: isoDay(-20), personName: "Olha" },
+      "Past Due",
+    );
+    await createBorrowedLoan(
+      accessToken,
+      { expectedReturnDate: isoDay(9), personName: "Olha" },
+      "Future Due",
+    );
+    await createBorrowedLoan(accessToken, { personName: "Olha" }, "No Due Date");
+
+    const res = await listLoans(
+      accessToken,
+      `?expectedReturnDateFrom=${isoDay(5)}&expectedReturnDateTo=${isoDay(15)}`,
+    );
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Future Due");
+  });
+
+  it("reaches into the past with the expected return date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(
+      accessToken,
+      { expectedReturnDate: isoDay(-9), loanDate: isoDay(-20), personName: "Olha" },
+      "Past Due",
+    );
+    await createBorrowedLoan(
+      accessToken,
+      { expectedReturnDate: isoDay(9), personName: "Olha" },
+      "Future Due",
+    );
+
+    const res = await listLoans(
+      accessToken,
+      `?expectedReturnDateFrom=${isoDay(-15)}&expectedReturnDateTo=${isoDay(-1)}`,
+    );
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Past Due");
+  });
+
+  it("rejects an inverted date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+
+    const res = await listLoans(
+      accessToken,
+      `?expectedReturnDateFrom=${isoDay(10)}&expectedReturnDateTo=${isoDay(1)}`,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("filters loans that carry a note", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(accessToken, { note: "handed over in person" }, "With Note");
+    await createBorrowedLoan(accessToken, { personName: "Olha" }, "Without Note");
+
+    const res = await listLoans(accessToken, "?hasNote=true");
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("With Note");
+  });
+
+  it("filters loans that carry no note", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(accessToken, { note: "handed over in person" }, "With Note");
+    await createBorrowedLoan(accessToken, { personName: "Olha" }, "Without Note");
+
+    const res = await listLoans(accessToken, "?hasNote=false");
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Without Note");
+  });
+
+  it("combines the quick status, the person, the reminder, the note and a date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createLentLoan(
+      accessToken,
+      {
+        expectedReturnDate: isoDay(-4),
+        loanDate: isoDay(-10),
+        note: "asked twice already",
+        personName: "Ivan",
+      },
+      "Wanted",
+    );
+    await createLentLoan(
+      accessToken,
+      {
+        expectedReturnDate: isoDay(-4),
+        loanDate: isoDay(-10),
+        personName: "Ivan",
+      },
+      "No Note",
+    );
+    await createLentLoan(
+      accessToken,
+      {
+        expectedReturnDate: isoDay(-4),
+        loanDate: isoDay(-30),
+        note: "too old",
+        personName: "Ivan",
+      },
+      "Too Old",
+    );
+    await createLentLoan(
+      accessToken,
+      {
+        expectedReturnDate: isoDay(-4),
+        loanDate: isoDay(-10),
+        note: "someone else",
+        personName: "Maria",
+      },
+      "Other Person",
+    );
+    const contactId = await contactIdFor("Ivan");
+
+    const res = await listLoans(
+      accessToken,
+      `?type=lent_to_someone&filter=overdue&contactId=${contactId}&reminder=off&hasNote=true&loanDateFrom=${isoDay(-14)}`,
+    );
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].book.title).toBe("Wanted");
+    expect(res.body.totalCount).toBe(1);
+  });
+
+  it("returns nothing when a date range contradicts the no-return-date filter", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await createBorrowedLoan(accessToken, { personName: "Olha" }, "No Due Date");
+    await createBorrowedLoan(
+      accessToken,
+      { expectedReturnDate: isoDay(6), personName: "Olha" },
+      "Due Soon",
+    );
+
+    const res = await listLoans(
+      accessToken,
+      `?filter=no_return_date&expectedReturnDateFrom=${isoDay(1)}&expectedReturnDateTo=${isoDay(30)}`,
+    );
+
+    expect(res.body.items).toHaveLength(0);
+    expect(res.body.totalCount).toBe(0);
   });
 });
 

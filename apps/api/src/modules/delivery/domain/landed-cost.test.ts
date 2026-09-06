@@ -188,7 +188,7 @@ describe("allocateLandedCost", () => {
     expect(result).toEqual({ status: "unavailable" });
   });
 
-  it("gives the whole total to a lone book whose price was never entered", () => {
+  it("refuses a lone book whose price was never entered rather than calling it free", () => {
     const result = allocateLandedCost({
       countedItems: [makeItem({ bookId: "a" })],
       deliveryPrice: 40,
@@ -196,20 +196,7 @@ describe("allocateLandedCost", () => {
       effectiveTotalAmount: 500,
     });
 
-    expect(result).toEqual({
-      allocations: [
-        {
-          adjustmentShare: 47000,
-          deliveryShare: 4000,
-          discountShare: 1000,
-          itemId: "item-a",
-          rawPrice: 0,
-          realCost: 50000,
-        },
-      ],
-      status: "allocated",
-    });
-    expectReconciles({ effectiveTotalAmount: 500, result });
+    expect(result).toEqual({ status: "unavailable" });
   });
 
   it("has nothing to allocate when the effective total is unknown", () => {
@@ -298,12 +285,16 @@ describe("buildLandedCostSummary", () => {
 
     expect(summary).toEqual([
       {
+        averageAdjustmentShare: 0,
+        averageDeliveryShare: 50,
+        averageDiscountShare: 40,
+        averageEligibleRawBookPrice: 400,
         averageLandedBookCost: 410,
-        countedBooksCount: 4,
+        booksInScope: 4,
+        booksWithLandedCost: 2,
         coveragePercent: 50,
         currency: "UAH",
-        differenceVsAverageRawBookPrice: 43.33,
-        eligibleBooksCount: 2,
+        deltaFromEligibleRawPrice: 10,
       },
     ]);
   });
@@ -313,12 +304,16 @@ describe("buildLandedCostSummary", () => {
 
     expect(summary).toEqual([
       {
+        averageAdjustmentShare: null,
+        averageDeliveryShare: null,
+        averageDiscountShare: null,
+        averageEligibleRawBookPrice: null,
         averageLandedBookCost: null,
-        countedBooksCount: 0,
+        booksInScope: 0,
+        booksWithLandedCost: 0,
         coveragePercent: 0,
         currency: "UAH",
-        differenceVsAverageRawBookPrice: null,
-        eligibleBooksCount: 0,
+        deltaFromEligibleRawPrice: null,
       },
     ]);
   });
@@ -335,5 +330,81 @@ describe("buildLandedCostSummary", () => {
       { average: 900, currency: "UAH" },
       { average: 30, currency: "USD" },
     ]);
+  });
+});
+
+describe("buildLandedCostSummary price bridge", () => {
+  it("reconciles the bridge stages back to the landed cost of the same books", () => {
+    const [row] = buildLandedCostSummary([
+      orderOf({
+        deliveryPrice: 100,
+        discount: 80,
+        id: "order-bridge",
+        items: [makeItem({ bookId: "a", price: 300 }), makeItem({ bookId: "b", price: 500 })],
+      }),
+    ]);
+
+    const bridged =
+      (row?.averageEligibleRawBookPrice ?? 0) -
+      (row?.averageDiscountShare ?? 0) +
+      (row?.averageDeliveryShare ?? 0) +
+      (row?.averageAdjustmentShare ?? 0);
+
+    expect(bridged).toBeCloseTo(row?.averageLandedBookCost ?? 0, 2);
+  });
+
+  it("keeps a book the allocation skipped out of the starting price it compares against", () => {
+    const [row] = buildLandedCostSummary([
+      orderOf({
+        id: "order-allocated",
+        items: [makeItem({ bookId: "a", price: 300 }), makeItem({ bookId: "b", price: 500 })],
+      }),
+      orderOf({
+        id: "order-unallocatable",
+        items: [makeItem({ bookId: "c", price: 30 }), makeItem({ bookId: "d" })],
+        totalAmount: 700,
+      }),
+    ]);
+
+    expect(row?.averageEligibleRawBookPrice).toBe(400);
+  });
+
+  it("leaves no adjustment once every book of an order carries a price", () => {
+    const [row] = buildLandedCostSummary([
+      orderOf({
+        id: "order-fully-priced",
+        items: [makeItem({ bookId: "a", price: 300 }), makeItem({ bookId: "b", price: 500 })],
+        totalAmount: 600,
+      }),
+    ]);
+
+    expect(row?.averageAdjustmentShare).toBe(0);
+  });
+
+  it("keeps an unpriced book out of the starting price instead of entering it as zero", () => {
+    const [row] = buildLandedCostSummary([
+      orderOf({ id: "order-unpriced", items: [makeItem({ bookId: "a" })], totalAmount: 700 }),
+    ]);
+
+    expect({
+      counted: row?.booksInScope,
+      eligible: row?.booksWithLandedCost,
+      raw: row?.averageEligibleRawBookPrice,
+    }).toEqual({ counted: 1, eligible: 0, raw: null });
+  });
+
+  it("lets an unpriced book pull the coverage down instead of the average price", () => {
+    const [row] = buildLandedCostSummary([
+      orderOf({
+        id: "order-priced",
+        items: [makeItem({ bookId: "a", price: 300 }), makeItem({ bookId: "b", price: 500 })],
+      }),
+      orderOf({ id: "order-unpriced", items: [makeItem({ bookId: "c" })], totalAmount: 700 }),
+    ]);
+
+    expect({
+      coverage: row?.coveragePercent,
+      raw: row?.averageEligibleRawBookPrice,
+    }).toEqual({ coverage: (2 / 3) * 100, raw: 400 });
   });
 });

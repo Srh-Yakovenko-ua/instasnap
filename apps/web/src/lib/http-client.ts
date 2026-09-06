@@ -22,6 +22,7 @@ const apiErrorBodySchema = z.object({
 
 const generalErrorBodySchema = z.object({
   code: z.string().optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
   message: z.string(),
   requestId: z.string().optional(),
 });
@@ -36,6 +37,7 @@ export class ApiError extends Error {
     message: string,
     public fieldErrors?: FieldError[],
     public code?: string,
+    public details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -171,7 +173,13 @@ async function toApiError(res: Response): Promise<ApiError> {
 
   const general = generalErrorBodySchema.safeParse(body);
   if (general.success) {
-    return new ApiError(res.status, general.data.message, undefined, general.data.code);
+    return new ApiError(
+      res.status,
+      general.data.message,
+      undefined,
+      general.data.code,
+      general.data.details,
+    );
   }
 
   return new ApiError(res.status, text || `HTTP ${res.status}`);

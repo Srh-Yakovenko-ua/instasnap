@@ -12,7 +12,7 @@ import type { BookOrdersControllerStatisticsParams } from "@/shared/api/generate
 
 import {
   BookOrdersControllerStatisticsCurrency,
-  BookOrdersControllerStatisticsStatus,
+  BookOrdersControllerStatisticsOrderState,
 } from "@/shared/api/generated/model";
 
 import type { StatisticsPeriodRange } from "./statistics-period";
@@ -25,21 +25,24 @@ import {
 } from "./statistics-period";
 
 export const DELIVERY_STATISTICS_CURRENCIES = Object.values(BookOrdersControllerStatisticsCurrency);
-export const DELIVERY_STATISTICS_STATUSES = Object.values(BookOrdersControllerStatisticsStatus);
+export const DELIVERY_STATISTICS_ORDER_STATES = Object.values(
+  BookOrdersControllerStatisticsOrderState,
+);
 
 const currencyValues = Object.values(BookOrdersControllerStatisticsCurrency);
-const statusValues = Object.values(BookOrdersControllerStatisticsStatus);
+const orderStateValues = Object.values(BookOrdersControllerStatisticsOrderState);
 
 export const deliveryStatisticsParsers = {
+  budgetCurrency: parseAsStringLiteral(currencyValues),
   compare: parseAsStringLiteral(BookOrderStatisticsCompareModeSchema.options),
   currency: parseAsStringLiteral(currencyValues),
   from: parseAsString.withDefault(""),
   includeCancelled: parseAsBoolean.withDefault(false),
   money: parseAsStringLiteral(currencyValues),
+  orderState: parseAsStringLiteral(orderStateValues),
   period: parseAsStringLiteral(STATISTICS_PERIOD_PRESETS).withDefault(
     STATISTICS_PERIOD.defaultPreset,
   ),
-  status: parseAsStringLiteral(statusValues),
   store: parseAsString.withDefault(""),
   to: parseAsString.withDefault(""),
 };
@@ -58,7 +61,7 @@ export function resolveStatisticsCompareMode(
 }
 
 export function statisticsFilterCount(state: DeliveryStatisticsQueryState): number {
-  const flags = [state.currency !== null, state.status !== null, state.store.trim() !== ""];
+  const flags = [state.currency !== null, state.orderState !== null, state.store.trim() !== ""];
   return flags.filter(Boolean).length;
 }
 
@@ -84,7 +87,7 @@ export function toDeliveryStatisticsParams(
   return {
     includeCancelled: state.includeCancelled ? "true" : "false",
     ...(state.currency === null ? {} : { currency: state.currency }),
-    ...(state.status === null ? {} : { status: state.status }),
+    ...(state.orderState === null ? {} : { orderState: state.orderState }),
     ...(store === "" ? {} : { store }),
     ...(range.from === null ? {} : { from: range.from }),
     ...(range.to === null ? {} : { to: range.to }),

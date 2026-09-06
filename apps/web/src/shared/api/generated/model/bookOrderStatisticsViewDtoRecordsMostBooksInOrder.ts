@@ -9,6 +9,7 @@ import type { BookOrderStatisticsViewDtoRecordsMostBooksInOrderCurrency } from "
 import type { BookOrderStatisticsViewDtoRecordsMostBooksInOrderDerivedStatus } from "./bookOrderStatisticsViewDtoRecordsMostBooksInOrderDerivedStatus";
 
 /**
+ * One order named by its id, which is what navigation uses. orderNumber is a label a user may never have filled in and never decides whether the order can be opened.
  * @nullable
  */
 export type BookOrderStatisticsViewDtoRecordsMostBooksInOrder = {
@@ -19,6 +20,7 @@ export type BookOrderStatisticsViewDtoRecordsMostBooksInOrder = {
   booksCount: number;
   /** @nullable */
   currency: BookOrderStatisticsViewDtoRecordsMostBooksInOrderCurrency;
+  /** The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet. */
   derivedStatus: BookOrderStatisticsViewDtoRecordsMostBooksInOrderDerivedStatus;
   id: string;
   /** @nullable */
@@ -26,5 +28,6 @@ export type BookOrderStatisticsViewDtoRecordsMostBooksInOrder = {
   /** @nullable */
   orderNumber: string | null;
   storeName: string;
-  totalAmount: number;
+  /** @nullable */
+  totalAmount: number | null;
 } | null;

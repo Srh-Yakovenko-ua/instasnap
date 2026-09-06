@@ -1,5 +1,6 @@
 import type { BookOrderStatisticsStore } from "@app/shared";
 
+import { normalizeName } from "@app/shared";
 import { describe, expect, it } from "vitest";
 
 import { storeRows, storeScatter } from "./statistics-stores";
@@ -11,11 +12,15 @@ function store(overrides: Partial<BookOrderStatisticsStore> & { store: string })
     averageLandedBookCostByCurrency: [],
     averageOrderAmountByCurrency: [],
     booksCount: 0,
+    booksCountByCurrency: [],
     deliveryTotalByCurrency: [],
     discountTotalByCurrency: [],
+    drilldown: { targets: [] },
     landedCoverageByCurrency: [],
     landedEligibleBooksCountByCurrency: [],
     ordersCount: 0,
+    ordersCountByCurrency: [],
+    storeKey: normalizeName(overrides.store),
     totalsByCurrency: [],
     ...overrides,
   } satisfies BookOrderStatisticsStore;
@@ -26,18 +31,22 @@ const YAKABOO = store({
   averageLandedBookCostByCurrency: [{ average: 582, currency: "UAH" }],
   averageOrderAmountByCurrency: [{ average: 841, currency: "UAH" }],
   booksCount: 13,
+  booksCountByCurrency: [{ count: 13, currency: "UAH" }],
   landedCoverageByCurrency: [
-    { countedBooksCount: 13, coveragePercent: 100, currency: "UAH", eligibleBooksCount: 13 },
+    { booksInScope: 13, booksWithLandedCost: 13, coveragePercent: 100, currency: "UAH" },
   ],
   landedEligibleBooksCountByCurrency: [{ count: 13, currency: "UAH" }],
   ordersCount: 9,
+  ordersCountByCurrency: [{ count: 9, currency: "UAH" }],
   store: "Yakaboo",
   totalsByCurrency: [{ currency: "UAH", total: 7575 }],
 });
 
 const VIVAT = store({
   booksCount: 6,
+  booksCountByCurrency: [{ count: 6, currency: "UAH" }],
   ordersCount: 4,
+  ordersCountByCurrency: [{ count: 4, currency: "UAH" }],
   store: "Vivat",
   totalsByCurrency: [{ currency: "UAH", total: 4840 }],
 });
@@ -45,7 +54,6 @@ const VIVAT = store({
 describe("storeRows", () => {
   it("ranks by the chosen metric and scales the bar against the leader", () => {
     const rows = storeRows({
-      comparisonStores: null,
       currency: "UAH",
       metric: "spend",
       stores: [VIVAT, YAKABOO],
@@ -58,7 +66,6 @@ describe("storeRows", () => {
 
   it("re-ranks when the metric switches to counts", () => {
     const rows = storeRows({
-      comparisonStores: null,
       currency: "UAH",
       metric: "orders",
       stores: [VIVAT, YAKABOO],
@@ -69,7 +76,6 @@ describe("storeRows", () => {
 
   it("hides a store that has nothing in the chosen currency", () => {
     const rows = storeRows({
-      comparisonStores: null,
       currency: "EUR",
       metric: "spend",
       stores: [YAKABOO],
@@ -77,54 +83,32 @@ describe("storeRows", () => {
 
     expect(rows).toEqual([]);
   });
-
-  it("reports the change against the comparison period", () => {
-    const rows = storeRows({
-      comparisonStores: [{ ...YAKABOO, totalsByCurrency: [{ currency: "UAH", total: 5000 }] }],
-      currency: "UAH",
-      metric: "spend",
-      stores: [YAKABOO],
-    });
-
-    expect(rows[0]?.deltaValue).toBe(2575);
-    expect(rows[0]?.deltaPercent).toBeCloseTo(51.5);
-  });
-
-  it("refuses to invent a percentage when the store had nothing before", () => {
-    const rows = storeRows({
-      comparisonStores: [],
-      currency: "UAH",
-      metric: "spend",
-      stores: [YAKABOO],
-    });
-
-    expect(rows[0]?.deltaValue).toBe(7575);
-    expect(rows[0]?.deltaPercent).toBeNull();
-  });
 });
 
 describe("storeScatter", () => {
   it("plots a store that has enough landed data", () => {
-    const { points, withoutLandedData } = storeScatter({ currency: "UAH", stores: [YAKABOO] });
+    const { excluded, points } = storeScatter({ currency: "UAH", stores: [YAKABOO] });
 
     expect(points).toEqual([
       {
         averageLandedBookCost: 582,
         averageOrderAmount: 841,
-        booksCount: 13,
         coveragePercent: 100,
-        ordersCount: 9,
+        currencyBooksCount: 13,
+        currencyOrdersCount: 9,
+        landedEligibleBooksCount: 13,
         store: "Yakaboo",
+        storeKey: "yakaboo",
       },
     ]);
-    expect(withoutLandedData).toEqual([]);
+    expect(excluded).toEqual([]);
   });
 
   it("lists rather than plots a store with no landed average", () => {
-    const { points, withoutLandedData } = storeScatter({ currency: "UAH", stores: [VIVAT] });
+    const { excluded, points } = storeScatter({ currency: "UAH", stores: [VIVAT] });
 
     expect(points).toEqual([]);
-    expect(withoutLandedData).toEqual(["Vivat"]);
+    expect(excluded.map((entry) => entry.store)).toEqual(["Vivat"]);
   });
 
   it("keeps a single landed book out of the chart", () => {
@@ -132,16 +116,67 @@ describe("storeScatter", () => {
       averageLandedBookCostByCurrency: [{ average: 400, currency: "UAH" }],
       averageOrderAmountByCurrency: [{ average: 400, currency: "UAH" }],
       landedCoverageByCurrency: [
-        { countedBooksCount: 1, coveragePercent: 100, currency: "UAH", eligibleBooksCount: 1 },
+        { booksInScope: 1, booksWithLandedCost: 1, coveragePercent: 100, currency: "UAH" },
       ],
       landedEligibleBooksCountByCurrency: [{ count: 1, currency: "UAH" }],
       ordersCount: 1,
+      ordersCountByCurrency: [{ count: 1, currency: "UAH" }],
       store: "Комора",
     });
 
-    const { points, withoutLandedData } = storeScatter({ currency: "UAH", stores: [thin] });
+    const { excluded, points } = storeScatter({ currency: "UAH", stores: [thin] });
 
     expect(points).toEqual([]);
-    expect(withoutLandedData).toEqual(["Комора"]);
+    expect(excluded.map((entry) => entry.store)).toEqual(["Комора"]);
+  });
+});
+
+describe("storeRows currency-specific counts", () => {
+  const MIXED = store({
+    booksCount: 10,
+    booksCountByCurrency: [
+      { count: 8, currency: "UAH" },
+      { count: 2, currency: "EUR" },
+    ],
+    ordersCount: 6,
+    ordersCountByCurrency: [
+      { count: 5, currency: "UAH" },
+      { count: 1, currency: "EUR" },
+    ],
+    store: "Mixed",
+    totalsByCurrency: [
+      { currency: "UAH", total: 5000 },
+      { currency: "EUR", total: 12 },
+    ],
+  });
+
+  it("counts only the orders of the chosen currency in the spend ranking", () => {
+    const [row] = storeRows({
+      currency: "EUR",
+      metric: "spend",
+      stores: [MIXED],
+    });
+
+    expect({ books: row?.booksCount, orders: row?.ordersCount }).toEqual({ books: 2, orders: 1 });
+  });
+
+  it("counts every currency in the orders ranking, which is currency independent", () => {
+    const [row] = storeRows({
+      currency: "EUR",
+      metric: "orders",
+      stores: [MIXED],
+    });
+
+    expect({ books: row?.booksCount, orders: row?.ordersCount }).toEqual({ books: 10, orders: 6 });
+  });
+
+  it("works out books per order from the counts it actually showed", () => {
+    const [row] = storeRows({
+      currency: "UAH",
+      metric: "spend",
+      stores: [MIXED],
+    });
+
+    expect(row?.booksPerOrder).toBeCloseTo(1.6, 2);
   });
 });

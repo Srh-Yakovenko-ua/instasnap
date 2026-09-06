@@ -1,9 +1,8 @@
 import type {
   LoanHistoryDetailView,
-  LoanHistoryListItemView,
   LoanHistoryOverviewView,
   LoanHistoryPeopleView,
-  Paginator,
+  PaginatedLoanHistory,
 } from "@app/shared";
 
 import {
@@ -58,6 +57,8 @@ export class LoanHistoryController {
   @ApiQuery({ name: "search", required: false })
   @ApiQuery({ name: "returnedFrom", required: false })
   @ApiQuery({ name: "returnedTo", required: false })
+  @ApiQuery({ name: "loanDateFrom", required: false })
+  @ApiQuery({ name: "loanDateTo", required: false })
   @ApiQuery({ name: "sort", required: false })
   @ApiQuery({ name: "pageNumber", required: false })
   @ApiQuery({ name: "pageSize", required: false })
@@ -65,7 +66,7 @@ export class LoanHistoryController {
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Query(new ZodQueryPipe(LoanHistoryQuerySchema)) query: LoanHistoryQueryDto,
-  ): Promise<Paginator<LoanHistoryListItemView>> {
+  ): Promise<PaginatedLoanHistory> {
     return this.loanHistoryService.list({ query, userId: user.id });
   }
 
@@ -78,6 +79,8 @@ export class LoanHistoryController {
   @ApiQuery({ name: "contactId", required: false })
   @ApiQuery({ name: "returnedFrom", required: false })
   @ApiQuery({ name: "returnedTo", required: false })
+  @ApiQuery({ name: "loanDateFrom", required: false })
+  @ApiQuery({ name: "loanDateTo", required: false })
   @Get("overview")
   overview(
     @CurrentUser() user: AuthenticatedUser,
@@ -93,6 +96,11 @@ export class LoanHistoryController {
   @ApiOperation({ summary: "List the people available for the loan history person filter" })
   @ApiQuery({ name: "search", required: false })
   @ApiQuery({ name: "limit", required: false })
+  @ApiQuery({ name: "type", required: false })
+  @ApiQuery({ name: "returnedFrom", required: false })
+  @ApiQuery({ name: "returnedTo", required: false })
+  @ApiQuery({ name: "loanDateFrom", required: false })
+  @ApiQuery({ name: "loanDateTo", required: false })
   @Get("people")
   people(
     @CurrentUser() user: AuthenticatedUser,

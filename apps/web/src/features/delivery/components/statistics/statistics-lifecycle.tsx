@@ -1,27 +1,51 @@
 "use client";
 
-import type { BookOrderStatisticsLifecycle, Nullable } from "@app/shared";
+import type { BookOrderStatisticsLifecycle, Nullable, StatisticsPeriod } from "@app/shared";
 
+import { STATISTICS_METRIC_KIND, statisticsDrilldownDestinationOf } from "@app/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+
+import type { UiIconName } from "@/components/icons";
 
 import { UiIcon } from "@/components/icons";
 import { Link } from "@/i18n/navigation";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+import type { StatisticsDrilldownContext } from "../../model/statistics-drilldown";
 import type { LifecycleMode, LifecycleRow } from "../../model/statistics-lifecycle";
 
-import { DELIVERY_ROUTES } from "../../model/statistics-drilldown";
+import { buildStatisticsDrilldown } from "../../model/statistics-drilldown";
+import { formatPercentValue } from "../../model/statistics-format";
 import { LIFECYCLE_MODES, lifecycleBreakdown } from "../../model/statistics-lifecycle";
 import { StatisticsMetricTabs, StatisticsSection } from "./statistics-section";
+import { StatisticsSectionState } from "./statistics-states";
 
-const STAGE_HREF: Partial<Record<LifecycleRow["stage"], string>> = {
-  cancelled: `${DELIVERY_ROUTES.history}?tab=cancelled`,
-  received: `${DELIVERY_ROUTES.history}?tab=received`,
+const PERCENT_MULTIPLIER = 100;
+
+const STAGE_ICON: Record<LifecycleRow["stage"], UiIconName> = {
+  active: "package",
+  cancelled: "x-circle",
+  partially_received: "check-circle",
+  partially_shipped: "truck",
+  received: "check-circle",
+  shipped: "truck",
 };
 
-export function StatisticsLifecycle({ lifecycle }: { lifecycle: BookOrderStatisticsLifecycle }) {
+export function StatisticsLifecycle({
+  currentLabel,
+  drilldown,
+  includeCancelled,
+  lifecycle,
+  period,
+}: {
+  currentLabel: Nullable<string>;
+  drilldown: StatisticsDrilldownContext;
+  includeCancelled: boolean;
+  lifecycle: BookOrderStatisticsLifecycle;
+  period: StatisticsPeriod;
+}) {
   const t = useTranslations("delivery.statistics.lifecycle");
   const tStatus = useTranslations("delivery.statistics.orderStatus");
   const locale = useLocale();
@@ -40,20 +64,21 @@ export function StatisticsLifecycle({ lifecycle }: { lifecycle: BookOrderStatist
           value={mode}
         />
       }
-      className="h-full"
-      description={t("subtitle")}
+      description={t(`subtitles.${mode}`, { period: currentLabel ?? t("allTime") })}
       title={t("title")}
     >
       {breakdown.total === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <StatisticsSectionState kind="empty" title={t("empty")} />
       ) : (
         <>
           <ul className="flex flex-col gap-2.5">
             {breakdown.stages.map((row) => (
               <StageRow
+                drilldown={mode === "orders" ? drilldown : null}
                 key={row.stage}
                 label={tStatus(row.stage)}
                 locale={locale}
+                period={period}
                 row={row}
                 unit={t(`units.${mode}`)}
               />
@@ -61,10 +86,14 @@ export function StatisticsLifecycle({ lifecycle }: { lifecycle: BookOrderStatist
           </ul>
           <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
             <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <UiIcon className="text-icon" name="x-circle" size={15} />
+              <UiIcon aria-hidden className="text-icon" name="x-circle" size={15} />
               {tStatus("cancelled")}
             </span>
-            <StageValue locale={locale} row={breakdown.cancelled} unit={t(`units.${mode}`)} />
+            {includeCancelled ? (
+              <StageValue locale={locale} row={breakdown.cancelled} unit={t(`units.${mode}`)} />
+            ) : (
+              <span className="text-sm text-muted-foreground">{t("cancelledExcluded")}</span>
+            )}
           </div>
         </>
       )}
@@ -84,22 +113,42 @@ function LifecycleDelta({ delta, locale }: { delta: Nullable<number>; locale: st
 }
 
 function StageRow({
+  drilldown,
   label,
   locale,
+  period,
   row,
   unit,
 }: {
+  drilldown: Nullable<StatisticsDrilldownContext>;
   label: string;
   locale: string;
+  period: StatisticsPeriod;
   row: LifecycleRow;
   unit: string;
 }) {
-  const href = STAGE_HREF[row.stage] ?? null;
+  const href =
+    drilldown === null || row.count === 0
+      ? null
+      : buildStatisticsDrilldown({
+          context: { ...drilldown, orderState: row.stage },
+          destination: statisticsDrilldownDestinationOf(row.stage),
+          metricKind: STATISTICS_METRIC_KIND.countOrStatus,
+          scope: { from: period.from, kind: "order_date_range", to: period.to },
+        });
 
   const content = (
     <>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="truncate text-sm font-medium text-foreground">{label}</span>
+        <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-foreground">
+          <UiIcon
+            aria-hidden
+            className="shrink-0 text-icon"
+            name={STAGE_ICON[row.stage]}
+            size={14}
+          />
+          {label}
+        </span>
         <StageValue locale={locale} row={row} unit={unit} />
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -137,6 +186,9 @@ function StageValue({ locale, row, unit }: { locale: string; row: LifecycleRow; 
         {formatNumber(row.count, locale)}
       </span>
       <span className="text-xs text-muted-foreground">{unit}</span>
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {formatPercentValue(row.totalShare * PERCENT_MULTIPLIER, locale)}
+      </span>
       <LifecycleDelta delta={row.delta} locale={locale} />
     </span>
   );

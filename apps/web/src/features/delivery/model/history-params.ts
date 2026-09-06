@@ -1,6 +1,5 @@
 import type { Nullable } from "@app/shared";
 
-import { isAfter, isValid, parseISO } from "date-fns";
 import {
   type inferParserType,
   parseAsArrayOf,
@@ -16,7 +15,14 @@ import type {
 } from "@/shared/api/generated/model";
 
 import {
+  isInvertedDayRange,
+  isStorableDay,
+  isStorableOrderId,
+  storableDay,
+} from "@/features/books/model/filter-chips";
+import {
   DeliveryReadControllerHistoryListCurrencyItem,
+  DeliveryReadControllerHistoryListOrderState,
   DeliveryReadControllerHistoryListSort,
   DeliveryReadControllerHistoryListTab,
 } from "@/shared/api/generated/model";
@@ -46,6 +52,10 @@ export const DELIVERY_HISTORY_CURRENCY_VALUES = Object.values(
   DeliveryReadControllerHistoryListCurrencyItem,
 );
 
+export const DELIVERY_HISTORY_ORDER_STATE_VALUES = Object.values(
+  DeliveryReadControllerHistoryListOrderState,
+);
+
 export const deliveryHistoryRetiredParsers = {
   hasTrackingNumber: parseAsString,
   hasTrackingUrl: parseAsString,
@@ -60,6 +70,8 @@ export const deliveryHistoryParsers = {
   cancelledTo: parseAsString,
   currency: parseAsArrayOf(parseAsStringLiteral(DELIVERY_HISTORY_CURRENCY_VALUES)).withDefault([]),
   from: parseAsString,
+  orderId: parseAsString,
+  orderState: parseAsStringLiteral(DELIVERY_HISTORY_ORDER_STATE_VALUES),
   priceMax: parseAsFloat,
   priceMin: parseAsFloat,
   q: parseAsString.withDefault(""),
@@ -93,6 +105,8 @@ export const DELIVERY_HISTORY_ADVANCED_RESET = {
   cancelledTo: null,
   currency: null,
   from: null,
+  orderId: null,
+  orderState: null,
   priceMax: null,
   priceMin: null,
   receivedFrom: null,
@@ -109,6 +123,8 @@ export const DELIVERY_HISTORY_ADVANCED_EMPTY: DeliveryHistoryAdvancedState = {
   cancelledTo: null,
   currency: [],
   from: null,
+  orderId: null,
+  orderState: null,
   priceMax: null,
   priceMin: null,
   receivedFrom: null,
@@ -136,6 +152,8 @@ export function countActiveHistoryDimensions({
   const terminal = historyTerminalRange({ state, tab });
 
   return [
+    isStorableOrderId(state.orderId),
+    state.orderState !== null,
     state.store.length > 0,
     state.from !== null || state.to !== null,
     state.booksMin !== null || state.booksMax !== null,
@@ -206,10 +224,6 @@ export function isKnownHistoryTab(value: string): boolean {
   return DELIVERY_HISTORY_TABS.some((tab) => tab === value);
 }
 
-export function isStorableHistoryDay(value: Nullable<string>): value is string {
-  return value !== null && isValid(parseISO(value));
-}
-
 export function resolveHistoryPriceCurrency(
   state: Pick<DeliveryHistoryAdvancedState, "currency" | "priceMax" | "priceMin">,
 ): Nullable<DeliveryReadControllerHistoryListPriceCurrency> {
@@ -238,6 +252,8 @@ export function toDeliveryHistoryListParams(
 
   return {
     currency: state.currency,
+    ...(isStorableOrderId(state.orderId) ? { orderId: state.orderId } : {}),
+    ...(state.orderState === null ? {} : { orderState: state.orderState }),
     pageSize: DELIVERY_HISTORY_PAGE_SIZE,
     service: state.service,
     sort: resolveHistorySort(state),
@@ -272,19 +288,10 @@ function dayBound(
   key: "cancelledFrom" | "cancelledTo" | "from" | "receivedFrom" | "receivedTo" | "to",
   value: Nullable<string>,
 ): Partial<DeliveryHistoryListParams> {
-  return isStorableHistoryDay(value) ? { [key]: value } : {};
-}
-
-function isInvertedDayRange(from: Nullable<string>, to: Nullable<string>): boolean {
-  if (!isStorableHistoryDay(from) || !isStorableHistoryDay(to)) return false;
-  return isAfter(parseISO(from), parseISO(to));
+  return isStorableDay(value) ? { [key]: value } : {};
 }
 
 function isInvertedNumberRange(min: Nullable<number>, max: Nullable<number>): boolean {
   if (min === null || max === null) return false;
   return min > max;
-}
-
-function storableDay(value: Nullable<string>): Nullable<string> {
-  return isStorableHistoryDay(value) ? value : null;
 }

@@ -5,6 +5,7 @@
  * REST API for the book-nest project
  * OpenAPI spec version: 1.0
  */
+import type { BookOrderStatisticsViewDtoDailyItemDrilldown } from "./bookOrderStatisticsViewDtoDailyItemDrilldown";
 import type { BookOrderStatisticsViewDtoDailyItemTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoDailyItemTotalsByCurrencyItem";
 
 export type BookOrderStatisticsViewDtoDailyItem = {
@@ -15,6 +16,8 @@ export type BookOrderStatisticsViewDtoDailyItem = {
   booksCount: number;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$ */
   date: string;
+  /** Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books. */
+  drilldown: BookOrderStatisticsViewDtoDailyItemDrilldown;
   /**
    * @minimum 0
    * @maximum 9007199254740991

@@ -5,7 +5,7 @@ import type { LoanListItemView, UpdateLoanInput } from "@app/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import type { LoanContactSelection } from "../model/loan-contact-selection";
 
 import { useEditLoan } from "../api/use-loan-actions";
 import { restoreLoanTriggerFocus } from "../model/loan-focus";
+import { CreateLoanContactStep } from "./contact/create-loan-contact-step";
 import { LoanContactPicker } from "./loan-contact-picker";
 
 const NOTE_MAX = 300;
@@ -38,6 +39,8 @@ type EditLoanDialogProps = {
   onOpenChange: (open: boolean) => void;
   open: boolean;
 };
+
+type EditLoanStep = "create-contact" | "edit";
 
 type LoanMessages = {
   contactRequired: string;
@@ -70,7 +73,7 @@ export function EditLoanDialog({ loan, onOpenChange, open }: EditLoanDialogProps
           });
         }}
       >
-        {open ? <EditLoanForm loan={loan} onDone={() => onOpenChange(false)} /> : null}
+        {open ? <EditLoanBody loan={loan} onDone={() => onOpenChange(false)} /> : null}
       </DialogContent>
     </Dialog>
   );
@@ -118,23 +121,13 @@ function buildSchema(messages: LoanMessages) {
     });
 }
 
-function EditLoanForm({ loan, onDone }: { loan: LoanListItemView; onDone: () => void }) {
-  const t = useTranslations("books.details.loan");
+function EditLoanBody({ loan, onDone }: { loan: LoanListItemView; onDone: () => void }) {
   const tErrors = useTranslations("books.details.loan.errors");
-  const tActions = useTranslations("books.actions");
-  const tEdit = useTranslations("loans.edit");
   const tContact = useTranslations("loans.contactPicker");
-  const editLoan = useEditLoan();
-  const [serverError, setServerError] = useState<null | string>(null);
+  const [createName, setCreateName] = useState("");
+  const [step, setStep] = useState<EditLoanStep>("edit");
 
-  const variant = loan.type === "lent_to_someone" ? "lent" : "borrowed";
-
-  const {
-    control,
-    formState: { errors },
-    handleSubmit,
-    setValue,
-  } = useForm<LoanValues>({
+  const form = useForm<LoanValues>({
     defaultValues: {
       expectedReturnDate: loan.expectedReturnDate ?? "",
       loanContactId: loan.loanContactId,
@@ -155,6 +148,61 @@ function EditLoanForm({ loan, onDone }: { loan: LoanListItemView; onDone: () => 
       }),
     ),
   });
+
+  if (step === "create-contact") {
+    return (
+      <CreateLoanContactStep
+        initialName={createName}
+        onBack={() => setStep("edit")}
+        onCancel={onDone}
+        onResolved={({ contact }) => {
+          form.setValue("loanContactId", contact.id, { shouldValidate: true });
+          form.setValue("loanContactName", contact.name);
+          setStep("edit");
+        }}
+      />
+    );
+  }
+
+  return (
+    <EditLoanForm
+      form={form}
+      loan={loan}
+      onDone={onDone}
+      onRequestCreate={(name) => {
+        setCreateName(name);
+        setStep("create-contact");
+      }}
+    />
+  );
+}
+
+function EditLoanForm({
+  form,
+  loan,
+  onDone,
+  onRequestCreate,
+}: {
+  form: UseFormReturn<LoanValues>;
+  loan: LoanListItemView;
+  onDone: () => void;
+  onRequestCreate: (name: string) => void;
+}) {
+  const t = useTranslations("books.details.loan");
+  const tErrors = useTranslations("books.details.loan.errors");
+  const tActions = useTranslations("books.actions");
+  const tEdit = useTranslations("loans.edit");
+  const editLoan = useEditLoan();
+  const [serverError, setServerError] = useState<null | string>(null);
+
+  const variant = loan.type === "lent_to_someone" ? "lent" : "borrowed";
+
+  const {
+    control,
+    formState: { errors },
+    handleSubmit,
+    setValue,
+  } = form;
 
   const loanContactId = useWatch({ control, name: "loanContactId" });
   const loanContactName = useWatch({ control, name: "loanContactName" });
@@ -192,10 +240,12 @@ function EditLoanForm({ loan, onDone }: { loan: LoanListItemView; onDone: () => 
         <Label htmlFor="edit-loan-contact-picker">{t(`${variant}.personName`)}</Label>
         <LoanContactPicker
           describedBy={errors.loanContactId ? "edit-loan-contact-picker-error" : undefined}
+          direction={variant}
           id="edit-loan-contact-picker"
           invalid={errors.loanContactId !== undefined}
           label={t(`${variant}.personName`)}
           onChange={handleContactChange}
+          onRequestCreate={onRequestCreate}
           placeholder={t(`${variant}.personNamePlaceholder`)}
           value={contactSelection}
         />

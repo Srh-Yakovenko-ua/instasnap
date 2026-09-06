@@ -5,7 +5,6 @@ import {
   IN_TRANSIT_ATTENTION_FILTER,
   InTransitAttentionReasonSchema,
 } from "@app/shared";
-import { isAfter, isValid, parseISO } from "date-fns";
 import {
   type inferParserType,
   parseAsArrayOf,
@@ -21,8 +20,14 @@ import type {
 } from "@/shared/api/generated/model";
 
 import {
+  isInvertedDayRange,
+  isStorableDay,
+  isStorableOrderId,
+} from "@/features/books/model/filter-chips";
+import {
   DeliveryReadControllerInTransitListCurrencyItem,
   DeliveryReadControllerInTransitListFilter,
+  DeliveryReadControllerInTransitListOrderState,
   DeliveryReadControllerInTransitListSort,
   DeliveryReadControllerInTransitListStructureItem,
 } from "@/shared/api/generated/model";
@@ -44,6 +49,9 @@ export const DELIVERY_CURRENCY_VALUES = Object.values(
 );
 export const DELIVERY_STRUCTURE_VALUES = Object.values(
   DeliveryReadControllerInTransitListStructureItem,
+);
+export const DELIVERY_ORDER_STATE_VALUES = Object.values(
+  DeliveryReadControllerInTransitListOrderState,
 );
 
 export type DeliveryFilterCounts = Record<DeliveryPrimaryFilter, number>;
@@ -67,6 +75,8 @@ export const deliveryQueryParsers = {
   filter: parseAsStringLiteral(filterValues).withDefault(DELIVERY_FILTER_DEFAULT),
   orderedFrom: parseAsString,
   orderedTo: parseAsString,
+  orderId: parseAsString,
+  orderState: parseAsStringLiteral(DELIVERY_ORDER_STATE_VALUES),
   priceMax: parseAsFloat,
   priceMin: parseAsFloat,
   q: parseAsString.withDefault(""),
@@ -98,6 +108,8 @@ export const DELIVERY_ADVANCED_RESET = {
   expectedTo: null,
   orderedFrom: null,
   orderedTo: null,
+  orderId: null,
+  orderState: null,
   priceMax: null,
   priceMin: null,
   service: null,
@@ -114,6 +126,8 @@ export const DELIVERY_ADVANCED_EMPTY: DeliveryAdvancedState = {
   expectedTo: null,
   orderedFrom: null,
   orderedTo: null,
+  orderId: null,
+  orderState: null,
   priceMax: null,
   priceMin: null,
   service: [],
@@ -128,6 +142,8 @@ export function canSortByOrderTotal(state: Pick<DeliveryQueryState, "currency">)
 export function countActiveDeliveryDimensions(state: DeliveryAdvancedState): number {
   return [
     state.ageBucket !== null,
+    isStorableOrderId(state.orderId),
+    state.orderState !== null,
     state.store.length > 0,
     state.orderedFrom !== null || state.orderedTo !== null,
     state.booksMin !== null || state.booksMax !== null,
@@ -165,10 +181,6 @@ export function isDeliveryPrimaryFilter(
   filter: DeliveryReadControllerInTransitListFilter,
 ): filter is DeliveryPrimaryFilter {
   return DELIVERY_PRIMARY_FILTERS.some((value) => value === filter);
-}
-
-export function isStorableDay(value: Nullable<string>): value is string {
-  return value !== null && isValid(parseISO(value));
 }
 
 export function resolveDeliveryPriceCurrency(
@@ -217,6 +229,8 @@ export function toDeliveryListParams(state: DeliveryQueryState): DeliveryListPar
     currency: state.currency,
     filter: state.filter,
     ...(state.ageBucket === null ? {} : { ageBucket: state.ageBucket }),
+    ...(isStorableOrderId(state.orderId) ? { orderId: state.orderId } : {}),
+    ...(state.orderState === null ? {} : { orderState: state.orderState }),
     pageSize: DELIVERY_PAGE_SIZE,
     service: state.service,
     sort: resolveDeliverySort(state),
@@ -244,11 +258,6 @@ function dayBound(
   value: Nullable<string>,
 ): Partial<DeliveryListParams> {
   return isStorableDay(value) ? { [key]: value } : {};
-}
-
-function isInvertedDayRange(from: Nullable<string>, to: Nullable<string>): boolean {
-  if (!isStorableDay(from) || !isStorableDay(to)) return false;
-  return isAfter(parseISO(from), parseISO(to));
 }
 
 function isInvertedNumberRange(min: Nullable<number>, max: Nullable<number>): boolean {

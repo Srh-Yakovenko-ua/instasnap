@@ -1,11 +1,13 @@
 "use client";
 
-import type { BookOrderStatisticsDaily } from "@app/shared";
+import type { BookOrderStatisticsDaily, Nullable, StatisticsPeriod } from "@app/shared";
 
-import { parseISO } from "date-fns";
+import { STATISTICS_METRIC_KIND } from "@app/shared";
+import { addDays, parseISO } from "date-fns";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -14,18 +16,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRouter } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import { formatDateLong } from "@/lib/format";
 
 import type { CalendarCell, CalendarMetric } from "../../model/statistics-calendar";
-import type { StatisticsDrilldownFilters } from "../../model/statistics-drilldown";
+import type { StatisticsDrilldownContext } from "../../model/statistics-drilldown";
 
 import { formatCurrencyTotals } from "../../model/money-format";
-import { CALENDAR_METRICS, calendarGrid, calendarYears } from "../../model/statistics-calendar";
-import { dayHref } from "../../model/statistics-drilldown";
+import {
+  CALENDAR_METRICS,
+  calendarGrid,
+  calendarScope,
+  resolveCalendarYear,
+} from "../../model/statistics-calendar";
+import { statisticsDrilldownLinks } from "../../model/statistics-drilldown";
+import { StatisticsDrilldownMenuContent } from "./statistics-drilldown-action";
 import { StatisticsMetricTabs, StatisticsSection } from "./statistics-section";
+import { StatisticsSectionState } from "./statistics-states";
 
 const CELL_PITCH_PX = 14;
+
+const WEEKDAY_ROWS = [0, 2, 4, 6] as const;
+
+const WEEKDAY_ANCHOR = "2026-01-05";
 
 const LEVEL_CLASS = [
   "bg-secondary",
@@ -38,23 +51,25 @@ const LEVEL_CLASS = [
 export function StatisticsCalendar({
   daily,
   drilldown,
+  isTruncated,
+  period,
   today,
 }: {
   daily: BookOrderStatisticsDaily;
-  drilldown: StatisticsDrilldownFilters;
+  drilldown: StatisticsDrilldownContext;
+  isTruncated: boolean;
+  period: StatisticsPeriod;
   today: string;
 }) {
   const t = useTranslations("delivery.statistics.calendar");
   const locale = useLocale();
-  const router = useRouter();
   const [metric, setMetric] = useState<CalendarMetric>("orders");
+  const [requestedYear, setRequestedYear] = useState<Nullable<number>>(null);
 
-  const years = calendarYears(daily);
-  const [year, setYear] = useState<null | number>(null);
-  const activeYear = year !== null && years.includes(year) ? year : (years[0] ?? null);
-
+  const scope = calendarScope({ daily, period, today });
+  const year = scope === null ? null : resolveCalendarYear({ requested: requestedYear, scope });
   const grid =
-    activeYear === null ? null : calendarGrid({ daily, metric, today, year: activeYear });
+    scope === null || year === null ? null : calendarGrid({ daily, metric, scope, year });
 
   return (
     <StatisticsSection
@@ -67,91 +82,123 @@ export function StatisticsCalendar({
             optionLabel={(value) => t(`metrics.${value}`)}
             value={metric}
           />
-          {years.length > 1 ? (
-            <Select onValueChange={(value) => setYear(Number(value))} value={String(activeYear)}>
-              <SelectTrigger
-                aria-label={t("yearLabel")}
-                className="w-24 text-xs data-[size=default]:h-8"
-              >
+          {scope === null || scope.years.length < 2 ? null : (
+            <Select onValueChange={(value) => setRequestedYear(Number(value))} value={String(year)}>
+              <SelectTrigger aria-label={t("yearLabel")} className="w-24 data-[size=default]:h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {years.map((entry) => (
+                {scope.years.map((entry) => (
                   <SelectItem key={entry} value={String(entry)}>
                     {entry}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
+          )}
         </div>
       }
-      className="h-full"
-      description={t("subtitle")}
+      description={t(`subtitle.${metric}`)}
       title={t("title")}
     >
-      {grid === null ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+      {grid === null || year === null ? (
+        <StatisticsSectionState kind="empty" title={t("empty")} />
       ) : (
         <>
           <div className="overflow-x-auto pb-1">
-            <div className="flex min-w-max flex-col gap-1">
-              <div className="relative h-4">
-                {grid.monthLabels.map((label) => (
+            <div className="flex min-w-max gap-2">
+              <div className="flex shrink-0 flex-col gap-[3px] pt-4">
+                {Array.from({ length: 7 }, (_, row) => (
                   <span
-                    className="absolute top-0 text-[0.6875rem] text-muted-foreground"
-                    key={label.monthStart}
-                    style={{ left: `${label.weekIndex * CELL_PITCH_PX}px` }}
+                    aria-hidden
+                    className="flex h-[11px] items-center text-[0.625rem] leading-none text-muted-foreground"
+                    key={row}
                   >
-                    {monthShortLabel(label.monthStart, locale)}
+                    {WEEKDAY_ROWS.some((visible) => visible === row)
+                      ? weekdayLabel(row, locale)
+                      : ""}
                   </span>
                 ))}
               </div>
-              <div className="flex gap-[3px]">
-                {grid.weeks.map((week, weekIndex) => (
-                  <div className="flex flex-col gap-[3px]" key={weekIndex}>
-                    {week.map((cell, dayIndex) =>
-                      cell === null ? (
-                        <span className="size-[11px] rounded-[3px]" key={dayIndex} />
-                      ) : (
-                        <CalendarDay
-                          cell={cell}
-                          key={cell.date}
-                          onOpen={() => router.push(dayHref(cell.date, drilldown))}
-                        />
-                      ),
-                    )}
-                  </div>
-                ))}
+
+              <div className="flex flex-col gap-1">
+                <div className="relative h-4">
+                  {grid.monthLabels.map((label) => (
+                    <span
+                      className="absolute top-0 text-[0.6875rem] text-muted-foreground"
+                      key={label.monthStart}
+                      style={{ left: `${label.weekIndex * CELL_PITCH_PX}px` }}
+                    >
+                      {monthShortLabel(label.monthStart, locale)}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-[3px]">
+                  {grid.weeks.map((week, weekIndex) => (
+                    <div className="flex flex-col gap-[3px]" key={weekIndex}>
+                      {week.map((cell, dayIndex) =>
+                        cell === null ? (
+                          <span aria-hidden className="size-[11px]" key={dayIndex} />
+                        ) : (
+                          <CalendarDay
+                            cell={cell}
+                            drilldown={drilldown}
+                            isTruncated={isTruncated}
+                            key={cell.date}
+                            metric={metric}
+                          />
+                        ),
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>{t("less")}</span>
-            {LEVEL_CLASS.map((className, level) => (
-              <span className={`size-[11px] rounded-[3px] ${className}`} key={level} />
-            ))}
-            <span>{t("more")}</span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>{t(`legendLess.${metric}`)}</span>
+              {LEVEL_CLASS.map((className, level) => (
+                <span
+                  aria-hidden
+                  className={`size-[11px] rounded-[3px] ${className}`}
+                  key={level}
+                />
+              ))}
+              <span>{t("legendMore")}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("relativeHint")}</p>
           </div>
+
+          {grid.hasValues ? null : (
+            <StatisticsSectionState kind="empty" title={t("emptyYear", { year: String(year) })} />
+          )}
         </>
       )}
     </StatisticsSection>
   );
 }
 
-function CalendarDay({ cell, onOpen }: { cell: CalendarCell; onOpen: () => void }) {
+function CalendarDay({
+  cell,
+  drilldown,
+  isTruncated,
+  metric,
+}: {
+  cell: CalendarCell;
+  drilldown: StatisticsDrilldownContext;
+  isTruncated: boolean;
+  metric: CalendarMetric;
+}) {
   const t = useTranslations("delivery.statistics.calendar");
   const locale = useLocale();
 
+  const date = formatDateLong(cell.date, locale);
   const summary =
     cell.value === 0
-      ? t("dayEmpty", { date: formatDateLong(cell.date, locale) })
-      : t("daySummary", {
-          books: cell.booksCount,
-          date: formatDateLong(cell.date, locale),
-          orders: cell.ordersCount,
-        });
+      ? t("dayEmpty", { date })
+      : t(`daySummary.${metric}`, { books: cell.booksCount, date, orders: cell.ordersCount });
 
   if (cell.value === 0) {
     return (
@@ -159,34 +206,115 @@ function CalendarDay({ cell, onOpen }: { cell: CalendarCell; onOpen: () => void 
         aria-label={summary}
         className={`size-[11px] rounded-[3px] ${LEVEL_CLASS[0]}`}
         role="img"
-        title={summary}
       />
     );
   }
 
+  const links = isTruncated
+    ? []
+    : statisticsDrilldownLinks({
+        breakdown: cell.drilldown,
+        context: drilldown,
+        metricKind: STATISTICS_METRIC_KIND.countOrStatus,
+        scope: { from: cell.date, kind: "order_date_range", to: cell.date },
+      });
+
+  const cellClass = `size-[11px] rounded-[3px] transition-transform outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:ring-2 data-[state=open]:ring-primary motion-safe:hover:scale-110 ${LEVEL_CLASS[cell.level]}`;
+  const only = links.at(0);
+  const summaryTooltip = (
+    <TooltipContent>
+      <CalendarDayDetails cell={cell} date={date} metric={metric} />
+    </TooltipContent>
+  );
+
+  if (only === undefined) {
+    return (
+      <Tooltip>
+        <TooltipTrigger aria-label={summary} className={cellClass} type="button" />
+        {summaryTooltip}
+      </Tooltip>
+    );
+  }
+
+  if (links.length === 1) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link aria-label={summary} className={`block ${cellClass}`} href={only.href} />
+        </TooltipTrigger>
+        {summaryTooltip}
+      </Tooltip>
+    );
+  }
+
   return (
-    <Tooltip>
-      <TooltipTrigger
-        aria-label={summary}
-        className={`size-[11px] cursor-pointer rounded-[3px] transition-transform outline-none hover:scale-125 focus-visible:ring-[3px] focus-visible:ring-ring/50 ${LEVEL_CLASS[cell.level]}`}
-        onClick={onOpen}
-        type="button"
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger
+            aria-label={summary}
+            className={`cursor-pointer ${cellClass}`}
+            type="button"
+          />
+        </TooltipTrigger>
+        {summaryTooltip}
+      </Tooltip>
+      <StatisticsDrilldownMenuContent
+        align="center"
+        links={links}
+        unit={metric === "books" ? "books" : "orders"}
       />
-      <TooltipContent>
-        <span className="flex flex-col gap-0.5">
-          <span className="font-medium">{formatDateLong(cell.date, locale)}</span>
-          <span>{t("counts", { books: cell.booksCount, orders: cell.ordersCount })}</span>
-          {cell.totalsByCurrency.length === 0 ? null : (
-            <span className="tabular-nums">
-              {formatCurrencyTotals(cell.totalsByCurrency, locale)}
-            </span>
-          )}
-        </span>
-      </TooltipContent>
-    </Tooltip>
+    </DropdownMenu>
+  );
+}
+
+function CalendarDayDetails({
+  cell,
+  date,
+  metric,
+}: {
+  cell: CalendarCell;
+  date: string;
+  metric: CalendarMetric;
+}) {
+  const t = useTranslations("delivery.statistics.calendar");
+  const locale = useLocale();
+
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="font-medium">{date}</span>
+      <span>{t(`tooltipPrimary.${metric}`, { count: primaryCount(cell, metric) })}</span>
+      <span className="opacity-80">
+        {t(`tooltipSecondary.${metric}`, { count: secondaryCount(cell, metric) })}
+      </span>
+      {cell.totalsByCurrency.length === 0 ? (
+        <span className="opacity-80">{t("tooltipMoneyMissing")}</span>
+      ) : (
+        <>
+          <span className="pt-0.5 opacity-80">{t("tooltipMoney")}</span>
+          <span className="tabular-nums">
+            {formatCurrencyTotals(cell.totalsByCurrency, locale)}
+          </span>
+        </>
+      )}
+    </span>
   );
 }
 
 function monthShortLabel(monthStart: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: "short" }).format(parseISO(monthStart));
+}
+
+function primaryCount(cell: CalendarCell, metric: CalendarMetric): number {
+  return metric === "books" ? cell.booksCount : cell.ordersCount;
+}
+
+function secondaryCount(cell: CalendarCell, metric: CalendarMetric): number {
+  return metric === "books" ? cell.ordersCount : cell.booksCount;
+}
+
+function weekdayLabel(row: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(
+    addDays(parseISO(WEEKDAY_ANCHOR), row),
+  );
 }

@@ -1,4 +1,9 @@
-import type { BookOrderHistorySort, BookOrderHistoryTab, Currency } from "@app/shared";
+import type {
+  BookOrderDerivedStatus,
+  BookOrderHistorySort,
+  BookOrderHistoryTab,
+  Currency,
+} from "@app/shared";
 
 import { DEFAULT_CURRENCY } from "@app/shared";
 
@@ -6,6 +11,7 @@ import { assertNever } from "../../../core/assert-never.js";
 import { ilikeContains } from "../../../core/database/like-pattern.js";
 import { Prisma } from "../../../generated/prisma/client.js";
 import { ORDER_EFFECTIVE_TOTAL_SQL, ORDER_PLACED_ON_SQL } from "./in-transit-sql.js";
+import { orderStateSql } from "./order-state-sql.js";
 
 export const HISTORY_ITEM_SOURCE = Prisma.sql`
   FROM book_order_items item
@@ -29,6 +35,8 @@ export type HistoryFilterInput = {
   cancelledTo: string | undefined;
   currency: Currency[] | undefined;
   from: string | undefined;
+  orderId: string | undefined;
+  orderState: BookOrderDerivedStatus | undefined;
   priceCurrency: Currency | undefined;
   priceMax: number | undefined;
   priceMin: number | undefined;
@@ -118,12 +126,21 @@ export function buildHistoryContentConditions({
 }
 
 export function buildHistoryOrderConditions(filter: HistoryFilterInput): Prisma.Sql {
-  const { booksMax, booksMin, currency, from, search, store, to, userId } = filter;
+  const { booksMax, booksMin, currency, from, orderId, orderState, search, store, to, userId } =
+    filter;
   const content = buildHistoryContentConditions(filter);
   const conditions: Prisma.Sql[] = [
     Prisma.sql`book_order.user_id = ${userId}::uuid`,
     correlatedContentSql(content),
   ];
+
+  if (orderId !== undefined) {
+    conditions.push(Prisma.sql`book_order.id = ${orderId}::uuid`);
+  }
+
+  if (orderState !== undefined) {
+    conditions.push(orderStateSql(orderState));
+  }
 
   if (store !== undefined) {
     conditions.push(Prisma.sql`lower(book_order.store_name) = ANY(${lowered(store)}::text[])`);

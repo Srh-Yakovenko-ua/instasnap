@@ -1,6 +1,7 @@
 "use client";
 
 import type { BookView } from "@app/shared";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -29,18 +30,20 @@ export type BookMultiSelectPickerLabels = {
   removeSelected: string;
   search: string;
   selected: (count: number) => string;
-  selectLoaded: (count: number) => string;
+  selectLoaded?: (count: number) => string;
 };
 
 export function BookMultiSelectPicker({
   baseParams,
   labels,
   onSelectedChange,
+  renderEmpty,
   selected,
 }: {
   baseParams?: Partial<LibraryListParams>;
   labels: BookMultiSelectPickerLabels;
   onSelectedChange: (books: BookView[]) => void;
+  renderEmpty?: (searched: boolean) => ReactNode;
   selected: BookView[];
 }) {
   const tCommon = useTranslations("common");
@@ -51,6 +54,7 @@ export function BookMultiSelectPicker({
   const selectedIds = new Set(selected.map((book) => book.id));
   const results = (query.data?.pages ?? []).flatMap((page) => page.items);
   const selectableResults = results.filter((book) => !selectedIds.has(book.id));
+  const searched = debouncedSearch.trim().length > 0;
 
   function toggle(book: BookView) {
     onSelectedChange(
@@ -80,7 +84,7 @@ export function BookMultiSelectPicker({
             value={search}
           />
         </div>
-        {results.length === 0 ? null : (
+        {results.length === 0 || labels.selectLoaded === undefined ? null : (
           <Button
             className="self-start"
             disabled={selectableResults.length === 0}
@@ -94,7 +98,7 @@ export function BookMultiSelectPicker({
         )}
         <ScrollArea className={cn("h-72", BOOK_PICKER_SCROLL_AREA)}>
           <BookPickerResults
-            emptyLabel={labels.empty}
+            emptyLabel={renderEmpty === undefined ? labels.empty : renderEmpty(searched)}
             isPending={query.isPending}
             loadingLabel={tCommon("loading")}
             onToggle={toggle}

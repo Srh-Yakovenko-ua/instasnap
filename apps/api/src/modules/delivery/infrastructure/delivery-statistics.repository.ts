@@ -1,19 +1,18 @@
-import type { Currency, ShipmentStatus } from "@app/shared";
+import type { BookOrderDerivedStatus, Currency } from "@app/shared";
 
-import { CurrencySchema, DEFAULT_CURRENCY, ShipmentStatusSchema } from "@app/shared";
+import { CurrencySchema, ShipmentStatusSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
 
 import type { OrderStatisticsRecordsPage } from "../domain/order-statistics-page.js";
 import type { OrderStatisticsRecord } from "../domain/statistics-scope.js";
+import type { ActiveStatisticsScope, StatisticsScope } from "./statistics-scope-sql.js";
 
 import { PrismaService } from "../../../core/database/prisma.service.js";
 import { SOFT_DELETE_SCOPE } from "../../../core/database/soft-delete.js";
 import { createLogger } from "../../../core/logger.js";
 import { Prisma } from "../../../generated/prisma/client.js";
-import {
-  capOrderStatisticsRecords,
-  ORDER_STATISTICS_FETCH,
-} from "../domain/order-statistics-page.js";
+import { capOrderStatisticsIds, ORDER_STATISTICS_FETCH } from "../domain/order-statistics-page.js";
+import { activeStatisticsScopeSql, statisticsScopeSql } from "./statistics-scope-sql.js";
 
 const log = createLogger("delivery-statistics.repository");
 
@@ -55,19 +54,17 @@ const orderStatisticsSelect = {
 
 export type ActiveOrderFilterInput = {
   currency: Currency | undefined;
-  status: ShipmentStatus | undefined;
+  orderState: BookOrderDerivedStatus | undefined;
   store: string | undefined;
   userId: string;
 };
 
-export type BookOrderStatisticsFilterInput = {
-  currency: Currency | undefined;
-  from: Date | undefined;
-  status: ShipmentStatus | undefined;
-  store: string | undefined;
-  to: Date | undefined;
-  userId: string;
+export type BookOrderStatisticsFilterInput = ActiveOrderFilterInput & {
+  from: string | undefined;
+  to: string | undefined;
 };
+
+type OrderIdRow = { id: string };
 
 type OrderStatisticsRow = Prisma.BookOrderGetPayload<typeof orderStatisticsSelect>;
 
@@ -75,127 +72,68 @@ type OrderStatisticsRow = Prisma.BookOrderGetPayload<typeof orderStatisticsSelec
 export class DeliveryStatisticsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listActiveOrderRecords(filter: ActiveOrderFilterInput): Promise<OrderStatisticsRecord[]> {
-    const rows = await this.prisma.bookOrder.findMany({
-      orderBy: { id: "asc" },
-      take: ORDER_STATISTICS_FETCH.maxOrders,
-      where: buildActiveOrderWhere(filter),
-      ...orderStatisticsSelect,
+  async listActiveOrderRecords(
+    filter: ActiveOrderFilterInput,
+  ): Promise<OrderStatisticsRecordsPage> {
+    return this.loadScopedRecords({
+      conditions: activeStatisticsScopeSql(toActiveScope(filter)),
+      source: "active orders",
+      userId: filter.userId,
     });
-
-    return rows.map(toOrderStatisticsRecord);
   }
 
   async listOrderRecords(
     filter: BookOrderStatisticsFilterInput,
   ): Promise<OrderStatisticsRecordsPage> {
-    const rows = await this.prisma.bookOrder.findMany({
-      orderBy: { id: "asc" },
-      take: ORDER_STATISTICS_FETCH.maxOrders + ORDER_STATISTICS_FETCH.overshootRows,
-      where: buildStatisticsWhere(filter),
-      ...orderStatisticsSelect,
+    return this.loadScopedRecords({
+      conditions: statisticsScopeSql(toScope(filter)),
+      source: "period orders",
+      userId: filter.userId,
     });
-    const page = capOrderStatisticsRecords(rows.map(toOrderStatisticsRecord));
-    if (page.isTruncated) {
+  }
+
+  private async loadScopedRecords({
+    conditions,
+    source,
+    userId,
+  }: {
+    conditions: Prisma.Sql;
+    source: string;
+    userId: string;
+  }): Promise<OrderStatisticsRecordsPage> {
+    const fetched = await this.prisma.$queryRaw<OrderIdRow[]>`
+      SELECT book_order.id
+      FROM book_orders book_order
+      WHERE ${conditions}
+      ORDER BY book_order.id ASC
+      LIMIT ${ORDER_STATISTICS_FETCH.maxOrders + ORDER_STATISTICS_FETCH.overshootRows}
+    `;
+    const { ids, ...quality } = capOrderStatisticsIds(fetched.map((row) => row.id));
+
+    if (quality.isTruncated) {
       log.warn(
-        { cap: page.maxOrders, userId: filter.userId },
+        { cap: quality.maxOrders, source, userId },
         "book order statistics truncated at the safety cap",
       );
     }
 
-    return page;
+    const rows = await this.prisma.bookOrder.findMany({
+      orderBy: { id: "asc" },
+      where: { id: { in: ids } },
+      ...orderStatisticsSelect,
+    });
+
+    return { ...quality, records: rows.map(toOrderStatisticsRecord) };
   }
 }
 
-function buildActiveOrderWhere({
+function toActiveScope({
   currency,
-  status,
+  orderState,
   store,
   userId,
-}: ActiveOrderFilterInput): Prisma.BookOrderWhereInput {
-  const conditions: Prisma.BookOrderWhereInput[] = [];
-
-  if (store !== undefined) {
-    conditions.push({ storeName: { equals: store, mode: "insensitive" } });
-  }
-
-  if (currency !== undefined) {
-    conditions.push(currencyWhere(currency));
-  }
-
-  if (status !== undefined) {
-    conditions.push(shipmentStatusWhere(status));
-  }
-
-  return {
-    AND: conditions,
-    items: { some: { book: SOFT_DELETE_SCOPE.active, cancelledAt: null, receivedAt: null } },
-    userId,
-  };
-}
-
-function buildStatisticsWhere({
-  currency,
-  from,
-  status,
-  store,
-  to,
-  userId,
-}: BookOrderStatisticsFilterInput): Prisma.BookOrderWhereInput {
-  const conditions: Prisma.BookOrderWhereInput[] = [];
-
-  if (store !== undefined) {
-    conditions.push({ storeName: { equals: store, mode: "insensitive" } });
-  }
-
-  if (currency !== undefined) {
-    conditions.push(currencyWhere(currency));
-  }
-
-  if (status !== undefined) {
-    conditions.push(shipmentStatusWhere(status));
-  }
-
-  if (from !== undefined || to !== undefined) {
-    conditions.push({ orderDate: { gte: from, lte: to } });
-  }
-
-  return { AND: conditions, items: { some: { book: SOFT_DELETE_SCOPE.active } }, userId };
-}
-
-function currencyWhere(currency: Currency): Prisma.BookOrderWhereInput {
-  if (currency !== DEFAULT_CURRENCY) {
-    return { currency };
-  }
-  return {
-    OR: [
-      { currency },
-      { currency: null, isFree: true },
-      { currency: null, totalAmount: { not: null } },
-    ],
-  };
-}
-
-function shipmentStatusWhere(status: ShipmentStatus): Prisma.BookOrderWhereInput {
-  const shipmentMatches: Prisma.ShipmentWhereInput = { ...SHIPMENT_WITH_LIVE_BOOKS, status };
-  if (status !== ShipmentStatusSchema.enum.ordered) {
-    return { shipments: { some: shipmentMatches } };
-  }
-  return {
-    OR: [
-      { shipments: { some: shipmentMatches } },
-      {
-        items: {
-          some: {
-            book: SOFT_DELETE_SCOPE.active,
-            cancelledAt: null,
-            receivedAt: null,
-            shipmentId: null,
-          },
-        },
-      },
-    ],
-  };
+}: ActiveOrderFilterInput): ActiveStatisticsScope {
+  return { currency, orderState, store, userId };
 }
 
 function toOrderStatisticsRecord(row: OrderStatisticsRow): OrderStatisticsRecord {
@@ -225,4 +163,8 @@ function toOrderStatisticsRecord(row: OrderStatisticsRow): OrderStatisticsRecord
     storeName: row.storeName,
     totalAmount: row.totalAmount === null ? null : row.totalAmount.toNumber(),
   };
+}
+
+function toScope({ from, to, ...rest }: BookOrderStatisticsFilterInput): StatisticsScope {
+  return { ...toActiveScope(rest), from, to };
 }

@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 
 import { useLocale, useTranslations } from "next-intl";
 import Image from "next/image";
-import { useEffect, useRef } from "react";
 
 import { UiIcon } from "@/components/icons";
 import { Badge, badgeVariants } from "@/components/ui/badge";
@@ -17,10 +16,10 @@ import { Link } from "@/i18n/navigation";
 import { formatDateLong } from "@/lib/format";
 
 import { useLoanHistoryDetail } from "../../api/use-loan-history-detail";
-import { restoreLoanTriggerFocus } from "../../model/loan-focus";
 
 type LoanHistoryDetailDrawerProps = {
   loanId: Nullable<string>;
+  onCloseAutoFocus: (event: Event) => void;
   onCorrectDate: () => void;
   onEditNote: () => void;
   onOpenChange: (open: boolean) => void;
@@ -35,29 +34,20 @@ const RESULT_BADGE_VARIANT = {
 
 export function LoanHistoryDetailDrawer({
   loanId,
+  onCloseAutoFocus,
   onCorrectDate,
   onEditNote,
   onOpenChange,
   open,
 }: LoanHistoryDetailDrawerProps) {
   const t = useTranslations("loans.history.detail");
-  const openedLoanIdRef = useRef<Nullable<string>>(null);
-
-  useEffect(() => {
-    if (loanId === null) return;
-    openedLoanIdRef.current = loanId;
-  }, [loanId]);
 
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent
         aria-describedby={undefined}
         className="w-full gap-0 p-0 data-[side=right]:w-full sm:max-w-lg"
-        onCloseAutoFocus={(event) => {
-          const openedLoanId = openedLoanIdRef.current;
-          if (openedLoanId === null) return;
-          restoreLoanTriggerFocus(event, openedLoanId);
-        }}
+        onCloseAutoFocus={onCloseAutoFocus}
         side="right"
       >
         <SheetHeader>

@@ -231,3 +231,56 @@ describe("building the request", () => {
     expect(toDeliveryHistoryListParams(state({ from: "not-a-day" }))).not.toHaveProperty("from");
   });
 });
+
+describe("the exact order filters arriving from the statistics page", () => {
+  const ORDER_ID = "3f1a6b1c-2f3d-4a5b-8c9d-0e1f2a3b4c5d";
+
+  it("reads them off a drill-down URL", () => {
+    const parsed = fromUrl(`?tab=received&orderId=${ORDER_ID}&orderState=received`);
+
+    expect(parsed.orderId).toBe(ORDER_ID);
+    expect(parsed.orderState).toBe("received");
+  });
+
+  it("drops an order state the lifecycle never names", () => {
+    expect(fromUrl("?orderState=teleported").orderState).toBeNull();
+  });
+
+  it("reaches the server as the identity it is, not as a search term", () => {
+    const params = toDeliveryHistoryListParams(state({ orderId: ORDER_ID }));
+
+    expect(params.orderId).toBe(ORDER_ID);
+    expect(params.search).toBeUndefined();
+  });
+
+  it("refuses a URL value that cannot be an order identity", () => {
+    expect(toDeliveryHistoryListParams(state({ orderId: "ORD-20260206" })).orderId).toBeUndefined();
+  });
+
+  it("stays out of the request while nothing pinned the list", () => {
+    const params = toDeliveryHistoryListParams(state());
+
+    expect(params.orderId).toBeUndefined();
+    expect(params.orderState).toBeUndefined();
+  });
+
+  it("each counts as one dimension the reader can see and clear", () => {
+    expect(
+      countActiveHistoryDimensions({ state: advanced({ orderId: ORDER_ID }), tab: "received" }),
+    ).toBe(1);
+    expect(
+      countActiveHistoryDimensions({
+        state: advanced({ orderState: "cancelled" }),
+        tab: "received",
+      }),
+    ).toBe(1);
+    expect(
+      hasActiveHistoryFilters({ state: advanced({ orderId: ORDER_ID }), tab: "received" }),
+    ).toBe(true);
+  });
+
+  it("clears together with the other advanced filters", () => {
+    expect(DELIVERY_HISTORY_ADVANCED_EMPTY.orderId).toBeNull();
+    expect(DELIVERY_HISTORY_ADVANCED_EMPTY.orderState).toBeNull();
+  });
+});

@@ -1,4 +1,10 @@
-import type { BookFormat, OwnershipStatus, ReadingStatus, ShipmentStatus } from "@app/shared";
+import type {
+  BookFormat,
+  LoanDirection,
+  OwnershipStatus,
+  ReadingStatus,
+  ShipmentStatus,
+} from "@app/shared";
 
 type StatusPayload = {
   deliveryInfo?: unknown;
@@ -67,6 +73,10 @@ export function ownershipBlockHasData(
   if (block === undefined) return false;
   const keys = activeOwnershipKeys(status);
   return keys.some((key) => hasMeaningfulValue(block[key]));
+}
+
+export function ownershipLoanDirection(status: OwnershipStatus): LoanDirection {
+  return status === "lent_to_someone" ? "lent" : "borrowed";
 }
 
 export function ownershipUsesDelivery(status: OwnershipStatus): boolean {

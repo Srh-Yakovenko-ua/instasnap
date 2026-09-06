@@ -1,12 +1,13 @@
 import type {
   LoanHistoryResult,
+  LoanHistoryResultCounts,
   LoanHistoryResultFilter,
   LoanHistorySort,
   LoanType,
   Nullable,
 } from "@app/shared";
 
-import { LoanStatusSchema, LoanTypeSchema } from "@app/shared";
+import { LoanHistoryResultSchema, LoanStatusSchema, LoanTypeSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
 
@@ -20,6 +21,8 @@ const LOAN_STATUS_RETURNED = LoanStatusSchema.enum.returned;
 const LOAN_TYPE_BORROWED = LoanTypeSchema.enum.borrowed_from_someone;
 
 const LOAN_TYPE_LENT = LoanTypeSchema.enum.lent_to_someone;
+
+const HISTORY_RESULT = LoanHistoryResultSchema.enum;
 
 const loanContactSelect = {
   select: { contact: true, id: true, name: true },
@@ -50,6 +53,12 @@ const HISTORY_RESULT_CONDITION: Record<LoanHistoryResult, Prisma.Sql> = {
   on_time: Prisma.sql`(loan.expected_return_date IS NOT NULL AND ${RETURNED_CALENDAR_DATE} <= loan.expected_return_date)`,
 };
 
+const HISTORY_RESULT_EXPRESSION = Prisma.sql`(CASE
+  WHEN ${HISTORY_RESULT_CONDITION.no_due_date} THEN ${HISTORY_RESULT.no_due_date}::text
+  WHEN ${HISTORY_RESULT_CONDITION.late} THEN ${HISTORY_RESULT.late}::text
+  ELSE ${HISTORY_RESULT.on_time}::text
+END)`;
+
 const HISTORY_ORDER_BY: Record<LoanHistorySort, Prisma.Sql> = {
   duration_desc: Prisma.sql`duration_days DESC NULLS LAST, returned_at DESC, id ASC`,
   loan_date_desc: Prisma.sql`loan_date DESC NULLS LAST, returned_at DESC, id ASC`,
@@ -74,7 +83,11 @@ const LoanHistoryOverviewRowSchema = z.object({
 });
 
 const LoanHistoryPageRowSchema = z.object({
+  allCount: z.number(),
   ids: z.array(z.uuid()),
+  lateCount: z.number(),
+  noDueDateCount: z.number(),
+  onTimeCount: z.number(),
   totalCount: z.number(),
 });
 
@@ -105,13 +118,13 @@ export type LoanHistoryOverviewRow = z.infer<typeof LoanHistoryOverviewRowSchema
 
 export type LoanHistoryPage = {
   items: CompletedLoanWithBook[];
+  resultCounts: LoanHistoryResultCounts;
   totalCount: number;
 };
 
-export type LoanHistoryPeopleInput = {
+export type LoanHistoryPeopleInput = Omit<LoanHistoryScope, "contactId"> & {
   limit: number;
   search: string | undefined;
-  userId: string;
 };
 
 export type LoanHistoryPersonCountsRow = z.infer<typeof LoanHistoryPersonCountsRowSchema>;
@@ -120,28 +133,28 @@ export type LoanHistoryPersonOptionRow = z.infer<typeof LoanHistoryPersonOptionR
 
 export type LoanHistoryScope = {
   contactId: string | undefined;
+  loanDateFrom: string | undefined;
+  loanDateTo: string | undefined;
   returnedFrom: string | undefined;
   returnedTo: string | undefined;
   type: LoanType | undefined;
   userId: string;
 };
 
-type ListLoanHistoryInput = LoanHistoryScope & {
+type ListLoanHistoryInput = LoanHistoryScopedFilter & {
   result: LoanHistoryResultFilter;
-  search: string | undefined;
   skip: number;
   sort: LoanHistorySort;
   take: number;
 };
 
-type LoanHistoryListFilter = LoanHistoryScope & {
-  result: LoanHistoryResultFilter;
-  search: string | undefined;
-};
+type LoanHistoryPageRow = z.infer<typeof LoanHistoryPageRowSchema>;
 
 type LoanHistoryRow = Prisma.BookLoanGetPayload<typeof historyBookInclude>;
 
-type TopHistoryPeopleInput = LoanHistoryScope & { take: number };
+type LoanHistoryScopedFilter = LoanHistoryScope & { search: string | undefined };
+
+type TopHistoryPeopleInput = Omit<LoanHistoryScope, "contactId"> & { take: number };
 
 @Injectable()
 export class LoanHistoryRepository {
@@ -176,22 +189,28 @@ export class LoanHistoryRepository {
   }
 
   async listHistory({
+    result,
     skip,
     sort,
     take,
     ...filter
   }: ListLoanHistoryInput): Promise<LoanHistoryPage> {
     const rows = await this.prisma.$queryRaw(Prisma.sql`
-      WITH matched AS (
+      WITH scoped AS (
         SELECT
           loan.id AS id,
           loan.returned_at AS returned_at,
           loan.loan_date AS loan_date,
           contact.name AS person_name,
           book.title AS title,
-          ${DURATION_DAYS} AS duration_days
+          ${DURATION_DAYS} AS duration_days,
+          ${HISTORY_RESULT_EXPRESSION} AS history_result
         ${HISTORY_SOURCE}
-        WHERE ${buildHistoryListWhere(filter)}
+        WHERE ${buildHistoryScopedWhere(filter)}
+      ),
+      matched AS (
+        SELECT * FROM scoped
+        ${buildMatchedResultWhere(result)}
       ),
       ranked AS (
         SELECT id, row_number() OVER (ORDER BY ${HISTORY_ORDER_BY[sort]}) AS row_position
@@ -205,14 +224,19 @@ export class LoanHistoryRepository {
       )
       SELECT
         (SELECT count(*) FROM matched)::int AS "totalCount",
+        (SELECT count(*) FROM scoped)::int AS "allCount",
+        (SELECT count(*) FILTER (WHERE history_result = ${HISTORY_RESULT.on_time}) FROM scoped)::int AS "onTimeCount",
+        (SELECT count(*) FILTER (WHERE history_result = ${HISTORY_RESULT.late}) FROM scoped)::int AS "lateCount",
+        (SELECT count(*) FILTER (WHERE history_result = ${HISTORY_RESULT.no_due_date}) FROM scoped)::int AS "noDueDateCount",
         COALESCE(
           (SELECT array_agg(id ORDER BY row_position) FROM page),
           ARRAY[]::uuid[]
         ) AS "ids"
     `);
     const [page] = z.tuple([LoanHistoryPageRowSchema]).parse(rows);
+    const resultCounts = toResultCounts(page);
     if (page.ids.length === 0) {
-      return { items: [], totalCount: page.totalCount };
+      return { items: [], resultCounts, totalCount: page.totalCount };
     }
 
     const unordered = await this.prisma.bookLoan.findMany({
@@ -221,6 +245,7 @@ export class LoanHistoryRepository {
     });
     return {
       items: orderLoansByIds({ ids: page.ids, rows: unordered }),
+      resultCounts,
       totalCount: page.totalCount,
     };
   }
@@ -249,9 +274,9 @@ export class LoanHistoryRepository {
   async people({
     limit,
     search,
-    userId,
+    ...scope
   }: LoanHistoryPeopleInput): Promise<LoanHistoryPersonOptionRow[]> {
-    const conditions = buildBaseHistoryConditions(userId);
+    const conditions = buildHistoryScopeConditions({ ...scope, contactId: undefined });
     if (search !== undefined) {
       conditions.push(Prisma.sql`contact.name ILIKE ${toLikePattern(search)}`);
     }
@@ -282,7 +307,7 @@ export class LoanHistoryRepository {
         (count(*) FILTER (WHERE loan.type = ${LOAN_TYPE_BORROWED}))::int AS "borrowedCount",
         (count(*) FILTER (WHERE loan.type = ${LOAN_TYPE_LENT}))::int AS "lentCount"
       ${HISTORY_SOURCE}
-      WHERE ${buildHistoryScopeWhere(scope)}
+      WHERE ${buildHistoryScopeWhere({ ...scope, contactId: undefined })}
       GROUP BY contact.id
       ORDER BY "totalCount" DESC, contact.name ASC
       LIMIT ${take}
@@ -300,19 +325,10 @@ function buildBaseHistoryConditions(userId: string): Prisma.Sql[] {
   ];
 }
 
-function buildHistoryListWhere({ result, search, ...scope }: LoanHistoryListFilter): Prisma.Sql {
-  const conditions = buildHistoryScopeConditions(scope);
-  if (result !== "all") {
-    conditions.push(HISTORY_RESULT_CONDITION[result]);
-  }
-  if (search !== undefined) {
-    conditions.push(buildHistorySearchCondition(search));
-  }
-  return Prisma.join(conditions, " AND ");
-}
-
 function buildHistoryScopeConditions({
   contactId,
+  loanDateFrom,
+  loanDateTo,
   returnedFrom,
   returnedTo,
   type,
@@ -331,7 +347,21 @@ function buildHistoryScopeConditions({
   if (returnedTo !== undefined) {
     conditions.push(Prisma.sql`${RETURNED_CALENDAR_DATE} <= ${returnedTo}::date`);
   }
+  if (loanDateFrom !== undefined) {
+    conditions.push(Prisma.sql`loan.loan_date >= ${loanDateFrom}::date`);
+  }
+  if (loanDateTo !== undefined) {
+    conditions.push(Prisma.sql`loan.loan_date <= ${loanDateTo}::date`);
+  }
   return conditions;
+}
+
+function buildHistoryScopedWhere({ search, ...scope }: LoanHistoryScopedFilter): Prisma.Sql {
+  const conditions = buildHistoryScopeConditions(scope);
+  if (search !== undefined) {
+    conditions.push(buildHistorySearchCondition(search));
+  }
+  return Prisma.join(conditions, " AND ");
 }
 
 function buildHistoryScopeWhere(scope: LoanHistoryScope): Prisma.Sql {
@@ -359,6 +389,10 @@ function buildHistorySearchCondition(search: string): Prisma.Sql {
   )`;
 }
 
+function buildMatchedResultWhere(result: LoanHistoryResultFilter): Prisma.Sql {
+  return result === "all" ? Prisma.empty : Prisma.sql`WHERE history_result = ${result}`;
+}
+
 function isCompletedLoan(loan: LoanHistoryRow): loan is CompletedLoanWithBook {
   return loan.returnedAt !== null;
 }
@@ -375,4 +409,18 @@ function orderLoansByIds({
     const row = byId.get(id);
     return row === undefined || !isCompletedLoan(row) ? [] : [row];
   });
+}
+
+function toResultCounts({
+  allCount,
+  lateCount,
+  noDueDateCount,
+  onTimeCount,
+}: LoanHistoryPageRow): LoanHistoryResultCounts {
+  return {
+    all: allCount,
+    late: lateCount,
+    no_due_date: noDueDateCount,
+    on_time: onTimeCount,
+  };
 }

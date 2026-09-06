@@ -19,6 +19,7 @@ import {
 } from "../../../core/iso-date.js";
 import { TRASH_RETENTION } from "../../../core/trash-retention.js";
 import { createAuthTestContext } from "../../../test/auth-test-context.js";
+import { insertFinishedReadingCycle } from "../../../test/reading-cycles.js";
 import { truncateAllTables } from "../../../test/truncate.js";
 import { AuthModule } from "../../auth/auth.module.js";
 import { ListLifecycleService } from "../../lists/application/list-lifecycle.service.js";
@@ -244,6 +245,7 @@ async function createBook({
     await prisma.bookReadingProgress.create({
       data: { bookId: book.id, finishedAt: parseIsoDate(finishedIsoDate) },
     });
+    await insertFinishedReadingCycle(prisma, { bookId: book.id, finishedIsoDate, userId });
   }
   return book.id;
 }
@@ -817,6 +819,11 @@ describe("reading goal progress", () => {
     const bookId = item?.bookId ?? MISSING_UUID;
     await prisma.bookReadingProgress.create({
       data: { bookId, finishedAt: parseIsoDate(TODAY) },
+    });
+    await insertFinishedReadingCycle(prisma, {
+      bookId,
+      finishedIsoDate: TODAY,
+      userId: owner.userId,
     });
     await syncService.syncBooks({ bookIds: [bookId], userId: owner.userId });
     const after = await getGoal({ accessToken: owner.accessToken, goalId });

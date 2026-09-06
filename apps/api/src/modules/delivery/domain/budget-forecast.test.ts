@@ -15,7 +15,13 @@ function progressAt({
   now: Date;
   spentToDate: number;
 }): ReturnType<typeof computeBudgetProgress> {
-  return computeBudgetProgress({ budget: 8000, deliverySpentToDate: 0, now, spentToDate });
+  return computeBudgetProgress({
+    budget: 8000,
+    deliverySpentToDate: 0,
+    isSpendComplete: true,
+    now,
+    spentToDate,
+  });
 }
 
 describe("resolveBudgetMonthWindow", () => {
@@ -92,6 +98,7 @@ describe("computeBudgetProgress arithmetic", () => {
     const progress = computeBudgetProgress({
       budget: 8000,
       deliverySpentToDate: 100,
+      isSpendComplete: true,
       now: AUGUST_TWENTIETH,
       spentToDate: 820,
     });
@@ -103,6 +110,7 @@ describe("computeBudgetProgress arithmetic", () => {
     const progress = computeBudgetProgress({
       budget: 0,
       deliverySpentToDate: 10,
+      isSpendComplete: true,
       now: AUGUST_TWENTIETH,
       spentToDate: 500,
     });
@@ -111,5 +119,67 @@ describe("computeBudgetProgress arithmetic", () => {
       deliveryShareOfBudgetPercent: progress.deliveryShareOfBudgetPercent,
       usedPercent: progress.usedPercent,
     }).toEqual({ deliveryShareOfBudgetPercent: null, usedPercent: 100 });
+  });
+});
+
+describe("computeBudgetProgress outlook", () => {
+  function outlookOf({ budget, spentToDate }: { budget: number; spentToDate: number }) {
+    return computeBudgetProgress({
+      budget,
+      deliverySpentToDate: 0,
+      isSpendComplete: true,
+      now: AUGUST_TWENTIETH,
+      spentToDate,
+    });
+  }
+
+  it("calls a month on track while both the spend and the pace stay inside the budget", () => {
+    expect(outlookOf({ budget: 8000, spentToDate: 3000 }).outlook).toBe("on_track");
+  });
+
+  it("calls a month at risk once the pace points past the budget", () => {
+    expect(outlookOf({ budget: 8000, spentToDate: 7000 }).outlook).toBe("at_risk");
+  });
+
+  it("calls a month exceeded on what was really spent, never on the forecast", () => {
+    expect(outlookOf({ budget: 8000, spentToDate: 9000 }).outlook).toBe("exceeded");
+  });
+
+  it("leaves the outlook pending while too few days have elapsed to project anything", () => {
+    const progress = computeBudgetProgress({
+      budget: 8000,
+      deliverySpentToDate: 0,
+      isSpendComplete: true,
+      now: AUGUST_FIRST,
+      spentToDate: 500,
+    });
+
+    expect({ forecast: progress.forecast, outlook: progress.outlook }).toEqual({
+      forecast: null,
+      outlook: "forecast_pending",
+    });
+  });
+
+  it("reports the room the pace leaves and the overage it points to as one pair", () => {
+    const onTrack = outlookOf({ budget: 8000, spentToDate: 3000 });
+    const atRisk = outlookOf({ budget: 8000, spentToDate: 7000 });
+
+    expect({
+      atRiskOverage: atRisk.projectedOverage,
+      atRiskRemaining: atRisk.projectedRemaining,
+      onTrackOverage: onTrack.projectedOverage,
+    }).toEqual({ atRiskOverage: 2850, atRiskRemaining: 0, onTrackOverage: 0 });
+  });
+
+  it("marks the forecast incomplete when the spend behind it was partial", () => {
+    const progress = computeBudgetProgress({
+      budget: 8000,
+      deliverySpentToDate: 0,
+      isSpendComplete: false,
+      now: AUGUST_TWENTIETH,
+      spentToDate: 500,
+    });
+
+    expect(progress.isForecastComplete).toBe(false);
   });
 });

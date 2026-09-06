@@ -1,5 +1,7 @@
 "use client";
 
+import type { Nullable } from "@app/shared";
+
 import { useTranslations } from "next-intl";
 
 import type { LoansControllerListSort } from "@/shared/api/generated/model";
@@ -14,12 +16,18 @@ import {
 } from "@/components/ui/select";
 
 import type { LoanDirection } from "../model/loan-pages";
+import type { LoansAdvancedState } from "../model/loans-query";
 
 import { LOANS_SORT_DEFAULT, LOANS_SORT_VALUES } from "../model/loans-query";
+import { LoansAdvancedFilters } from "./loans-advanced-filters";
 import { LoansSortSheet } from "./loans-sort-sheet";
 
 type LoansToolbarProps = {
+  advanced: LoansAdvancedState;
+  advancedCount: number;
+  contactName: Nullable<string>;
   direction: LoanDirection;
+  onApplyAdvanced: (draft: LoansAdvancedState) => void;
   onSearchChange: (value: string) => void;
   onSearchClear: () => void;
   onSortChange: (value: LoansControllerListSort) => void;
@@ -28,7 +36,11 @@ type LoansToolbarProps = {
 };
 
 export function LoansToolbar({
+  advanced,
+  advancedCount,
+  contactName,
   direction,
+  onApplyAdvanced,
   onSearchChange,
   onSearchClear,
   onSortChange,
@@ -59,6 +71,14 @@ export function LoansToolbar({
           label={t("sortLabel")}
           onChange={onSortChange}
           value={sort}
+        />
+
+        <LoansAdvancedFilters
+          activeCount={advancedCount}
+          contactName={contactName}
+          direction={direction}
+          onApply={onApplyAdvanced}
+          state={advanced}
         />
 
         <div className="hidden sm:block sm:w-80">

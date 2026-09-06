@@ -5,52 +5,59 @@ import type { Currency, Nullable } from "@app/shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import type { BookOrdersControllerStatisticsStatus } from "@/shared/api/generated/model";
+import type { BookOrdersControllerStatisticsOrderState } from "@/shared/api/generated/model";
 
 import { UiIcon } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ChipGroup } from "@/components/ui/chip-group";
+import { FilterSection } from "@/components/ui/filter-panel";
+import { Multiselect } from "@/components/ui/multiselect";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 
 import type { DeliveryStatisticsQueryState } from "../model/statistics-params";
 import type { StatisticsFilterPatch } from "../model/use-statistics-params";
 
 import {
   DELIVERY_STATISTICS_CURRENCIES,
-  DELIVERY_STATISTICS_STATUSES,
+  DELIVERY_STATISTICS_ORDER_STATES,
 } from "../model/statistics-params";
 
 type DeliveryStatisticsFiltersProps = {
   filterCount: number;
+  includeCancelled: boolean;
   onApply: (patch: StatisticsFilterPatch) => void;
+  onIncludeCancelledChange: (value: boolean) => void;
   onReset: () => void;
   state: DeliveryStatisticsQueryState;
+  stores: readonly string[];
 };
 
 type FilterDraft = {
   currency: Nullable<Currency>;
-  status: Nullable<BookOrdersControllerStatisticsStatus>;
+  orderState: Nullable<BookOrdersControllerStatisticsOrderState>;
   store: string;
 };
 
-const ANY_VALUE = "any";
-
 export function DeliveryStatisticsFilters({
   filterCount,
+  includeCancelled,
   onApply,
+  onIncludeCancelledChange,
   onReset,
   state,
+  stores,
 }: DeliveryStatisticsFiltersProps) {
   const t = useTranslations("delivery.statistics.filters");
-  const tBadge = useTranslations("delivery.badge");
+  const tOrderState = useTranslations("delivery.statistics.orderStatus");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<FilterDraft>(() => toDraft(state));
 
@@ -59,116 +66,106 @@ export function DeliveryStatisticsFilters({
     setOpen(next);
   }
 
-  function apply() {
-    onApply(toPatch(draft));
-    setOpen(false);
-  }
-
-  function reset() {
-    onReset();
-    setOpen(false);
-  }
-
   function patch(next: Partial<FilterDraft>) {
     setDraft((prev) => ({ ...prev, ...next }));
   }
 
   return (
-    <Popover onOpenChange={handleOpenChange} open={open}>
-      <PopoverTrigger asChild>
+    <Sheet onOpenChange={handleOpenChange} open={open}>
+      <SheetTrigger asChild>
         <Button className="relative" variant="secondary">
           <UiIcon name="funnel" size={16} />
           {t("label")}
           {filterCount > 0 ? (
-            <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            <Badge className="ms-1" variant="secondary">
               {filterCount}
-            </span>
+            </Badge>
           ) : null}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground" htmlFor="stats-filter-currency">
-              {t("currency")}
-            </Label>
-            <Select
-              onValueChange={(value) =>
-                patch({ currency: value === ANY_VALUE ? null : (value as Currency) })
-              }
-              value={draft.currency ?? ANY_VALUE}
-            >
-              <SelectTrigger className="h-9 w-full" id="stats-filter-currency">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_VALUE}>{t("any")}</SelectItem>
-                {DELIVERY_STATISTICS_CURRENCIES.map((currency) => (
-                  <SelectItem key={currency} value={currency}>
-                    {currency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      </SheetTrigger>
+      <SheetContent className="flex w-full flex-col gap-0 sm:max-w-md" side="right">
+        <SheetHeader>
+          <SheetTitle>{t("label")}</SheetTitle>
+        </SheetHeader>
 
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground" htmlFor="stats-filter-status">
-              {t("status")}
-            </Label>
-            <Select
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 pb-4">
+          <FilterSection title={t("currency")}>
+            <ChipGroup
+              mode="single"
+              onValueChange={(value) => patch({ currency: (value as Currency) || null })}
+              options={DELIVERY_STATISTICS_CURRENCIES.map((currency) => ({
+                label: currency,
+                value: currency,
+              }))}
+              value={draft.currency ?? ""}
+            />
+          </FilterSection>
+
+          <FilterSection title={t("status")}>
+            <ChipGroup
+              mode="single"
               onValueChange={(value) =>
                 patch({
-                  status:
-                    value === ANY_VALUE ? null : (value as BookOrdersControllerStatisticsStatus),
+                  orderState: (value as BookOrdersControllerStatisticsOrderState) || null,
                 })
               }
-              value={draft.status ?? ANY_VALUE}
-            >
-              <SelectTrigger className="h-9 w-full" id="stats-filter-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_VALUE}>{t("any")}</SelectItem>
-                {DELIVERY_STATISTICS_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {tBadge(status)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground" htmlFor="stats-filter-store">
-              {t("store")}
-            </Label>
-            <Input
-              id="stats-filter-store"
-              onChange={(event) => patch({ store: event.target.value })}
-              placeholder={t("storePlaceholder")}
-              value={draft.store}
+              options={DELIVERY_STATISTICS_ORDER_STATES.map((orderState) => ({
+                label: tOrderState(orderState),
+                value: orderState,
+              }))}
+              value={draft.orderState ?? ""}
             />
-          </div>
+          </FilterSection>
 
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <Button onClick={reset} size="sm" variant="ghost">
-              {t("reset")}
-            </Button>
-            <Button onClick={apply} size="sm">
-              {t("apply")}
-            </Button>
-          </div>
+          <FilterSection title={t("store")}>
+            <Multiselect
+              emptyText={t("storeEmpty")}
+              onValueChange={(value) => patch({ store: value.at(0) ?? "" })}
+              options={stores.map((store) => ({ label: store, value: store }))}
+              placeholder={t("storePlaceholder")}
+              searchPlaceholder={t("storeSearch")}
+              value={draft.store === "" ? [] : [draft.store]}
+            />
+          </FilterSection>
+
+          <FilterSection title={t("cancelled")}>
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
+              <Switch checked={includeCancelled} onCheckedChange={onIncludeCancelledChange} />
+              {t("includeCancelled")}
+            </label>
+          </FilterSection>
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <SheetFooter className="flex-row items-center justify-between gap-2">
+          <Button
+            onClick={() => {
+              onReset();
+              setOpen(false);
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("reset")}
+          </Button>
+          <Button
+            onClick={() => {
+              onApply(toPatch(draft));
+              setOpen(false);
+            }}
+            size="sm"
+          >
+            {t("apply")}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
 function toDraft(state: DeliveryStatisticsQueryState): FilterDraft {
-  return { currency: state.currency, status: state.status, store: state.store };
+  return { currency: state.currency, orderState: state.orderState, store: state.store };
 }
 
 function toPatch(draft: FilterDraft): StatisticsFilterPatch {
-  return { currency: draft.currency, status: draft.status, store: draft.store.trim() };
+  return { currency: draft.currency, orderState: draft.orderState, store: draft.store.trim() };
 }

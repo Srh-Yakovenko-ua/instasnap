@@ -101,6 +101,8 @@ function emptyToNull(value: unknown): null | string {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+const LOAN_PERSON_FIELD_PATHS = ["loanInfo.loanContactId", "loanInfo.personName"] as const;
+
 const SERVER_FIELD_PATHS = [
   "title",
   "authors",
@@ -228,6 +230,7 @@ export function BookForm(props: BookFormProps) {
     setError,
     setValue,
     subscribe,
+    trigger,
   } = useForm<CreateBookFormValues, unknown, CreateBookFormOutput>({
     defaultValues: defaultFormValues,
     mode: "onTouched",
@@ -346,8 +349,9 @@ export function BookForm(props: BookFormProps) {
     setValue(
       "loanInfo.loanContactId",
       selection?.kind === "picked" ? selection.contactId : undefined,
-      { shouldDirty: true, shouldValidate: true },
+      { shouldDirty: true },
     );
+    void trigger(LOAN_PERSON_FIELD_PATHS);
   }
 
   function handleAuthorsChange(next: AuthorSelection[]) {

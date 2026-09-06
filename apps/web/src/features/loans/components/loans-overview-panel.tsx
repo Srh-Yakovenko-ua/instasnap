@@ -57,8 +57,7 @@ export function LoansOverviewPanel({
                 ? null
                 : {
                     ...attention,
-                    onFilterSelect: (filter) =>
-                      panel.closeThen(() => attention.onFilterSelect(filter)),
+                    onSelect: (key) => panel.closeThen(() => attention.onSelect(key)),
                   }
             }
             direction={direction}

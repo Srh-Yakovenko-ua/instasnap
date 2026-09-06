@@ -3,6 +3,7 @@ import type { BookView } from "@app/shared";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { seriesKeys } from "@/features/series/api/series-keys";
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 
 import { bookKeys, matchesBooksExceptDetail } from "./book-keys";
 import { matchesReadingQueueKey } from "./reading-queue-keys";
@@ -22,5 +23,6 @@ export function useBookMutationSync() {
       predicate: (query) =>
         typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith("/api/delivery"),
     });
+    void invalidateStatisticsQueries(queryClient);
   };
 }

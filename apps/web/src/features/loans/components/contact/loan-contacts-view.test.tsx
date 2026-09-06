@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import type { LoanContactView } from "@app/shared";
+import type { LoanContactListItemView } from "@app/shared";
 import type { ReactNode } from "react";
 import type { Mock } from "vitest";
 
@@ -35,7 +35,7 @@ const COUNTS = { active: 2, all: 3, archived: 1 } as const;
 
 type ContactsStub = {
   counts?: { active: number; all: number; archived: number };
-  items: LoanContactView[];
+  items: LoanContactListItemView[];
   pagesCount?: number;
   totalCount?: number;
 };
@@ -65,29 +65,98 @@ describe("LoanContactsView", () => {
     expect(within(archived).getByText(messages.loans.contactDrawer.archivedBadge)).toBeVisible();
   });
 
-  it("shows the backend counts on the quick filters", async () => {
+  it("asks the backend for the unarchived contacts by default", async () => {
+    const { fetchMock } = renderView();
+
+    await screen.findByText("Ігор");
+
+    expect(lastListUrl(fetchMock)).toContain("status=active");
+  });
+
+  it("keeps the archived state out of the toolbar", async () => {
     renderView();
 
     await screen.findByText("Ігор");
+
+    expect(
+      screen.queryByRole("radio", { name: new RegExp(`^${copy.filters.statusOptions.archived}`) }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the backend counts inside the filters sheet", async () => {
+    renderView();
+
+    await screen.findByText("Ігор");
+    await openFilters();
+
     for (const [status, count] of [
-      [copy.toolbar.status.all, COUNTS.all],
-      [copy.toolbar.status.active, COUNTS.active],
-      [copy.toolbar.status.archived, COUNTS.archived],
+      [copy.filters.statusOptions.active, COUNTS.active],
+      [copy.filters.statusOptions.archived, COUNTS.archived],
+      [copy.filters.statusOptions.all, COUNTS.all],
     ] as const) {
       const chip = screen.getByRole("radio", { name: new RegExp(`^${status}`) });
       expect(within(chip).getByText(String(count))).toBeInTheDocument();
     }
   });
 
-  it("asks the backend for the archived contacts alone", async () => {
+  it("asks the backend for the archived contacts once the filter is applied", async () => {
     const { fetchMock } = renderView();
 
     await screen.findByText("Ігор");
-    await userEvent.click(
-      screen.getByRole("radio", { name: new RegExp(`^${copy.toolbar.status.archived}`) }),
-    );
+    await applyStatusFilter(copy.filters.statusOptions.archived);
 
     await waitFor(() => expect(lastListUrl(fetchMock)).toContain("status=archived"));
+    expect(await screen.findByText(copy.filters.statusOptions.archived)).toBeInTheDocument();
+  });
+
+  it("leaves the list alone until the filter is applied", async () => {
+    const { fetchMock } = renderView();
+
+    await screen.findByText("Ігор");
+    await openFilters();
+    await userEvent.click(
+      screen.getByRole("radio", { name: new RegExp(`^${copy.filters.statusOptions.all}`) }),
+    );
+
+    expect(lastListUrl(fetchMock)).toContain("status=active");
+  });
+
+  it("returns to the unarchived contacts when the status chip is removed", async () => {
+    const { fetchMock } = renderView();
+
+    await screen.findByText("Ігор");
+    await applyStatusFilter(copy.filters.statusOptions.archived);
+    await waitFor(() => expect(lastListUrl(fetchMock)).toContain("status=archived"));
+
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: messages.books.library.activeFilters.remove.replace(
+          "{label}",
+          copy.filters.statusOptions.archived,
+        ),
+      }),
+    );
+
+    await waitFor(() => expect(lastListUrl(fetchMock)).toContain("status=active"));
+  });
+
+  it("clears the search and the status filter together", async () => {
+    const { fetchMock } = renderView();
+
+    await screen.findByText("Ігор");
+    await applyStatusFilter(copy.filters.statusOptions.archived);
+    await userEvent.type(screen.getByLabelText(copy.toolbar.searchLabel), "Оль");
+    await waitFor(() => expect(lastListUrl(fetchMock)).toContain("search="));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: messages.books.library.activeFilters.clearAll }),
+    );
+
+    await waitFor(() => {
+      const url = lastListUrl(fetchMock);
+      expect(url).toContain("status=active");
+      expect(url).not.toContain("search=");
+    });
   });
 
   it("sends the search term to the backend", async () => {
@@ -105,7 +174,10 @@ describe("LoanContactsView", () => {
     await userEvent.click(await screen.findByRole("button", { name: copy.loadMore }));
 
     await waitFor(() => expect(lastListUrl(fetchMock)).toContain("pageNumber=2"));
-    const chip = screen.getByRole("radio", { name: new RegExp(`^${copy.toolbar.status.all}`) });
+    await openFilters();
+    const chip = screen.getByRole("radio", {
+      name: new RegExp(`^${copy.filters.statusOptions.all}`),
+    });
     expect(within(chip).getByText(String(COUNTS.all))).toBeInTheDocument();
   });
 
@@ -165,8 +237,16 @@ describe("LoanContactsView", () => {
   });
 });
 
-function contactView(overrides: Partial<LoanContactView> = {}): LoanContactView {
+function applyStatusFilter(label: string) {
+  return openFilters()
+    .then(() => userEvent.click(screen.getByRole("radio", { name: new RegExp(`^${label}`) })))
+    .then(() => userEvent.click(screen.getByRole("button", { name: copy.filters.apply })));
+}
+
+function contactView(overrides: Partial<LoanContactListItemView> = {}): LoanContactListItemView {
   return {
+    activeBorrowedCount: 0,
+    activeLentCount: 0,
     archivedAt: null,
     contact: null,
     createdAt: "2026-01-10T10:00:00.000Z",
@@ -186,7 +266,7 @@ function createCall(fetchMock: FetchMock) {
   );
 }
 
-function defaultContacts(): LoanContactView[] {
+function defaultContacts(): LoanContactListItemView[] {
   return [
     contactView({ contact: "ihor@example.com", loanCount: 3, name: "Ігор" }),
     contactView({
@@ -211,6 +291,12 @@ function lastListUrl(fetchMock: FetchMock): string {
     String(call[0]).includes("/api/loans/contacts?"),
   );
   return String(calls.at(-1)?.[0] ?? "");
+}
+
+function openFilters() {
+  return userEvent.click(
+    screen.getByRole("button", { name: new RegExp(`^${copy.filters.trigger}`) }),
+  );
 }
 
 function renderView(stub: Partial<ContactsStub> = {}) {

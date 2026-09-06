@@ -1,13 +1,20 @@
 import type {
   BookOrderStatisticsComparison,
   BookOrderStatisticsCosts,
+  BookOrderStatisticsInsights,
+  BookOrderStatisticsPulse,
+  BookOrderStatisticsRecordMonth,
   BookOrderStatisticsRecordScope,
+  Currency,
   CurrencyDelta,
+  CurrencyTotal,
+  NumericDelta,
+  StatisticsDynamics,
 } from "@app/shared";
 
 import { describe, expect, it } from "vitest";
 
-import { buildSpendingPulse, PULSE_RULES } from "./statistics-pulse.js";
+import { buildStatisticsInsights, PULSE_RULES } from "./statistics-pulse.js";
 
 const QUIET_SCOPE: BookOrderStatisticsRecordScope = {
   isPeriodFiltered: false,
@@ -15,13 +22,53 @@ const QUIET_SCOPE: BookOrderStatisticsRecordScope = {
   period: { from: null, to: null },
 };
 
-const NO_DELTA: CurrencyDelta = {
+const NO_NUMERIC: NumericDelta = {
   absoluteDelta: null,
-  currency: "UAH",
   current: null,
   percentDelta: null,
   previous: null,
 };
+
+function bucket({
+  booksCount = 0,
+  from,
+  key,
+  ordersCount = 0,
+  to,
+}: {
+  booksCount?: number;
+  from: string;
+  key: string;
+  ordersCount?: number;
+  to: string;
+}): StatisticsDynamics["buckets"][number] {
+  return {
+    comparison: null,
+    current: { booksCount, booksPerOrder: null, from, ordersCount, to, totalsByCurrency: [] },
+    drilldown: { targets: [] },
+    key,
+  };
+}
+
+function codesOf(signals: BookOrderStatisticsPulse): string[] {
+  return signals.map((signal) => signal.code);
+}
+
+function comparisonOf(
+  overrides: Partial<BookOrderStatisticsComparison> = {},
+): BookOrderStatisticsComparison {
+  return {
+    averageBookPriceByCurrency: [],
+    averageBooksPerOrder: NO_NUMERIC,
+    averageOrderAmountByCurrency: [],
+    booksCount: NO_NUMERIC,
+    ordersCount: NO_NUMERIC,
+    receivedBooksCount: NO_NUMERIC,
+    shipmentsCount: NO_NUMERIC,
+    totalsByCurrency: [],
+    ...overrides,
+  };
+}
 
 function costsOf(
   overrides: Partial<BookOrderStatisticsCosts[number]> = {},
@@ -41,7 +88,10 @@ function costsOf(
   ];
 }
 
-function delta(percentDelta: null | number, overrides: Partial<CurrencyDelta> = {}): CurrencyDelta {
+function currencyDelta(
+  percentDelta: null | number,
+  overrides: Partial<CurrencyDelta> = {},
+): CurrencyDelta {
   return {
     absoluteDelta: 100,
     currency: "UAH",
@@ -52,170 +102,348 @@ function delta(percentDelta: null | number, overrides: Partial<CurrencyDelta> = 
   };
 }
 
-function emptyComparison(): BookOrderStatisticsComparison {
-  const noNumeric = { absoluteDelta: null, current: null, percentDelta: null, previous: null };
-  return {
-    averageBookPriceByCurrency: [],
-    averageBooksPerOrder: noNumeric,
-    averageOrderAmountByCurrency: [],
-    booksCount: noNumeric,
-    ordersCount: noNumeric,
-    receivedBooksCount: noNumeric,
-    shipmentsCount: noNumeric,
-    totalsByCurrency: [],
-  };
-}
-
-function pulseOf({
+function insightsOf({
   comparison = null,
-  costs = [],
+  costs = costsOf(),
+  dynamics = { buckets: [], granularity: "month" } as StatisticsDynamics,
   landedCostDeltas = [],
   landedCoverage = [],
   recordMonthByCurrency = [],
-  scope = QUIET_SCOPE,
-  storeGrowth = [],
-}: Partial<Parameters<typeof buildSpendingPulse>[0]> = {}) {
-  return buildSpendingPulse({
+  storeMovement = [],
+  totalsByCurrency = [{ currency: "UAH" as Currency, total: 10000 }],
+}: {
+  comparison?: BookOrderStatisticsComparison | null;
+  costs?: BookOrderStatisticsCosts;
+  dynamics?: StatisticsDynamics;
+  landedCostDeltas?: CurrencyDelta[];
+  landedCoverage?: { coveragePercent: number; currency: string }[];
+  recordMonthByCurrency?: BookOrderStatisticsRecordMonth[];
+  storeMovement?: (CurrencyDelta & { store: string })[];
+  totalsByCurrency?: CurrencyTotal[];
+} = {}): BookOrderStatisticsInsights {
+  return buildStatisticsInsights({
     comparison,
     costs,
+    dynamics,
     landedCostDeltas,
     landedCoverage,
     recordMonthByCurrency,
-    scope,
-    storeGrowth,
+    scope: QUIET_SCOPE,
+    storeMovement,
+    totalsByCurrency,
   });
 }
 
-describe("buildSpendingPulse with no comparison", () => {
-  it("says nothing at all when there is nothing to say", () => {
-    expect(pulseOf({})).toEqual([]);
-  });
+function numericDelta(percentDelta: null | number, overrides: Partial<NumericDelta> = {}) {
+  return { absoluteDelta: 5, current: 55, percentDelta, previous: 50, ...overrides };
+}
 
-  it("emits no comparison-derived insight while compare is off", () => {
-    const pulse = pulseOf({ costs: costsOf(), landedCostDeltas: [delta(50)] });
+function recordMonthOf(currency: Currency, total: number): BookOrderStatisticsRecordMonth {
+  return {
+    booksCount: 10,
+    currency,
+    drilldown: { targets: [] },
+    month: "2026-03",
+    ordersCount: 4,
+    total,
+  };
+}
 
-    expect(pulse.filter((signal) => signal.code === "spend_change")).toEqual([]);
-  });
-});
+function spendOf(
+  insights: BookOrderStatisticsInsights,
+  currency: Currency,
+): BookOrderStatisticsPulse {
+  return insights.spendByCurrency.find((group) => group.currency === currency)?.signals ?? [];
+}
 
-describe("buildSpendingPulse significance gates", () => {
-  it("ignores a spend change too small to be worth a sentence", () => {
-    const comparison = emptyComparison();
-    comparison.totalsByCurrency = [delta(PULSE_RULES.spendChangePercent - 1)];
-
-    expect(pulseOf({ comparison })).toEqual([]);
-  });
-
-  it("speaks up once the spend change clears the threshold", () => {
-    const comparison = emptyComparison();
-    comparison.totalsByCurrency = [delta(PULSE_RULES.spendChangePercent)];
-
-    expect(pulseOf({ comparison }).map((signal) => signal.code)).toEqual(["spend_change"]);
-  });
-
-  it("stays quiet when the previous period was zero, rather than inventing a percent", () => {
-    const comparison = emptyComparison();
-    comparison.totalsByCurrency = [NO_DELTA];
-
-    expect(pulseOf({ comparison })).toEqual([]);
-  });
-
-  it("withholds a landed-cost verdict while coverage is too thin to support one", () => {
-    const thin = pulseOf({
-      landedCostDeltas: [delta(40)],
-      landedCoverage: [
-        { coveragePercent: PULSE_RULES.minLandedCoveragePercent - 1, currency: "UAH" },
+describe("statistics insights grouped by selected context", () => {
+  it("keeps one currency's records out of another currency's group", () => {
+    const insights = insightsOf({
+      recordMonthByCurrency: [recordMonthOf("UAH", 5000), recordMonthOf("EUR", 90)],
+      totalsByCurrency: [
+        { currency: "UAH", total: 10000 },
+        { currency: "EUR", total: 200 },
       ],
     });
-    const solid = pulseOf({
-      landedCostDeltas: [delta(40)],
-      landedCoverage: [{ coveragePercent: PULSE_RULES.minLandedCoveragePercent, currency: "UAH" }],
-    });
 
-    expect({ solid: solid.map((signal) => signal.code), thin }).toEqual({
-      solid: ["avg_landed_cost_change"],
-      thin: [],
-    });
-  });
-
-  it("flags delivery only once it eats a real share of the spend", () => {
-    const quiet = pulseOf({
-      costs: costsOf({ deliveryShareOfSpendPercent: PULSE_RULES.deliverySharePercent - 1 }),
-    });
-    const loud = pulseOf({
-      costs: costsOf({
-        deliveryShareOfSpendPercent: PULSE_RULES.deliverySharePercent,
-        deliveryTotal: 500,
-      }),
-    });
-
-    expect({ loud: loud.map((signal) => signal.code), quiet }).toEqual({
-      loud: ["delivery_share"],
-      quiet: [],
-    });
-  });
-
-  it("celebrates a discount only when something was actually saved", () => {
-    const nothing = pulseOf({ costs: costsOf({ discountTotal: 0 }) });
-    const saved = pulseOf({
-      costs: costsOf({ discountShareOfRawSubtotalPercent: 20, discountTotal: 300 }),
-    });
-
-    expect({ nothing, saved: saved.map((signal) => signal.code) }).toEqual({
-      nothing: [],
-      saved: ["discount_savings"],
-    });
-  });
-});
-
-describe("buildSpendingPulse ranking", () => {
-  it("keeps each currency's spend change as its own signal", () => {
-    const comparison = emptyComparison();
-    comparison.totalsByCurrency = [delta(30), delta(30, { currency: "USD" })];
-
-    expect(pulseOf({ comparison }).map((signal) => signal.currency)).toEqual(["UAH", "USD"]);
-  });
-
-  it("leads with the spend change and drops the least useful signal at the cap", () => {
-    const comparison = emptyComparison();
-    comparison.totalsByCurrency = [delta(30)];
-    comparison.averageBookPriceByCurrency = [delta(30)];
-
-    const pulse = pulseOf({
-      comparison,
-      costs: costsOf({
-        deliveryShareOfSpendPercent: 40,
-        deliveryTotal: 900,
-        discountShareOfRawSubtotalPercent: 30,
-        discountTotal: 400,
-      }),
-      landedCostDeltas: [delta(30)],
-      landedCoverage: [{ coveragePercent: 100, currency: "UAH" }],
-      storeGrowth: [{ ...delta(30), store: "Yakaboo" }],
-    });
-
-    expect(pulse).toHaveLength(PULSE_RULES.maxSignals);
-    expect(pulse.map((signal) => signal.code)).toEqual([
-      "spend_change",
-      "avg_book_price_change",
-      "avg_landed_cost_change",
-      "store_growth",
+    expect(spendOf(insights, "UAH")).toEqual([
+      expect.objectContaining({ code: "record_month", currency: "UAH", total: 5000 }),
+    ]);
+    expect(spendOf(insights, "EUR")).toEqual([
+      expect.objectContaining({ code: "record_month", currency: "EUR", total: 90 }),
     ]);
   });
 
-  it("hands the record month the scope so the wording can stay honest under truncation", () => {
-    const scope: BookOrderStatisticsRecordScope = {
-      isPeriodFiltered: true,
-      isTruncated: true,
-      period: { from: "2026-03-01", to: "2026-03-31" },
-    };
-    const [signal] = pulseOf({
-      recordMonthByCurrency: [
-        { booksCount: 3, currency: "UAH", month: "2026-03", ordersCount: 2, total: 900 },
-      ],
-      scope,
+  it("answers a USD context with USD facts alone", () => {
+    const insights = insightsOf({
+      recordMonthByCurrency: [recordMonthOf("USD", 300)],
+      totalsByCurrency: [{ currency: "USD", total: 900 }],
     });
 
-    expect(signal?.code === "record_month" ? signal.scope : null).toEqual(scope);
+    expect(spendOf(insights, "USD")).toHaveLength(1);
+    expect(spendOf(insights, "UAH")).toEqual([]);
+  });
+
+  it("gives the order metric its own insights instead of money ones", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ ordersCount: numericDelta(24) }),
+      costs: costsOf({ deliveryShareOfSpendPercent: 40, deliveryTotal: 800 }),
+    });
+
+    expect(codesOf(insights.orders)).toEqual(["orders_count_change"]);
+    expect(codesOf(insights.spendByCurrency[0]?.signals ?? [])).toContain("delivery_share");
+  });
+
+  it("gives the book metric its own change signal", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ booksCount: numericDelta(31) }),
+    });
+
+    expect(codesOf(insights.books)).toEqual(["books_count_change"]);
+  });
+
+  it("reports how the basket size moved for both count metrics", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        averageBooksPerOrder: numericDelta(18),
+        booksCount: numericDelta(31),
+        ordersCount: numericDelta(24),
+      }),
+    });
+
+    expect(codesOf(insights.orders)).toEqual([
+      "orders_count_change",
+      "average_books_per_order_change",
+    ]);
+    expect(codesOf(insights.books)).toEqual([
+      "books_count_change",
+      "average_books_per_order_change",
+    ]);
   });
 });
+
+describe("statistics insights priority and diversity", () => {
+  it("leads with the change and follows the spec order across families", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        averageBookPriceByCurrency: [currencyDelta(20)],
+        totalsByCurrency: [currencyDelta(30)],
+      }),
+      costs: costsOf({ deliveryShareOfSpendPercent: 40, deliveryTotal: 800 }),
+      recordMonthByCurrency: [recordMonthOf("UAH", 5000)],
+      storeMovement: [{ ...currencyDelta(50, { absoluteDelta: 4000 }), store: "Yakaboo" }],
+    });
+
+    expect(codesOf(spendOf(insights, "UAH"))).toEqual([
+      "spend_change",
+      "avg_book_price_change",
+      "store_movement",
+      "delivery_share",
+    ]);
+  });
+
+  it("never returns two insights of the same family", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        averageBookPriceByCurrency: [currencyDelta(20)],
+        totalsByCurrency: [currencyDelta(30)],
+      }),
+      landedCostDeltas: [currencyDelta(25)],
+      landedCoverage: [{ coveragePercent: 90, currency: "UAH" }],
+    });
+
+    expect(codesOf(spendOf(insights, "UAH"))).toEqual(["spend_change", "avg_landed_cost_change"]);
+  });
+
+  it("prefers the actual cost of a book over its listed price", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ averageBookPriceByCurrency: [currencyDelta(20)] }),
+      landedCostDeltas: [currencyDelta(25)],
+      landedCoverage: [{ coveragePercent: 90, currency: "UAH" }],
+    });
+
+    expect(codesOf(spendOf(insights, "UAH"))).toEqual(["avg_landed_cost_change"]);
+  });
+
+  it("distrusts an actual cost built on too few books", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ averageBookPriceByCurrency: [currencyDelta(20)] }),
+      landedCostDeltas: [currencyDelta(25)],
+      landedCoverage: [{ coveragePercent: 10, currency: "UAH" }],
+    });
+
+    expect(codesOf(spendOf(insights, "UAH"))).toEqual(["avg_book_price_change"]);
+  });
+
+  it("promotes the record to the headline when there is nothing to compare against", () => {
+    const insights = insightsOf({
+      costs: costsOf({ deliveryShareOfSpendPercent: 40, deliveryTotal: 800 }),
+      recordMonthByCurrency: [recordMonthOf("UAH", 5000)],
+    });
+
+    expect(codesOf(spendOf(insights, "UAH"))).toEqual(["record_month", "delivery_share"]);
+  });
+
+  it("names the busiest bucket when no comparison exists, and points at its column", () => {
+    const insights = insightsOf({
+      dynamics: {
+        buckets: [
+          bucket({
+            booksCount: 4,
+            from: "2026-01-01",
+            key: "2026-01",
+            ordersCount: 2,
+            to: "2026-01-31",
+          }),
+          bucket({
+            booksCount: 20,
+            from: "2026-03-01",
+            key: "2026-03",
+            ordersCount: 9,
+            to: "2026-03-31",
+          }),
+        ],
+        granularity: "month",
+      },
+    });
+
+    expect(insights.orders).toEqual([
+      expect.objectContaining({
+        bucketKey: "2026-03",
+        code: "record_orders_bucket",
+        ordersCount: 9,
+      }),
+    ]);
+    expect(insights.books).toEqual([
+      expect.objectContaining({
+        booksCount: 20,
+        bucketKey: "2026-03",
+        code: "record_books_bucket",
+      }),
+    ]);
+  });
+
+  it("keeps the record as context once a real change owns the headline", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ ordersCount: numericDelta(24) }),
+      dynamics: {
+        buckets: [bucket({ from: "2026-03-01", key: "2026-03", ordersCount: 9, to: "2026-03-31" })],
+        granularity: "month",
+      },
+    });
+
+    expect(codesOf(insights.orders)).toEqual(["orders_count_change", "record_orders_bucket"]);
+  });
+
+  it("selects by business priority rather than by the order signals were generated in", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        averageBookPriceByCurrency: [currencyDelta(20)],
+        totalsByCurrency: [currencyDelta(30)],
+      }),
+      costs: costsOf({
+        deliveryShareOfSpendPercent: 40,
+        deliveryTotal: 800,
+        discountShareOfRawSubtotalPercent: 20,
+        discountTotal: 500,
+      }),
+      recordMonthByCurrency: [recordMonthOf("UAH", 5000)],
+      storeMovement: [{ ...currencyDelta(50, { absoluteDelta: 4000 }), store: "Yakaboo" }],
+    });
+
+    const signals = spendOf(insights, "UAH");
+    expect(signals).toHaveLength(FAMILY_COUNT);
+    expect(codesOf(signals)).not.toContain("discount_savings");
+    expect(codesOf(signals)).not.toContain("record_month");
+  });
+});
+
+describe("statistics insights thresholds", () => {
+  it("stays silent about a change too small to matter", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        totalsByCurrency: [currencyDelta(PULSE_RULES.spendChangePercent - 1)],
+      }),
+    });
+
+    expect(spendOf(insights, "UAH")).toEqual([]);
+  });
+
+  it("cannot rank a change whose share of the period is unknown", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({ totalsByCurrency: [currencyDelta(null)] }),
+    });
+
+    expect(spendOf(insights, "UAH")).toEqual([]);
+  });
+
+  it("shows a store that grew and a store that fell alike", () => {
+    const grew = insightsOf({
+      storeMovement: [{ ...currencyDelta(50, { absoluteDelta: 4000 }), store: "Yakaboo" }],
+    });
+    const fell = insightsOf({
+      storeMovement: [{ ...currencyDelta(-50, { absoluteDelta: -4000 }), store: "Vivat" }],
+    });
+
+    expect(spendOf(grew, "UAH")).toEqual([
+      expect.objectContaining({ absoluteDelta: 4000, code: "store_movement", store: "Yakaboo" }),
+    ]);
+    expect(spendOf(fell, "UAH")).toEqual([
+      expect.objectContaining({ absoluteDelta: -4000, code: "store_movement", store: "Vivat" }),
+    ]);
+  });
+
+  it("refuses a huge percentage built on a tiny slice of the period", () => {
+    const insights = insightsOf({
+      storeMovement: [
+        { ...currencyDelta(900, { absoluteDelta: 90, current: 100, previous: 10 }), store: "Мала" },
+      ],
+      totalsByCurrency: [{ currency: "UAH", total: 10000 }],
+    });
+
+    expect(spendOf(insights, "UAH")).toEqual([]);
+  });
+
+  it("says nothing at all rather than padding the group with noise", () => {
+    expect(insightsOf()).toEqual({ books: [], orders: [], spendByCurrency: [] });
+  });
+});
+
+describe("statistics insights tone", () => {
+  it("keeps every directional change neutral instead of judging it", () => {
+    const insights = insightsOf({
+      comparison: comparisonOf({
+        averageBookPriceByCurrency: [currencyDelta(-20)],
+        booksCount: numericDelta(-31),
+        ordersCount: numericDelta(-24),
+        totalsByCurrency: [currencyDelta(-30)],
+      }),
+      landedCostDeltas: [currencyDelta(-25)],
+      landedCoverage: [{ coveragePercent: 90, currency: "UAH" }],
+      storeMovement: [{ ...currencyDelta(-50, { absoluteDelta: -4000 }), store: "Vivat" }],
+    });
+
+    const tones = [...spendOf(insights, "UAH"), ...insights.orders, ...insights.books].map(
+      (signal) => signal.tone,
+    );
+    expect(new Set(tones)).toEqual(new Set(["neutral"]));
+  });
+
+  it("flags an unusually heavy delivery and praises a real saving", () => {
+    const delivery = insightsOf({
+      costs: costsOf({ deliveryShareOfSpendPercent: 40, deliveryTotal: 800 }),
+    });
+    const discount = insightsOf({
+      costs: costsOf({ discountShareOfRawSubtotalPercent: 20, discountTotal: 500 }),
+    });
+
+    expect(spendOf(delivery, "UAH")).toEqual([
+      expect.objectContaining({ code: "delivery_share", tone: "attention" }),
+    ]);
+    expect(spendOf(discount, "UAH")).toEqual([
+      expect.objectContaining({ code: "discount_savings", tone: "positive" }),
+    ]);
+  });
+});
+
+const FAMILY_COUNT = 4;

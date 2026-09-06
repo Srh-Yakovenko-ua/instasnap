@@ -1,9 +1,10 @@
 import { z } from "zod";
 
-import type { Currency } from "./book-enums.js";
+import type { BookOrderDerivedStatus, Currency } from "./book-enums.js";
 
 import {
   ActiveShipmentStatusSchema,
+  BookOrderDerivedStatusSchema,
   CurrencySchema,
   DeliveryUiStatusSchema,
   ShipmentStatusSchema,
@@ -43,13 +44,17 @@ import {
   BookOrderStatisticsComparisonSchema,
   BookOrderStatisticsCostsSchema,
   BookOrderStatisticsDailySchema,
+  BookOrderStatisticsFinancialCoverageSchema,
+  BookOrderStatisticsInsightsSchema,
   BookOrderStatisticsLandedCoverageSchema,
   BookOrderStatisticsLandedSchema,
   BookOrderStatisticsMetaSchema,
-  BookOrderStatisticsPulseSchema,
+  BookOrderStatisticsPriceCoverageSchema,
   BookOrderStatisticsRecordScopeSchema,
   BookOrderStatisticsSnapshotSchema,
   CurrencyCountSchema,
+  StatisticsDrilldownBreakdownSchema,
+  StatisticsDynamicsSchema,
 } from "./order-statistics.js";
 import { ReadingGoalRiskLevelSchema } from "./reading-goals.js";
 
@@ -108,17 +113,6 @@ const orderFinancialIssuePath = (message: string): string[] => [
     "totalAmount",
   ]),
 ];
-
-export const BookOrderDerivedStatusSchema = z.enum([
-  "active",
-  "partially_shipped",
-  "shipped",
-  "partially_received",
-  "received",
-  "cancelled",
-]);
-
-export type BookOrderDerivedStatus = z.infer<typeof BookOrderDerivedStatusSchema>;
 
 export const ShipmentDeliveryServiceViewSchema = z.object({
   id: z.string().nullable(),
@@ -602,6 +596,15 @@ export const InTransitQuerySchema = z.object({
   filter: InTransitFilterSchema.default("all"),
   orderedFrom: isoDay().optional(),
   orderedTo: isoDay().optional(),
+  orderId: z
+    .uuid()
+    .optional()
+    .describe(
+      "Opens exactly one order by identity. Statistics navigates here instead of searching for an order number, which is a display label and not a key.",
+    ),
+  orderState: BookOrderDerivedStatusSchema.optional().describe(
+    "Keeps only orders in one derived lifecycle state. A state no in-transit order can hold yields an empty list rather than being quietly ignored.",
+  ),
   ...paginationQueryFields({ pageSizeDefault: BOOK_ORDER_LIMITS.pageSizeDefault }),
   priceCurrency: CurrencySchema.optional().describe(
     "Gates the canonical order total range. The range is ignored unless exactly one currency is named here.",
@@ -715,6 +718,15 @@ export const BookOrderHistoryQuerySchema = z
     cancelledTo: isoDay().optional(),
     currency: queryStringArray(CurrencySchema),
     from: isoDay().optional(),
+    orderId: z
+      .uuid()
+      .optional()
+      .describe(
+        "Opens exactly one order by identity. Statistics navigates here instead of searching for an order number, which is a display label and not a key.",
+      ),
+    orderState: BookOrderDerivedStatusSchema.optional().describe(
+      "Keeps only orders in one derived lifecycle state, so a drill-down reproduces the very subset a statistic was built from.",
+    ),
     ...paginationQueryFields({ pageSizeDefault: BOOK_ORDER_LIMITS.pageSizeDefault }),
     priceCurrency: CurrencySchema.optional().describe(
       "Gates the canonical order total range. The range is ignored unless exactly one currency is named here.",
@@ -1219,7 +1231,9 @@ export const BookOrderStatisticsQuerySchema = z.object({
   currency: CurrencySchema.optional(),
   from: isoDay().optional(),
   includeCancelled: QueryBooleanWithDefaultSchema,
-  status: ShipmentStatusSchema.optional(),
+  orderState: BookOrderDerivedStatusSchema.optional().describe(
+    "Narrows the dataset to orders sitting in one derived lifecycle state. It is the same state the lifecycle chart counts and the same one a drill-down carries to a destination page, so a statistic and the list it opens can never disagree.",
+  ),
   store: z.string().trim().max(BOOK_ORDER_LIMITS.storeMax).optional(),
   to: isoDay().optional(),
 });
@@ -1236,7 +1250,9 @@ export const BookOrderStatisticsSummarySchema = z.object({
   booksCount: CountSchema,
   cancelledOrdersCount: CountSchema,
   cancelledTotalsByCurrency: z.array(CurrencyTotalSchema),
+  financialCoverageByCurrency: z.array(BookOrderStatisticsFinancialCoverageSchema),
   ordersCount: CountSchema,
+  priceCoverageByCurrency: z.array(BookOrderStatisticsPriceCoverageSchema),
   receivedBooksCount: CountSchema,
   receivedTotalsByCurrency: z.array(CurrencyTotalSchema),
   shipmentsCount: CountSchema,
@@ -1251,12 +1267,20 @@ export const BookOrderStatisticsStoreSchema = z.object({
   averageLandedBookCostByCurrency: z.array(CurrencyAverageSchema),
   averageOrderAmountByCurrency: z.array(CurrencyAverageSchema),
   booksCount: CountSchema,
+  booksCountByCurrency: z.array(CurrencyCountSchema),
   deliveryTotalByCurrency: z.array(CurrencyTotalSchema),
   discountTotalByCurrency: z.array(CurrencyTotalSchema),
+  drilldown: StatisticsDrilldownBreakdownSchema,
   landedCoverageByCurrency: z.array(BookOrderStatisticsLandedCoverageSchema),
   landedEligibleBooksCountByCurrency: z.array(CurrencyCountSchema),
   ordersCount: CountSchema,
+  ordersCountByCurrency: z.array(CurrencyCountSchema),
   store: z.string(),
+  storeKey: z
+    .string()
+    .describe(
+      "A stable key for the same store across blocks. There is no store entity, so this is the canonical name normalized, and it is what shared highlighting and drill-downs match on rather than the display name.",
+    ),
   totalsByCurrency: z.array(CurrencyTotalSchema),
 });
 
@@ -1271,14 +1295,26 @@ export const BookOrderStatisticsMonthSchema = z.object({
 
 export type BookOrderStatisticsMonth = z.infer<typeof BookOrderStatisticsMonthSchema>;
 
-export const BookOrderStatisticsTopOrderSchema = z.object({
-  booksCount: CountSchema,
-  currency: CurrencySchema.nullable(),
-  derivedStatus: BookOrderDerivedStatusSchema,
-  id: z.string(),
-  orderDate: z.string().nullable(),
-  orderNumber: z.string().nullable(),
-  storeName: z.string(),
+export const BookOrderStatisticsOrderIdentitySchema = z
+  .object({
+    booksCount: CountSchema,
+    currency: CurrencySchema.nullable(),
+    derivedStatus: BookOrderDerivedStatusSchema,
+    id: z.string(),
+    orderDate: z.string().nullable(),
+    orderNumber: z.string().nullable(),
+    storeName: z.string(),
+    totalAmount: z.number().nullable(),
+  })
+  .describe(
+    "One order named by its id, which is what navigation uses. orderNumber is a label a user may never have filled in and never decides whether the order can be opened.",
+  );
+
+export type BookOrderStatisticsOrderIdentity = z.infer<
+  typeof BookOrderStatisticsOrderIdentitySchema
+>;
+
+export const BookOrderStatisticsTopOrderSchema = BookOrderStatisticsOrderIdentitySchema.extend({
   totalAmount: z.number(),
 });
 
@@ -1368,13 +1404,18 @@ export const BookOrderStatisticsLifecycleSchema = z
 
 export type BookOrderStatisticsLifecycle = z.infer<typeof BookOrderStatisticsLifecycleSchema>;
 
-export const BookOrderStatisticsRecordMonthSchema = z.object({
-  booksCount: CountSchema,
-  currency: CurrencySchema,
-  month: z.string(),
-  ordersCount: CountSchema,
-  total: z.number(),
-});
+export const BookOrderStatisticsRecordMonthSchema = z
+  .object({
+    booksCount: CountSchema,
+    currency: CurrencySchema,
+    drilldown: StatisticsDrilldownBreakdownSchema,
+    month: z.string(),
+    ordersCount: CountSchema,
+    total: z.number(),
+  })
+  .describe(
+    "The heaviest month inside one currency. Its order and book counts are counted in that same currency, so a month that also holds orders in another currency never inflates them.",
+  );
 
 export type BookOrderStatisticsRecordMonth = z.infer<typeof BookOrderStatisticsRecordMonthSchema>;
 
@@ -1389,8 +1430,10 @@ export type BookOrderStatisticsCurrencyLargestOrder = z.infer<
 
 export const BookOrderStatisticsStoreLeaderSchema = z.object({
   booksCount: CountSchema,
+  drilldown: StatisticsDrilldownBreakdownSchema,
   ordersCount: CountSchema,
   store: z.string(),
+  storeKey: z.string(),
 });
 
 export type BookOrderStatisticsStoreLeader = z.infer<typeof BookOrderStatisticsStoreLeaderSchema>;
@@ -1408,7 +1451,7 @@ export const BookOrderStatisticsRecordsSchema = z.object({
   bestValueStoreByCurrency: BookOrderStatisticsBestValueStoreByCurrencySchema,
   largestOrderByCurrency: z.array(BookOrderStatisticsCurrencyLargestOrderSchema),
   mostActiveStore: BookOrderStatisticsMostActiveStoreSchema,
-  mostBooksInOrder: BookOrderStatisticsTopOrderSchema.nullable(),
+  mostBooksInOrder: BookOrderStatisticsOrderIdentitySchema.nullable(),
   recordMonthByCurrency: z.array(BookOrderStatisticsRecordMonthSchema),
   scope: BookOrderStatisticsRecordScopeSchema,
 });
@@ -1421,11 +1464,12 @@ export const BookOrderStatisticsViewSchema = z.object({
   comparison: BookOrderStatisticsComparisonSchema.nullable(),
   costs: BookOrderStatisticsCostsSchema,
   daily: BookOrderStatisticsDailySchema,
+  dynamics: StatisticsDynamicsSchema,
+  insights: BookOrderStatisticsInsightsSchema,
   landedCost: BookOrderStatisticsLandedSchema,
   lifecycle: BookOrderStatisticsLifecycleSchema,
   meta: BookOrderStatisticsMetaSchema,
   monthly: z.array(BookOrderStatisticsMonthSchema),
-  pulse: BookOrderStatisticsPulseSchema,
   records: BookOrderStatisticsRecordsSchema,
   snapshot: BookOrderStatisticsSnapshotSchema,
   summary: BookOrderStatisticsSummarySchema,

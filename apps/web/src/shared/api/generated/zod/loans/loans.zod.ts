@@ -449,7 +449,19 @@ export const LoansControllerSummaryResponse = zod.object({
 export const loansControllerListQueryContactIdRegExp = new RegExp(
   "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 );
+export const loansControllerListQueryExpectedReturnDateFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loansControllerListQueryExpectedReturnDateToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
 export const loansControllerListQueryFilterDefault = `all`;
+export const loansControllerListQueryLoanDateFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loansControllerListQueryLoanDateToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
 export const loansControllerListQueryPageNumberDefault = 1;
 export const loansControllerListQueryPageNumberMax = 21474836;
 
@@ -462,9 +474,20 @@ export const loansControllerListQuerySortDefault = `overdue_first`;
 
 export const LoansControllerListQueryParams = zod.object({
   contactId: zod.uuid().regex(loansControllerListQueryContactIdRegExp).optional(),
+  expectedReturnDateFrom: zod.iso
+    .date()
+    .regex(loansControllerListQueryExpectedReturnDateFromRegExp)
+    .optional(),
+  expectedReturnDateTo: zod.iso
+    .date()
+    .regex(loansControllerListQueryExpectedReturnDateToRegExp)
+    .optional(),
   filter: zod
-    .enum(["all", "return_soon", "overdue", "no_return_date", "has_reminder", "without_reminder"])
+    .enum(["all", "return_soon", "overdue", "no_return_date"])
     .default(loansControllerListQueryFilterDefault),
+  hasNote: zod.string().optional(),
+  loanDateFrom: zod.iso.date().regex(loansControllerListQueryLoanDateFromRegExp).optional(),
+  loanDateTo: zod.iso.date().regex(loansControllerListQueryLoanDateToRegExp).optional(),
   pageNumber: zod
     .int()
     .min(1)
@@ -475,6 +498,7 @@ export const LoansControllerListQueryParams = zod.object({
     .min(1)
     .max(loansControllerListQueryPageSizeMax)
     .default(loansControllerListQueryPageSizeDefault),
+  reminder: zod.enum(["on", "off"]).optional(),
   search: zod.string().max(loansControllerListQuerySearchMax).optional(),
   sort: zod
     .enum(["overdue_first", "return_date", "loan_date", "title", "author", "person"])
@@ -577,6 +601,12 @@ export const LoansControllerListResponse = zod.object({
 export const loanHistoryControllerListQueryContactIdRegExp = new RegExp(
   "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 );
+export const loanHistoryControllerListQueryLoanDateFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loanHistoryControllerListQueryLoanDateToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
 export const loanHistoryControllerListQueryPageNumberDefault = 1;
 export const loanHistoryControllerListQueryPageNumberMax = 21474836;
 
@@ -596,6 +626,8 @@ export const loanHistoryControllerListQuerySortDefault = `returned_desc`;
 
 export const LoanHistoryControllerListQueryParams = zod.object({
   contactId: zod.uuid().regex(loanHistoryControllerListQueryContactIdRegExp).optional(),
+  loanDateFrom: zod.iso.date().regex(loanHistoryControllerListQueryLoanDateFromRegExp).optional(),
+  loanDateTo: zod.iso.date().regex(loanHistoryControllerListQueryLoanDateToRegExp).optional(),
   pageNumber: zod
     .int()
     .min(1)
@@ -642,6 +674,18 @@ export const loanHistoryControllerListResponsePageSizeMax = 9007199254740991;
 
 export const loanHistoryControllerListResponseTotalCountMin = -9007199254740991;
 export const loanHistoryControllerListResponseTotalCountMax = 9007199254740991;
+
+export const loanHistoryControllerListResponseResultCountsAllMin = 0;
+export const loanHistoryControllerListResponseResultCountsAllMax = 9007199254740991;
+
+export const loanHistoryControllerListResponseResultCountsLateMin = 0;
+export const loanHistoryControllerListResponseResultCountsLateMax = 9007199254740991;
+
+export const loanHistoryControllerListResponseResultCountsNoDueDateMin = 0;
+export const loanHistoryControllerListResponseResultCountsNoDueDateMax = 9007199254740991;
+
+export const loanHistoryControllerListResponseResultCountsOnTimeMin = 0;
+export const loanHistoryControllerListResponseResultCountsOnTimeMax = 9007199254740991;
 
 export const LoanHistoryControllerListResponse = zod.object({
   items: zod.array(
@@ -720,6 +764,28 @@ export const LoanHistoryControllerListResponse = zod.object({
     .int()
     .min(loanHistoryControllerListResponseTotalCountMin)
     .max(loanHistoryControllerListResponseTotalCountMax),
+  resultCounts: zod
+    .object({
+      all: zod
+        .int()
+        .min(loanHistoryControllerListResponseResultCountsAllMin)
+        .max(loanHistoryControllerListResponseResultCountsAllMax),
+      late: zod
+        .int()
+        .min(loanHistoryControllerListResponseResultCountsLateMin)
+        .max(loanHistoryControllerListResponseResultCountsLateMax),
+      no_due_date: zod
+        .int()
+        .min(loanHistoryControllerListResponseResultCountsNoDueDateMin)
+        .max(loanHistoryControllerListResponseResultCountsNoDueDateMax),
+      on_time: zod
+        .int()
+        .min(loanHistoryControllerListResponseResultCountsOnTimeMin)
+        .max(loanHistoryControllerListResponseResultCountsOnTimeMax),
+    })
+    .describe(
+      "Answers to every list filter except result itself, so all === on_time + late + no_due_date and all is the size of the dataset before the result filter is applied.",
+    ),
 });
 
 /**
@@ -727,6 +793,12 @@ export const LoanHistoryControllerListResponse = zod.object({
  */
 export const loanHistoryControllerOverviewQueryContactIdRegExp = new RegExp(
   "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const loanHistoryControllerOverviewQueryLoanDateFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loanHistoryControllerOverviewQueryLoanDateToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
 export const loanHistoryControllerOverviewQueryReturnedFromRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
@@ -737,6 +809,11 @@ export const loanHistoryControllerOverviewQueryReturnedToRegExp = new RegExp(
 
 export const LoanHistoryControllerOverviewQueryParams = zod.object({
   contactId: zod.uuid().regex(loanHistoryControllerOverviewQueryContactIdRegExp).optional(),
+  loanDateFrom: zod.iso
+    .date()
+    .regex(loanHistoryControllerOverviewQueryLoanDateFromRegExp)
+    .optional(),
+  loanDateTo: zod.iso.date().regex(loanHistoryControllerOverviewQueryLoanDateToRegExp).optional(),
   returnedFrom: zod.iso
     .date()
     .regex(loanHistoryControllerOverviewQueryReturnedFromRegExp)
@@ -775,11 +852,11 @@ export const loanHistoryControllerOverviewResponseSummaryAverageDurationDaysMax 
 export const loanHistoryControllerOverviewResponseSummaryBorrowedCountMin = 0;
 export const loanHistoryControllerOverviewResponseSummaryBorrowedCountMax = 9007199254740991;
 
+export const loanHistoryControllerOverviewResponseSummaryDurationCountMin = 0;
+export const loanHistoryControllerOverviewResponseSummaryDurationCountMax = 9007199254740991;
+
 export const loanHistoryControllerOverviewResponseSummaryLateCountMin = 0;
 export const loanHistoryControllerOverviewResponseSummaryLateCountMax = 9007199254740991;
-
-export const loanHistoryControllerOverviewResponseSummaryLatePercentMin = 0;
-export const loanHistoryControllerOverviewResponseSummaryLatePercentMax = 100;
 
 export const loanHistoryControllerOverviewResponseSummaryLentCountMin = 0;
 export const loanHistoryControllerOverviewResponseSummaryLentCountMax = 9007199254740991;
@@ -839,7 +916,11 @@ export const LoanHistoryControllerOverviewResponse = zod.object({
     onTimePercent: zod
       .int()
       .min(loanHistoryControllerOverviewResponseReliabilityOnTimePercentMin)
-      .max(loanHistoryControllerOverviewResponseReliabilityOnTimePercentMax),
+      .max(loanHistoryControllerOverviewResponseReliabilityOnTimePercentMax)
+      .nullable()
+      .describe(
+        "Share of the loans that had a due date and came back on time, so onTimeCount \/ (onTimeCount + lateCount). Null when no completed loan carried a due date, which keeps a missing percentage apart from a real 0%.",
+      ),
   }),
   summary: zod.object({
     averageDelayDays: zod
@@ -856,14 +937,17 @@ export const LoanHistoryControllerOverviewResponse = zod.object({
       .int()
       .min(loanHistoryControllerOverviewResponseSummaryBorrowedCountMin)
       .max(loanHistoryControllerOverviewResponseSummaryBorrowedCountMax),
+    durationCount: zod
+      .int()
+      .min(loanHistoryControllerOverviewResponseSummaryDurationCountMin)
+      .max(loanHistoryControllerOverviewResponseSummaryDurationCountMax)
+      .describe(
+        "How many completed loans have a loan date, so how many averageDurationDays covers.",
+      ),
     lateCount: zod
       .int()
       .min(loanHistoryControllerOverviewResponseSummaryLateCountMin)
       .max(loanHistoryControllerOverviewResponseSummaryLateCountMax),
-    latePercent: zod
-      .int()
-      .min(loanHistoryControllerOverviewResponseSummaryLatePercentMin)
-      .max(loanHistoryControllerOverviewResponseSummaryLatePercentMax),
     lentCount: zod
       .int()
       .min(loanHistoryControllerOverviewResponseSummaryLentCountMin)
@@ -879,7 +963,11 @@ export const LoanHistoryControllerOverviewResponse = zod.object({
     onTimePercent: zod
       .int()
       .min(loanHistoryControllerOverviewResponseSummaryOnTimePercentMin)
-      .max(loanHistoryControllerOverviewResponseSummaryOnTimePercentMax),
+      .max(loanHistoryControllerOverviewResponseSummaryOnTimePercentMax)
+      .nullable()
+      .describe(
+        "Share of the loans that had a due date and came back on time, so onTimeCount \/ (onTimeCount + lateCount). Null when no completed loan carried a due date, which keeps a missing percentage apart from a real 0%.",
+      ),
     totalCompleted: zod
       .int()
       .min(loanHistoryControllerOverviewResponseSummaryTotalCompletedMin)
@@ -911,6 +999,18 @@ export const LoanHistoryControllerOverviewResponse = zod.object({
 export const loanHistoryControllerPeopleQueryLimitDefault = 50;
 export const loanHistoryControllerPeopleQueryLimitMax = 200;
 
+export const loanHistoryControllerPeopleQueryLoanDateFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loanHistoryControllerPeopleQueryLoanDateToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loanHistoryControllerPeopleQueryReturnedFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const loanHistoryControllerPeopleQueryReturnedToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
 export const loanHistoryControllerPeopleQuerySearchMax = 100;
 
 export const LoanHistoryControllerPeopleQueryParams = zod.object({
@@ -919,7 +1019,12 @@ export const LoanHistoryControllerPeopleQueryParams = zod.object({
     .min(1)
     .max(loanHistoryControllerPeopleQueryLimitMax)
     .default(loanHistoryControllerPeopleQueryLimitDefault),
+  loanDateFrom: zod.iso.date().regex(loanHistoryControllerPeopleQueryLoanDateFromRegExp).optional(),
+  loanDateTo: zod.iso.date().regex(loanHistoryControllerPeopleQueryLoanDateToRegExp).optional(),
+  returnedFrom: zod.iso.date().regex(loanHistoryControllerPeopleQueryReturnedFromRegExp).optional(),
+  returnedTo: zod.iso.date().regex(loanHistoryControllerPeopleQueryReturnedToRegExp).optional(),
   search: zod.string().max(loanHistoryControllerPeopleQuerySearchMax).optional(),
+  type: zod.enum(["borrowed_from_someone", "lent_to_someone"]).optional(),
 });
 
 export const loanHistoryControllerPeopleResponseItemsItemTotalCountMin = 0;
@@ -1128,6 +1233,12 @@ export const LoanContactsControllerListQueryParams = zod.object({
 export const loanContactsControllerListResponseItemsItemLoanCountMin = 0;
 export const loanContactsControllerListResponseItemsItemLoanCountMax = 9007199254740991;
 
+export const loanContactsControllerListResponseItemsItemActiveBorrowedCountMin = 0;
+export const loanContactsControllerListResponseItemsItemActiveBorrowedCountMax = 9007199254740991;
+
+export const loanContactsControllerListResponseItemsItemActiveLentCountMin = 0;
+export const loanContactsControllerListResponseItemsItemActiveLentCountMax = 9007199254740991;
+
 export const loanContactsControllerListResponsePageMin = -9007199254740991;
 export const loanContactsControllerListResponsePageMax = 9007199254740991;
 
@@ -1162,6 +1273,14 @@ export const LoanContactsControllerListResponse = zod.object({
         .max(loanContactsControllerListResponseItemsItemLoanCountMax),
       name: zod.string(),
       updatedAt: zod.string(),
+      activeBorrowedCount: zod
+        .int()
+        .min(loanContactsControllerListResponseItemsItemActiveBorrowedCountMin)
+        .max(loanContactsControllerListResponseItemsItemActiveBorrowedCountMax),
+      activeLentCount: zod
+        .int()
+        .min(loanContactsControllerListResponseItemsItemActiveLentCountMin)
+        .max(loanContactsControllerListResponseItemsItemActiveLentCountMax),
     }),
   ),
   page: zod

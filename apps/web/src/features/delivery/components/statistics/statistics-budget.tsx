@@ -1,8 +1,8 @@
 "use client";
 
-import type { BookBudgetOverview, BookBudgetStatus, Currency } from "@app/shared";
+import type { BookBudgetOverview, BookBudgetStatus, Currency, Nullable } from "@app/shared";
 
-import { BOOK_BUDGET_RULES } from "@app/shared";
+import { BOOK_BUDGET_RULES, CurrencySchema } from "@app/shared";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,69 +10,101 @@ import { toast } from "sonner";
 import { UiIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/format";
 
-import { useCancelScheduledBudget } from "../../api/use-book-budgets";
+import type { StatisticsScopeState } from "../../model/statistics-scope-state";
+
+import { useCancelScheduledBudget, useCancelScheduledBudgetStop } from "../../api/use-book-budgets";
+import { budgetMonthInSentence, budgetMonthStandalone } from "../../model/budget-month";
 import { formatMoney } from "../../model/money-format";
-import { monthLabel } from "../../model/statistics-dynamics";
 import { StatisticsBudgetDialog } from "./statistics-budget-dialog";
-import { StatisticsCurrencyTabs, StatisticsSection } from "./statistics-section";
+import { StatisticsSection } from "./statistics-section";
+import { StatisticsDataQualityNote, StatisticsSectionState } from "./statistics-states";
+
+const BUDGET_CURRENCIES = CurrencySchema.options;
+
+const DEFAULT_BUDGET_CURRENCY: Currency = CurrencySchema.enum.UAH;
+
+const FULL_PERCENT = 100;
 
 export function StatisticsBudget({
   currency,
-  isLoading,
   onCurrencyChange,
-  overview,
+  scope,
 }: {
-  currency: Currency;
-  isLoading: boolean;
+  currency: Nullable<Currency>;
   onCurrencyChange: (currency: Currency) => void;
-  overview: BookBudgetOverview | undefined;
+  scope: StatisticsScopeState<BookBudgetOverview>;
 }) {
   const t = useTranslations("delivery.statistics.budget");
   const locale = useLocale();
   const [isDialogOpen, setDialogOpen] = useState(false);
 
-  const configured = overview?.budgets ?? [];
-  const currencies = configured.map((entry) => entry.currency);
-  const active = configured.find((entry) => entry.currency === currency) ?? configured[0] ?? null;
+  const overview = scope.data;
+  const active = currency ?? DEFAULT_BUDGET_CURRENCY;
+  const status = overview?.budgets.find((entry) => entry.currency === active) ?? null;
 
   return (
     <StatisticsSection
       action={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {currencies.length > 1 && active !== null ? (
-            <StatisticsCurrencyTabs
-              currencies={currencies}
-              label={t("currencyLabel")}
-              onChange={onCurrencyChange}
-              value={active.currency}
-            />
-          ) : null}
-          {configured.length === 0 ? null : (
-            <Button onClick={() => setDialogOpen(true)} size="sm" variant="secondary">
-              {t("edit")}
-            </Button>
-          )}
+          <Segmented
+            label={t("currencyLabel")}
+            onValueChange={(next) => onCurrencyChange(next as Currency)}
+            options={BUDGET_CURRENCIES.map((entry) => ({ label: entry, value: entry }))}
+            value={active}
+          />
+          <Button onClick={() => setDialogOpen(true)} size="lg" variant="secondary">
+            {t("edit")}
+          </Button>
         </div>
       }
       description={
         overview === undefined
           ? undefined
-          : t("monthCaption", { month: monthLabel(overview.month.slice(0, 7), locale, true) })
+          : t("monthCaption", { month: budgetMonthStandalone(overview.month, locale) })
       }
-      title={t("title")}
+      snapshotLabel={t("scopeBadge")}
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          {t("title")}
+          <Tooltip>
+            <TooltipTrigger
+              aria-label={t("scopeHint")}
+              className="text-muted-foreground"
+              type="button"
+            >
+              <UiIcon name="info" size={13} />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-72">{t("scopeHint")}</TooltipContent>
+          </Tooltip>
+        </span>
+      }
     >
-      {isLoading ? (
-        <Skeleton className="h-24 w-full rounded-lg" />
-      ) : active === null ? (
-        <div className="flex flex-col items-start gap-3">
-          <p className="max-w-md text-sm text-muted-foreground">{t("emptyDescription")}</p>
-          <Button onClick={() => setDialogOpen(true)}>{t("emptyCta")}</Button>
-        </div>
+      {scope.isInitialLoading ? (
+        <Skeleton className="h-28 w-full rounded-lg" />
+      ) : scope.isInitialError ? (
+        <StatisticsSectionState
+          action={
+            <Button onClick={scope.retry} size="sm" variant="secondary">
+              {t("retry")}
+            </Button>
+          }
+          kind="error"
+          title={t("loadFailed")}
+        />
+      ) : status === null ? (
+        <StatisticsSectionState
+          action={<Button onClick={() => setDialogOpen(true)}>{t("emptyCta")}</Button>}
+          description={t("emptyDescription")}
+          kind="empty"
+          title={t("unconfigured", { currency: active })}
+        />
       ) : (
-        <BudgetStatus status={active} />
+        <BudgetStatusBody status={status} />
       )}
 
       <StatisticsBudgetDialog
@@ -84,30 +116,90 @@ export function StatisticsBudget({
   );
 }
 
-function BudgetStatus({ status }: { status: BookBudgetStatus }) {
+function BudgetOutlook({
+  currentMonth,
+  isZeroSpend,
+  money,
+}: {
+  currentMonth: NonNullable<BookBudgetStatus["currentMonth"]>;
+  isZeroSpend: boolean;
+  money: (amount: number) => string;
+}) {
+  const t = useTranslations("delivery.statistics.budget");
+
+  if (isZeroSpend) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("zeroSpend")} {t("available", { value: money(currentMonth.remaining) })}
+      </p>
+    );
+  }
+
+  if (currentMonth.outlook === "forecast_pending") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("forecastPending", { day: BOOK_BUDGET_RULES.forecastMinimumElapsedDays })}
+      </p>
+    );
+  }
+
+  const forecast = currentMonth.forecast;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p
+        className={
+          currentMonth.outlook === "on_track"
+            ? "inline-flex items-center gap-1.5 text-sm text-success"
+            : "inline-flex items-center gap-1.5 text-sm text-favorite"
+        }
+      >
+        <UiIcon
+          aria-hidden
+          name={currentMonth.outlook === "on_track" ? "check-circle" : "alert-circle"}
+          size={14}
+        />
+        {t(`outlook.${currentMonth.outlook}`)}
+      </p>
+      {forecast === null ? null : (
+        <p className="text-sm text-muted-foreground">{t("forecast", { value: money(forecast) })}</p>
+      )}
+      {currentMonth.outlook === "at_risk" && currentMonth.projectedOverage !== null ? (
+        <p className="text-sm text-favorite">
+          {t("projectedOverage", { value: money(currentMonth.projectedOverage) })}
+        </p>
+      ) : null}
+      {currentMonth.outlook === "on_track" && currentMonth.projectedRemaining !== null ? (
+        <p className="text-sm text-muted-foreground">
+          {t("projectedRemaining", { value: money(currentMonth.projectedRemaining) })}
+        </p>
+      ) : null}
+      {currentMonth.isForecastComplete ? null : (
+        <StatisticsDataQualityNote kind="estimated">
+          {t("forecastPartial")}
+        </StatisticsDataQualityNote>
+      )}
+    </div>
+  );
+}
+
+function BudgetStatusBody({ status }: { status: BookBudgetStatus }) {
   const t = useTranslations("delivery.statistics.budget");
   const locale = useLocale();
-  const cancelScheduled = useCancelScheduledBudget();
-  const { currency, currentMonth, scheduled } = status;
+  const { currency, currentMonth, spendCoverage } = status;
   const money = (amount: number) => formatMoney({ amount, currency, locale });
 
   if (currentMonth === null) {
     return (
-      <div className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">{t("notActiveYet")}</p>
-        {scheduled === null ? null : (
-          <ScheduledLine
-            currency={currency}
-            isPending={cancelScheduled.isPending}
-            onCancel={() => cancelScheduled.mutate(currency)}
-            scheduled={scheduled}
-          />
-        )}
+      <div className="flex flex-col gap-3">
+        <StatisticsSectionState kind="insufficient" title={t("notActiveYet")} />
+        <UpcomingChanges status={status} />
       </div>
     );
   }
 
-  const usedPercent = Math.min(currentMonth.usedPercent, 100);
+  const fill = Math.min(currentMonth.usedPercent, FULL_PERCENT);
+  const isZeroSpend = currentMonth.spentToDate === 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -125,76 +217,90 @@ function BudgetStatus({ status }: { status: BookBudgetStatus }) {
 
       <Progress
         aria-label={t("progressAria", { currency })}
-        aria-valuemax={100}
+        aria-valuemax={FULL_PERCENT}
         aria-valuemin={0}
-        aria-valuenow={Math.round(usedPercent)}
+        aria-valuenow={Math.round(currentMonth.usedPercent)}
         className="h-2"
-        value={usedPercent}
+        value={fill}
       />
 
-      <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-        <li>
-          {currentMonth.remainingSigned >= 0
-            ? t("remaining", { value: money(currentMonth.remaining) })
-            : t("exceeded", { value: money(Math.abs(currentMonth.remainingSigned)) })}
-        </li>
-        <li>
-          {currentMonth.forecast === null
-            ? t("forecastPending", { days: BOOK_BUDGET_RULES.forecastMinimumElapsedDays })
-            : t("forecast", { value: money(currentMonth.forecast) })}
-        </li>
-        {currentMonth.projectedOverage === null || currentMonth.projectedOverage <= 0 ? null : (
-          <li className="inline-flex items-center gap-1.5 text-favorite">
-            <UiIcon name="alert-circle" size={14} />
-            {t("projectedOverage", { value: money(currentMonth.projectedOverage) })}
-          </li>
-        )}
-      </ul>
+      <p className="text-sm text-muted-foreground">
+        {currentMonth.remainingSigned >= 0
+          ? t("remaining", { value: money(currentMonth.remaining) })
+          : t("exceededBy", { value: money(Math.abs(currentMonth.remainingSigned)) })}
+      </p>
 
-      {scheduled === null ? null : (
-        <ScheduledLine
-          currency={currency}
-          isPending={cancelScheduled.isPending}
-          onCancel={() => cancelScheduled.mutate(currency)}
-          scheduled={scheduled}
-        />
+      <BudgetOutlook currentMonth={currentMonth} isZeroSpend={isZeroSpend} money={money} />
+
+      <p className="text-xs text-muted-foreground">
+        {t("elapsedDays", {
+          days: currentMonth.daysInMonth,
+          elapsed: currentMonth.elapsedDays,
+        })}
+      </p>
+
+      {spendCoverage.ordersWithoutResolvedAmount === 0 ? null : (
+        <StatisticsDataQualityNote kind="partial">
+          {t("uncountedOrders", { count: spendCoverage.ordersWithoutResolvedAmount })}
+        </StatisticsDataQualityNote>
       )}
+
+      <UpcomingChanges status={status} />
     </div>
   );
 }
 
-function ScheduledLine({
-  currency,
-  isPending,
-  onCancel,
-  scheduled,
-}: {
-  currency: Currency;
-  isPending: boolean;
-  onCancel: () => void;
-  scheduled: NonNullable<BookBudgetStatus["scheduled"]>;
-}) {
+function UpcomingChanges({ status }: { status: BookBudgetStatus }) {
   const t = useTranslations("delivery.statistics.budget");
   const locale = useLocale();
+  const cancelScheduled = useCancelScheduledBudget();
+  const cancelStop = useCancelScheduledBudgetStop();
+  const [next, ...rest] = status.upcomingChanges;
+
+  if (next === undefined) {
+    return null;
+  }
+
+  const isStop = next.kind === "stop";
+  const month = budgetMonthInSentence(next.effectiveFromMonth, locale);
 
   return (
-    <p className="flex flex-wrap items-center gap-2 rounded-md bg-accent px-2.5 py-1.5 text-xs text-icon">
-      {t("scheduled", {
-        month: monthLabel(scheduled.validFromMonth.slice(0, 7), locale, true),
-        value: formatMoney({ amount: scheduled.monthlyAmount, currency, locale }),
-      })}
-      <Button
-        className="h-6 px-2 text-xs"
-        disabled={isPending}
-        onClick={() => {
-          onCancel();
-          toast.success(t("scheduledCancelled"));
-        }}
-        size="sm"
-        variant="ghost"
-      >
-        {t("cancelScheduled")}
-      </Button>
-    </p>
+    <div className="flex flex-col gap-1 rounded-md bg-accent px-2.5 py-2">
+      <span className="text-[0.6875rem] font-medium tracking-wide text-icon uppercase">
+        {t(isStop ? "stopTitle" : "nextChangeTitle")}
+      </span>
+      <span className="flex flex-wrap items-center gap-2 text-xs text-icon">
+        {isStop
+          ? t("stopping", { month })
+          : t("scheduled", {
+              month,
+              value: formatMoney({
+                amount: next.monthlyAmount ?? 0,
+                currency: status.currency,
+                locale,
+              }),
+            })}
+        <Button
+          className="h-6 px-2 text-xs"
+          disabled={cancelScheduled.isPending || cancelStop.isPending}
+          onClick={() => {
+            if (isStop) {
+              cancelStop.mutate(status.currency);
+              toast.success(t("stopCancelled"));
+              return;
+            }
+            cancelScheduled.mutate(status.currency);
+            toast.success(t("scheduledCancelled"));
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t(isStop ? "cancelStop" : "cancelScheduled")}
+        </Button>
+      </span>
+      {rest.length === 0 ? null : (
+        <span className="text-xs text-icon">{t("moreChanges", { count: rest.length })}</span>
+      )}
+    </div>
   );
 }

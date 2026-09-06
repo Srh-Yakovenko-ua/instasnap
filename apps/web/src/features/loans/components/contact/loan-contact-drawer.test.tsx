@@ -5,8 +5,10 @@ import type {
   LoanContactView,
   LoanHistoryListItemView,
   LoanHistoryOverviewView,
+  LoanHistoryResult,
   LoanListItemView,
   LoanType,
+  Nullable,
 } from "@app/shared";
 import type { ReactNode } from "react";
 
@@ -134,24 +136,88 @@ describe("LoanContactDrawer", () => {
     expect(within(lent).queryByRole("link", { name: copy.active.viewAll })).not.toBeInTheDocument();
   });
 
-  it("counts the completed loans and lists the last of them", async () => {
+  it("sums the completed loans into one readable summary", async () => {
     mockApi({
-      history: [historyItem("Гобіт", "on_time")],
-      overview: { averageDurationDays: 12, lateCount: 1, onTimeCount: 4, totalCompleted: 5 },
+      history: [historyItem("Гобіт")],
+      overview: {
+        averageDurationDays: 29,
+        borrowedCount: 3,
+        lateCount: 2,
+        lentCount: 5,
+        onTimeCount: 6,
+        totalCompleted: 8,
+      },
+    });
+
+    const history = await findSection(copy.history.title, renderDrawer);
+
+    expect(await within(history).findByText("8 завершених позик")).toBeInTheDocument();
+    expect(within(history).queryByText(/Контакт:/)).not.toBeInTheDocument();
+    expect(within(history).getByText("5 ви передавали · 3 брали")).toBeInTheDocument();
+    expect(within(history).getByText("6 вчасно")).toBeInTheDocument();
+    expect(within(history).getByText("2 із запізненням")).toBeInTheDocument();
+    expect(within(history).queryByText(/без строку/)).not.toBeInTheDocument();
+    expect(within(history).getByText(copy.history.averageDurationLabel)).toBeInTheDocument();
+    expect(within(history).getByText("29 днів")).toBeInTheDocument();
+    expect(historyUrl()).toContain(`contactId=${CONTACT_ID}`);
+  });
+
+  it("keeps the result breakdown adding up when a loan had no due date", async () => {
+    mockApi({
+      overview: {
+        borrowedCount: 3,
+        lateCount: 2,
+        lentCount: 5,
+        noDueDateCount: 1,
+        onTimeCount: 5,
+        totalCompleted: 8,
+      },
+    });
+
+    const history = await findSection(copy.history.title, renderDrawer);
+
+    expect(await within(history).findByText("8 завершених позик")).toBeInTheDocument();
+    expect(within(history).getByText("5 вчасно")).toBeInTheDocument();
+    expect(within(history).getByText("2 із запізненням")).toBeInTheDocument();
+    expect(within(history).getByText("1 без строку")).toBeInTheDocument();
+  });
+
+  it("drops the average length when no completed loan can be measured", async () => {
+    mockApi({ overview: { lentCount: 1, onTimeCount: 1, totalCompleted: 1 } });
+
+    const history = await findSection(copy.history.title, renderDrawer);
+
+    expect(await within(history).findByText("1 завершена позика")).toBeInTheDocument();
+    expect(within(history).getByText("1 ви передавали")).toBeInTheDocument();
+    expect(within(history).queryByText(copy.history.averageDurationLabel)).not.toBeInTheDocument();
+  });
+
+  it("spells out how each of the last loans ended", async () => {
+    mockApi({
+      history: [
+        historyItem("Місто", { delayDays: 18, result: "late" }),
+        historyItem("Записки", { result: "on_time", type: "borrowed_from_someone" }),
+        historyItem("Гобіт", { result: "no_due_date", type: "borrowed_from_someone" }),
+      ],
+      overview: { borrowedCount: 2, lateCount: 1, lentCount: 1, onTimeCount: 2, totalCompleted: 3 },
     });
 
     const history = await findSection(copy.history.title, renderDrawer);
 
     expect(
-      (await within(history).findByText(copy.history.completed)).nextSibling,
-    ).toHaveTextContent("5");
-    expect(within(history).getByText(copy.history.onTime).nextSibling).toHaveTextContent("4");
-    expect(within(history).getByText(copy.history.late).nextSibling).toHaveTextContent("1");
-    expect(within(history).getByText(copy.history.averageDuration).nextSibling).toHaveTextContent(
-      "12 днів",
-    );
-    expect(within(history).getByText("Гобіт")).toBeInTheDocument();
-    expect(historyUrl()).toContain(`contactId=${CONTACT_ID}`);
+      await within(history).findByText("Ви передавали · повернено із запізненням на 18 днів"),
+    ).toBeInTheDocument();
+    expect(within(history).getByText("Ви брали · повернено 3 лют.")).toBeInTheDocument();
+    expect(within(history).getByText("Ви брали · без визначеного строку")).toBeInTheDocument();
+  });
+
+  it("sends the reader to the full history of this contact", async () => {
+    mockApi({ overview: { lentCount: 4, onTimeCount: 4, totalCompleted: 4 } });
+
+    const history = await findSection(copy.history.title, renderDrawer);
+
+    const link = await within(history).findByRole("link", { name: copy.history.viewAll });
+    expect(link).toHaveAttribute("href", `/loans/history?contactId=${CONTACT_ID}`);
   });
 
   it("keeps the history block short when nothing was ever returned", async () => {
@@ -159,8 +225,12 @@ describe("LoanContactDrawer", () => {
 
     const history = await findSection(copy.history.title, renderDrawer);
 
-    expect(await within(history).findByText(copy.history.empty)).toBeInTheDocument();
-    expect(within(history).queryByText(copy.history.completed)).not.toBeInTheDocument();
+    expect(await within(history).findByText(copy.history.empty.title)).toBeInTheDocument();
+    expect(within(history).getByText(copy.history.empty.description)).toBeInTheDocument();
+    expect(within(history).queryByText(/завершен/)).not.toBeInTheDocument();
+    expect(
+      within(history).queryByRole("link", { name: copy.history.viewAll }),
+    ).not.toBeInTheDocument();
   });
 
   it("saves a new name and contact through the contact endpoint", async () => {
@@ -265,14 +335,16 @@ describe("LoanContactDrawer", () => {
     expect(await screen.findByRole("button", { name: copy.actions.lend })).toBeInTheDocument();
   });
 
-  it("starts the lending flow on the book step without losing the drawer", async () => {
+  it("starts the lending flow on the book picker without losing the drawer", async () => {
     mockApi();
 
     renderDrawer();
     await userEvent.click(await screen.findByRole("button", { name: copy.actions.lend }));
 
     const bookStep = messages.books.details.loan.bookStep;
-    expect(await screen.findByRole("heading", { name: bookStep.lent.title })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: bookStep.lent.multiTitle }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { hidden: true, name: copy.active.lent.title }),
     ).toBeInTheDocument();
@@ -322,7 +394,7 @@ function contactView(overrides: Partial<LoanContactView> = {}): LoanContactView 
 function emptyOverview(): LoanHistoryOverviewView {
   return {
     duration: { averageDays: null, longestDays: null, shortestDays: null },
-    reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: 0 },
+    reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: null },
     summary: overviewSummary(),
     topPeople: [],
   };
@@ -336,12 +408,23 @@ async function findSection(title: string, render?: () => void): Promise<HTMLElem
   return section;
 }
 
-function historyItem(title: string, result: "late" | "on_time"): LoanHistoryListItemView {
+function historyItem(
+  title: string,
+  {
+    delayDays = null,
+    result = "on_time",
+    type = "lent_to_someone",
+  }: {
+    delayDays?: Nullable<number>;
+    result?: LoanHistoryResult;
+    type?: LoanType;
+  } = {},
+): LoanHistoryListItemView {
   return {
     book: bookPreview(title),
-    delayDays: result === "late" ? 3 : null,
+    delayDays,
     durationDays: 12,
-    expectedReturnDate: "2026-02-01",
+    expectedReturnDate: result === "no_due_date" ? null : "2026-02-01",
     historyResult: result,
     id: `history-${title}`,
     loanContactId: CONTACT_ID,
@@ -349,7 +432,7 @@ function historyItem(title: string, result: "late" | "on_time"): LoanHistoryList
     personName: "Оля",
     returnedAt: "2026-02-03T10:00:00.000Z",
     returnedDate: "2026-02-03",
-    type: "lent_to_someone",
+    type,
   };
 }
 
@@ -432,7 +515,13 @@ function mockApi(options: MockOptions = {}) {
         return Promise.resolve(jsonResponse({ ...emptyOverview(), summary }));
       }
       if (url.includes("/api/loans/history")) {
-        return Promise.resolve(jsonResponse(page(options.history ?? [])));
+        const history = options.history ?? [];
+        return Promise.resolve(
+          jsonResponse({
+            ...page(history),
+            resultCounts: { all: history.length, late: 0, no_due_date: 0, on_time: history.length },
+          }),
+        );
       }
       if (url.startsWith("/api/books?")) {
         return Promise.resolve(jsonResponse(page(options.candidateBooks ?? [])));
@@ -455,12 +544,12 @@ function overviewSummary(
     averageDelayDays: null,
     averageDurationDays: null,
     borrowedCount: 0,
+    durationCount: 0,
     lateCount: 0,
-    latePercent: 0,
     lentCount: 0,
     noDueDateCount: 0,
     onTimeCount: 0,
-    onTimePercent: 0,
+    onTimePercent: null,
     totalCompleted: 0,
     ...overrides,
   };

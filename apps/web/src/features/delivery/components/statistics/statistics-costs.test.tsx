@@ -1,6 +1,6 @@
 import type { BookOrderStatisticsView } from "@app/shared";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { renderWithProviders, screen } from "@/test-utils";
 
@@ -17,7 +17,6 @@ const EMPTY_STAGES = {
 };
 
 function renderCosts({
-  budgetShare = null,
   currency = "UAH" as const,
   data = view(),
 }: {
@@ -25,16 +24,21 @@ function renderCosts({
   currency?: "EUR" | "UAH" | "USD";
   data?: BookOrderStatisticsView;
 } = {}) {
-  return renderWithProviders(
-    <StatisticsCosts
-      currencies={["UAH", "EUR"]}
-      currency={currency}
-      deliveryShareOfBudgetPercent={budgetShare}
-      onCurrencyChange={vi.fn()}
-      view={data}
-    />,
-  );
+  return renderWithProviders(<StatisticsCosts currency={currency} view={data} />);
 }
+
+const LANDED = {
+  averageAdjustmentShare: 0,
+  averageDeliveryShare: 10.26,
+  averageDiscountShare: 11.4,
+  averageEligibleRawBookPrice: 725.06,
+  averageLandedBookCost: 710.87,
+  booksInScope: 57,
+  booksWithLandedCost: 55,
+  coveragePercent: 96.5,
+  currency: "UAH",
+  deltaFromEligibleRawPrice: -14.19,
+} satisfies BookOrderStatisticsView["landedCost"][number];
 
 function view(overrides: Partial<BookOrderStatisticsView> = {}): BookOrderStatisticsView {
   return {
@@ -54,26 +58,18 @@ function view(overrides: Partial<BookOrderStatisticsView> = {}): BookOrderStatis
       },
     ],
     daily: [],
-    landedCost: [
-      {
-        averageLandedBookCost: 710.87,
-        countedBooksCount: 57,
-        coveragePercent: 96.5,
-        currency: "UAH",
-        differenceVsAverageRawBookPrice: -14.19,
-        eligibleBooksCount: 55,
-      },
-    ],
+    dynamics: { buckets: [], granularity: "month" },
+    insights: { books: [], orders: [], spendByCurrency: [] },
+    landedCost: [LANDED],
     lifecycle: { books: EMPTY_STAGES, comparison: null, orders: EMPTY_STAGES },
     meta: {
+      activeSource: { isTruncated: false, loadedOrdersCount: 0, maxOrders: 5000 },
       comparisonPeriod: null,
+      comparisonSource: null,
       currentPeriod: { from: null, to: null },
-      isTruncated: false,
-      loadedOrdersCount: 0,
-      maxOrders: null,
+      currentSource: { isTruncated: false, loadedOrdersCount: 0, maxOrders: 5000 },
     },
     monthly: [],
-    pulse: [],
     records: {
       bestValueStoreByCurrency: [],
       largestOrderByCurrency: [],
@@ -84,6 +80,7 @@ function view(overrides: Partial<BookOrderStatisticsView> = {}): BookOrderStatis
     },
     snapshot: {
       activeBooksCount: 0,
+      activeMoneyCoverageByCurrency: [],
       activeOrdersCount: 0,
       activeShipmentsCount: 0,
       activeTotalsByCurrency: [],
@@ -98,7 +95,9 @@ function view(overrides: Partial<BookOrderStatisticsView> = {}): BookOrderStatis
       booksCount: 0,
       cancelledOrdersCount: 0,
       cancelledTotalsByCurrency: [],
+      financialCoverageByCurrency: [],
       ordersCount: 0,
+      priceCoverageByCurrency: [],
       receivedBooksCount: 0,
       receivedTotalsByCurrency: [],
       shipmentsCount: 0,
@@ -110,75 +109,123 @@ function view(overrides: Partial<BookOrderStatisticsView> = {}): BookOrderStatis
   };
 }
 
+const BRIDGED = view({});
+
 describe("StatisticsCosts", () => {
-  it("breaks the delivery cost down per book and as a share of spending", () => {
+  it("names the block after the question it answers", () => {
     renderCosts();
 
-    expect(screen.getByText("585 UAH")).toBeInTheDocument();
-    expect(screen.getByText("10,26 UAH на книгу")).toBeInTheDocument();
-    expect(screen.getByText("1,5% витрат")).toBeInTheDocument();
+    expect(screen.getByText("Як формується ціна книги")).toBeInTheDocument();
+    expect(screen.queryByText("З чого складається вартість")).not.toBeInTheDocument();
   });
 
-  it("mentions the budget only when one applies to the period", () => {
-    const { rerender } = renderCosts();
+  it("bridges the starting price to what a book actually cost", () => {
+    renderCosts({ data: BRIDGED });
 
-    expect(screen.queryByText(/бюджету/)).not.toBeInTheDocument();
-
-    rerender(
-      <StatisticsCosts
-        currencies={["UAH", "EUR"]}
-        currency="UAH"
-        deliveryShareOfBudgetPercent={1.5}
-        onCurrencyChange={vi.fn()}
-        view={view()}
-      />,
-    );
-
-    expect(screen.getByText("1,5% бюджету")).toBeInTheDocument();
+    expect(screen.getByText("725,06 UAH")).toBeInTheDocument();
+    expect(screen.getByText("Фактично за книгу")).toBeInTheDocument();
+    expect(screen.getByText("710,87 UAH")).toBeInTheDocument();
   });
 
-  it("counts how many books the landed average actually covers", () => {
-    renderCosts();
+  it("signs every bridge stage so the colour is never the only clue", () => {
+    renderCosts({ data: BRIDGED });
 
-    expect(screen.getByText("Розраховано для 55 із 57 книг")).toBeInTheDocument();
+    expect(screen.getByText("−11,4 UAH")).toBeInTheDocument();
+    expect(screen.getByText("+10,26 UAH")).toBeInTheDocument();
   });
 
-  it("warns that a partial coverage average does not speak for every book", () => {
-    renderCosts();
+  it("hides a stage that rounded to nothing", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.queryByText("Коригування замовлень")).not.toBeInTheDocument();
+  });
+
+  it("says how far the actual cost sits from the starting price", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText("на 14,19 UAH дешевше за початкову середню ціну")).toBeInTheDocument();
+  });
+
+  it("counts the books the average was actually built on", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText(/Розраховано для 55 із 57 книг/)).toBeInTheDocument();
+  });
+
+  it("says nothing about coverage once every book is counted", () => {
+    renderCosts({
+      data: view({
+        landedCost: [
+          {
+            ...LANDED,
+            booksWithLandedCost: 57,
+            coveragePercent: 100,
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByText("Розраховано для всіх 57 книг")).toBeInTheDocument();
+  });
+
+  it("refuses to price a book it has no eligible data for", () => {
+    renderCosts({
+      data: view({
+        landedCost: [
+          {
+            ...LANDED,
+            averageEligibleRawBookPrice: null,
+            averageLandedBookCost: null,
+            booksWithLandedCost: 0,
+          },
+        ],
+      }),
+    });
 
     expect(
-      screen.getByText("Покриття 96,5% — середня вартість не охоплює всі книги."),
+      screen.getByText("Недостатньо даних для розрахунку фактичної ціни книги."),
     ).toBeInTheDocument();
   });
 
-  it("stays quiet when the landed average covers everything", () => {
-    const full = view({
-      landedCost: [
-        {
-          averageLandedBookCost: 710.87,
-          countedBooksCount: 57,
-          coveragePercent: 100,
-          currency: "UAH",
-          differenceVsAverageRawBookPrice: -14.19,
-          eligibleBooksCount: 57,
-        },
-      ],
+  it("keeps the period totals apart from the per-book bridge", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText("За вибраний період")).toBeInTheDocument();
+    expect(screen.getByText("585 UAH")).toBeInTheDocument();
+    expect(screen.getByText("650 UAH заощаджено")).toBeInTheDocument();
+  });
+
+  it("says there was no delivery rather than showing four zeros", () => {
+    renderCosts({
+      data: view({
+        costs: [
+          {
+            currency: "UAH",
+            deliveryCostPerBook: null,
+            deliveryShareOfSpendPercent: null,
+            deliveryTotal: 0,
+            discountShareOfRawSubtotalPercent: null,
+            discountTotal: 0,
+            ordersWithDeliveryCount: 0,
+            ordersWithDiscountCount: 0,
+          },
+        ],
+      }),
     });
 
-    renderCosts({ data: full });
-
-    expect(screen.queryByText(/Покриття/)).not.toBeInTheDocument();
+    expect(screen.getByText("Без витрат на доставку")).toBeInTheDocument();
+    expect(screen.getByText("Знижок не було")).toBeInTheDocument();
   });
 
-  it("says the real cost sits below the listed price", () => {
-    renderCosts();
+  it("never names the budget in this block", () => {
+    renderCosts({ data: BRIDGED });
 
-    expect(screen.getByText("на 14,19 UAH нижча за ціну")).toBeInTheDocument();
+    expect(screen.queryByText(/бюджету/)).not.toBeInTheDocument();
   });
 
-  it("shows a dash for a currency it has no numbers for", () => {
+  it("says a currency has no data rather than showing dashes", () => {
     renderCosts({ currency: "EUR" });
 
-    expect(screen.getAllByText("—").length).toBe(3);
+    expect(screen.getByText("Немає даних у EUR за вибраний період.")).toBeInTheDocument();
   });
 });

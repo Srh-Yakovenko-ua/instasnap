@@ -9,22 +9,32 @@ import type { BookWithRelations } from "../infrastructure/books.repository.js";
 
 import { NotFoundError } from "../../../core/exceptions/errors.js";
 import { fakeOf } from "../../../test/fake.js";
+import { UserSettingsContextService } from "../../profile/index.js";
 import { ReadingGoalSyncService } from "../../reading-goals/index.js";
 import { BooksRepository } from "../infrastructure/books.repository.js";
 import { BookReadingService } from "./book-reading.service.js";
 import { BookViewAssembler } from "./book-view-assembler.js";
+import { ReadingLifecycleCoordinator } from "./reading-lifecycle.coordinator.js";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const BOOK_ID = "22222222-2222-4222-8222-222222222222";
 const TODAY = new Date("2026-07-07T09:00:00.000Z");
 const TODAY_START = new Date("2026-07-07T00:00:00.000Z");
 const EXISTING_STARTED_AT = new Date("2026-01-01T00:00:00.000Z");
+const TODAY_ISO = "2026-07-07";
 
 const TRANSACTION_CLIENT = fakeOf<Prisma.TransactionClient>();
 
 type ReadingProgressRow = NonNullable<BookWithRelations["readingProgress"]>;
 
 type RepositoryMock = {
+  acquireBookLock: Mock;
+  applyReadingChange: Mock;
+  findOwnedByIdOrThrow: Mock;
+};
+
+type StatusRepositoryMock = {
+  acquireBookLock: Mock;
   applyReadingChange: Mock;
   findOwnedByIdOrThrow: Mock;
 };
@@ -35,11 +45,18 @@ function buildService(repository: RepositoryMock): BookReadingService {
     fakeOf<BookViewAssembler>(),
     transactionRunnerMock(),
     fakeOf<ReadingGoalSyncService>({ syncBooks: vi.fn().mockResolvedValue(undefined) }),
+    fakeOf<ReadingLifecycleCoordinator>({ apply: vi.fn().mockResolvedValue(undefined) }),
+    fakeOf<UserSettingsContextService>({
+      today: vi.fn().mockResolvedValue(TODAY_ISO),
+    }),
   );
 }
 
-function ownedBook(readingProgress: Nullable<ReadingProgressRow>): BookWithRelations {
-  return fakeOf<BookWithRelations>({ pagesCount: 320, readingProgress });
+function ownedBook(
+  readingProgress: Nullable<ReadingProgressRow>,
+  readingStatus = "not_started",
+): BookWithRelations {
+  return fakeOf<BookWithRelations>({ pagesCount: 320, readingProgress, readingStatus });
 }
 
 function readingProgressRow(startedAt: Nullable<Date>): ReadingProgressRow {
@@ -48,6 +65,7 @@ function readingProgressRow(startedAt: Nullable<Date>): ReadingProgressRow {
 
 function repositoryMock(): RepositoryMock {
   return {
+    acquireBookLock: vi.fn().mockResolvedValue(undefined),
     applyReadingChange: vi.fn().mockResolvedValue(undefined),
     findOwnedByIdOrThrow: vi.fn(),
   };
@@ -99,14 +117,14 @@ describe("BookReadingService.startReading", () => {
           startedAt: TODAY_START,
         },
       },
-      undefined,
+      TRANSACTION_CLIENT,
     );
   });
 
   it("preserves the existing start date on an idempotent restart", async () => {
     const repository = repositoryMock();
     repository.findOwnedByIdOrThrow.mockResolvedValue(
-      ownedBook(readingProgressRow(EXISTING_STARTED_AT)),
+      ownedBook(readingProgressRow(EXISTING_STARTED_AT), "paused"),
     );
     const service = buildService(repository);
 
@@ -119,7 +137,7 @@ describe("BookReadingService.startReading", () => {
         book: { readingStatus: "reading" },
         progress: expect.objectContaining({ startedAt: EXISTING_STARTED_AT }),
       }),
-      undefined,
+      TRANSACTION_CLIENT,
     );
   });
 
@@ -140,90 +158,98 @@ describe("BookReadingService.startReading", () => {
   });
 });
 
-describe("BookReadingService.changeReadingStatus clearEvents", () => {
-  function buildStatusService(repository: {
-    acquireBookLock: Mock;
-    findOwnedByIdOrThrow: Mock;
-    recordReadingStatusChange: Mock;
+describe("BookReadingService.changeReadingStatus reading-cycle integration", () => {
+  function buildStatusService({
+    coordinator,
+    repository,
+  }: {
+    coordinator: { apply: Mock };
+    repository: StatusRepositoryMock;
   }): BookReadingService {
     return new BookReadingService(
       fakeOf<BooksRepository>(repository),
       fakeOf<BookViewAssembler>({ loadView: vi.fn().mockResolvedValue({} as BookView) }),
       transactionRunnerMock(),
       fakeOf<ReadingGoalSyncService>({ syncBooks: vi.fn().mockResolvedValue(undefined) }),
+      fakeOf<ReadingLifecycleCoordinator>(coordinator),
+      fakeOf<UserSettingsContextService>({ today: vi.fn().mockResolvedValue(TODAY_ISO) }),
     );
   }
 
-  function statusRepositoryMock(): {
-    acquireBookLock: Mock;
-    findOwnedByIdOrThrow: Mock;
-    recordReadingStatusChange: Mock;
-  } {
+  function coordinatorMock(): { apply: Mock } {
+    return { apply: vi.fn().mockResolvedValue(undefined) };
+  }
+
+  function statusRepositoryMock(): StatusRepositoryMock {
     return {
       acquireBookLock: vi.fn().mockResolvedValue(undefined),
+      applyReadingChange: vi.fn().mockResolvedValue(undefined),
       findOwnedByIdOrThrow: vi.fn().mockResolvedValue(
         fakeOf<BookWithRelations>({
           pagesCount: 320,
           readingProgress: fakeOf<ReadingProgressRow>({
             currentPage: 120,
+            rating: 8,
             startedAt: EXISTING_STARTED_AT,
           }),
+          readingStatus: "reading",
         }),
       ),
-      recordReadingStatusChange: vi.fn().mockResolvedValue(undefined),
     };
   }
 
-  it("clears the reading events when resetting progress to not_started", async () => {
+  it("routes a reset to not_started through the lifecycle coordinator", async () => {
     const repository = statusRepositoryMock();
-    const service = buildStatusService(repository);
+    const coordinator = coordinatorMock();
+    const service = buildStatusService({ coordinator, repository });
 
     await service.changeReadingStatus(USER_ID, BOOK_ID, {
       resetProgress: true,
       status: "not_started",
     });
 
-    expect(repository.recordReadingStatusChange).toHaveBeenCalledWith(
-      expect.objectContaining({ clearEvents: true }),
+    expect(coordinator.apply).toHaveBeenCalledWith(
+      expect.objectContaining({ bookId: BOOK_ID, targetStatus: "not_started", userId: USER_ID }),
+      TRANSACTION_CLIENT,
+    );
+    expect(repository.applyReadingChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the explicit finish rating to the lifecycle coordinator", async () => {
+    const repository = statusRepositoryMock();
+    const coordinator = coordinatorMock();
+    const service = buildStatusService({ coordinator, repository });
+
+    await service.changeReadingStatus(USER_ID, BOOK_ID, { rating: 9.5, status: "finished" });
+
+    expect(coordinator.apply).toHaveBeenCalledWith(
+      expect.objectContaining({ rating: 9.5, targetStatus: "finished" }),
       TRANSACTION_CLIENT,
     );
   });
 
-  it("keeps the reading events when finishing a book pulls the current page to the page count", async () => {
+  it("falls back to the stored rating when the finish request omits one", async () => {
     const repository = statusRepositoryMock();
-    const service = buildStatusService(repository);
+    const coordinator = coordinatorMock();
+    const service = buildStatusService({ coordinator, repository });
 
     await service.changeReadingStatus(USER_ID, BOOK_ID, { status: "finished" });
 
-    expect(repository.recordReadingStatusChange).toHaveBeenCalledWith(
-      expect.objectContaining({ clearEvents: false }),
+    expect(coordinator.apply).toHaveBeenCalledWith(
+      expect.objectContaining({ rating: 8, targetStatus: "finished" }),
       TRANSACTION_CLIENT,
     );
   });
 
-  it("keeps the reading events when returning to not_started without a reset", async () => {
+  it("resolves the implicit change date in the user timezone", async () => {
     const repository = statusRepositoryMock();
-    const service = buildStatusService(repository);
+    const coordinator = coordinatorMock();
+    const service = buildStatusService({ coordinator, repository });
 
-    await service.changeReadingStatus(USER_ID, BOOK_ID, { status: "not_started" });
+    await service.changeReadingStatus(USER_ID, BOOK_ID, { status: "paused" });
 
-    expect(repository.recordReadingStatusChange).toHaveBeenCalledWith(
-      expect.objectContaining({ clearEvents: false }),
-      TRANSACTION_CLIENT,
-    );
-  });
-
-  it("does not clear events when resetProgress is set but the target status still reads", async () => {
-    const repository = statusRepositoryMock();
-    const service = buildStatusService(repository);
-
-    await service.changeReadingStatus(USER_ID, BOOK_ID, {
-      resetProgress: true,
-      status: "reading",
-    });
-
-    expect(repository.recordReadingStatusChange).toHaveBeenCalledWith(
-      expect.objectContaining({ clearEvents: false }),
+    expect(coordinator.apply).toHaveBeenCalledWith(
+      expect.objectContaining({ date: TODAY_ISO }),
       TRANSACTION_CLIENT,
     );
   });

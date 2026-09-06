@@ -116,14 +116,11 @@ export const BookOrdersControllerCreateResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -179,6 +176,12 @@ export const bookOrdersControllerActiveMoneyAgeQueryStoreMax = 200;
 
 export const BookOrdersControllerActiveMoneyAgeQueryParams = zod.object({
   currency: zod.enum(["UAH", "EUR", "USD"]).optional(),
+  orderState: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .optional()
+    .describe(
+      "The same derived lifecycle state the rest of the page filters by. A state no active order can hold returns empty buckets rather than being ignored.",
+    ),
   store: zod.string().max(bookOrdersControllerActiveMoneyAgeQueryStoreMax).optional(),
 });
 
@@ -193,6 +196,12 @@ export const bookOrdersControllerActiveMoneyAgeResponseBucketsItemOrdersCountMax
 
 export const bookOrdersControllerActiveMoneyAgeResponseBucketsItemShipmentsCountMin = 0;
 export const bookOrdersControllerActiveMoneyAgeResponseBucketsItemShipmentsCountMax = 9007199254740991;
+
+export const bookOrdersControllerActiveMoneyAgeResponseSourceLoadedOrdersCountMin = 0;
+export const bookOrdersControllerActiveMoneyAgeResponseSourceLoadedOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerActiveMoneyAgeResponseSourceMaxOrdersExclusiveMin = 0;
+export const bookOrdersControllerActiveMoneyAgeResponseSourceMaxOrdersMax = 9007199254740991;
 
 export const BookOrdersControllerActiveMoneyAgeResponse = zod
   .object({
@@ -222,6 +231,22 @@ export const BookOrdersControllerActiveMoneyAgeResponse = zod
         ),
       }),
     ),
+    source: zod
+      .object({
+        isTruncated: zod.boolean(),
+        loadedOrdersCount: zod
+          .int()
+          .min(bookOrdersControllerActiveMoneyAgeResponseSourceLoadedOrdersCountMin)
+          .max(bookOrdersControllerActiveMoneyAgeResponseSourceLoadedOrdersCountMax),
+        maxOrders: zod
+          .int()
+          .gt(bookOrdersControllerActiveMoneyAgeResponseSourceMaxOrdersExclusiveMin)
+          .max(bookOrdersControllerActiveMoneyAgeResponseSourceMaxOrdersMax)
+          .nullable(),
+      })
+      .describe(
+        "How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter.",
+      ),
   })
   .describe(
     "Age of money committed to still-active orders, measured from orderDate against asOf. It ignores the historical from\/to filter. The 31_plus bucket is an age fact and carries no delivery-date judgement.",
@@ -247,12 +272,22 @@ export const BookOrdersControllerStatisticsQueryParams = zod.object({
   includeCancelled: zod
     .enum(["true", "false"])
     .default(bookOrdersControllerStatisticsQueryIncludeCancelledDefault),
-  status: zod
-    .enum(["ordered", "in_transit", "ready_for_pickup", "received", "cancelled"])
-    .optional(),
+  orderState: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .optional()
+    .describe(
+      "Narrows the dataset to orders sitting in one derived lifecycle state. It is the same state the lifecycle chart counts and the same one a drill-down carries to a destination page, so a statistic and the list it opens can never disagree.",
+    ),
   store: zod.string().max(bookOrdersControllerStatisticsQueryStoreMax).optional(),
   to: zod.iso.date().regex(bookOrdersControllerStatisticsQueryToRegExp).optional(),
+  status: zod.unknown().optional(),
 });
+
+export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemEligibleBooksCountMin = 2;
 export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemEligibleBooksCountMax = 9007199254740991;
@@ -260,20 +295,32 @@ export const bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemE
 export const bookOrdersControllerStatisticsResponseByStoreItemBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseByStoreItemBooksCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCountedBooksCountMin = 0;
-export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCountedBooksCountMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseByStoreItemBooksCountByCurrencyItemCountMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemBooksCountByCurrencyItemCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksInScopeMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksInScopeMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksWithLandedCostMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksWithLandedCostMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCoveragePercentMin = 0;
 export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCoveragePercentMax = 100;
-
-export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemEligibleBooksCountMin = 0;
-export const bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemEligibleBooksCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseByStoreItemLandedEligibleBooksCountByCurrencyItemCountMin = 0;
 export const bookOrdersControllerStatisticsResponseByStoreItemLandedEligibleBooksCountByCurrencyItemCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseByStoreItemOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseByStoreItemOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseByStoreItemOrdersCountByCurrencyItemCountMin = 0;
+export const bookOrdersControllerStatisticsResponseByStoreItemOrdersCountByCurrencyItemCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseCostsItemOrdersWithDeliveryCountMin = 0;
 export const bookOrdersControllerStatisticsResponseCostsItemOrdersWithDeliveryCountMax = 9007199254740991;
@@ -287,17 +334,204 @@ export const bookOrdersControllerStatisticsResponseDailyItemBooksCountMax = 9007
 export const bookOrdersControllerStatisticsResponseDailyItemDateRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
+export const bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
+
 export const bookOrdersControllerStatisticsResponseDailyItemOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseDailyItemOrdersCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponseLandedCostItemCountedBooksCountMin = 0;
-export const bookOrdersControllerStatisticsResponseLandedCostItemCountedBooksCountMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemSevenScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemEightScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsBooksItemNineScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemEightScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsOrdersItemNineScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineScopePeriodFromRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineScopePeriodToRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookOrdersControllerStatisticsResponseLandedCostItemBooksInScopeMin = 0;
+export const bookOrdersControllerStatisticsResponseLandedCostItemBooksInScopeMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseLandedCostItemBooksWithLandedCostMin = 0;
+export const bookOrdersControllerStatisticsResponseLandedCostItemBooksWithLandedCostMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseLandedCostItemCoveragePercentMin = 0;
 export const bookOrdersControllerStatisticsResponseLandedCostItemCoveragePercentMax = 100;
-
-export const bookOrdersControllerStatisticsResponseLandedCostItemEligibleBooksCountMin = 0;
-export const bookOrdersControllerStatisticsResponseLandedCostItemEligibleBooksCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseLifecycleBooksActiveMin = 0;
 export const bookOrdersControllerStatisticsResponseLifecycleBooksActiveMax = 9007199254740991;
@@ -439,23 +673,35 @@ export const bookOrdersControllerStatisticsResponseLifecycleOrdersShippedMax = 9
 export const bookOrdersControllerStatisticsResponseLifecycleOrdersTotalMin = 0;
 export const bookOrdersControllerStatisticsResponseLifecycleOrdersTotalMax = 9007199254740991;
 
+export const bookOrdersControllerStatisticsResponseMetaActiveSourceLoadedOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaActiveSourceLoadedOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseMetaActiveSourceMaxOrdersExclusiveMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaActiveSourceMaxOrdersMax = 9007199254740991;
+
 export const bookOrdersControllerStatisticsResponseMetaComparisonPeriodFromRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
 export const bookOrdersControllerStatisticsResponseMetaComparisonPeriodToRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
+export const bookOrdersControllerStatisticsResponseMetaComparisonSourceLoadedOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaComparisonSourceLoadedOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseMetaComparisonSourceMaxOrdersExclusiveMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaComparisonSourceMaxOrdersMax = 9007199254740991;
+
 export const bookOrdersControllerStatisticsResponseMetaCurrentPeriodFromRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
 export const bookOrdersControllerStatisticsResponseMetaCurrentPeriodToRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
-export const bookOrdersControllerStatisticsResponseMetaLoadedOrdersCountMin = 0;
-export const bookOrdersControllerStatisticsResponseMetaLoadedOrdersCountMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseMetaCurrentSourceLoadedOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaCurrentSourceLoadedOrdersCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponseMetaMaxOrdersExclusiveMin = 0;
-export const bookOrdersControllerStatisticsResponseMetaMaxOrdersMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseMetaCurrentSourceMaxOrdersExclusiveMin = 0;
+export const bookOrdersControllerStatisticsResponseMetaCurrentSourceMaxOrdersMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseMonthlyItemBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseMonthlyItemBooksCountMax = 9007199254740991;
@@ -463,18 +709,12 @@ export const bookOrdersControllerStatisticsResponseMonthlyItemBooksCountMax = 90
 export const bookOrdersControllerStatisticsResponseMonthlyItemOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseMonthlyItemOrdersCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponsePulseItemFourBooksCountMin = 0;
-export const bookOrdersControllerStatisticsResponsePulseItemFourBooksCountMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponsePulseItemFourOrdersCountMin = 0;
-export const bookOrdersControllerStatisticsResponsePulseItemFourOrdersCountMax = 9007199254740991;
+export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
 
-export const bookOrdersControllerStatisticsResponsePulseItemFourScopePeriodFromRegExp = new RegExp(
-  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
-);
-export const bookOrdersControllerStatisticsResponsePulseItemFourScopePeriodToRegExp = new RegExp(
-  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
-);
 export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemEligibleBooksCountMin = 2;
 export const bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemEligibleBooksCountMax = 9007199254740991;
 
@@ -484,11 +724,23 @@ export const bookOrdersControllerStatisticsResponseRecordsLargestOrderByCurrency
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksBooksCountMax = 9007199254740991;
 
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemOrdersCountMax = 9007199254740991;
+
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksOrdersCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemOrdersCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersOrdersCountMax = 9007199254740991;
@@ -498,6 +750,12 @@ export const bookOrdersControllerStatisticsResponseRecordsMostBooksInOrderBooksC
 
 export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemBooksCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemOrdersCountMin = 0;
+export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemOrdersCountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMax = 9007199254740991;
@@ -510,6 +768,12 @@ export const bookOrdersControllerStatisticsResponseRecordsScopePeriodToRegExp = 
 );
 export const bookOrdersControllerStatisticsResponseSnapshotActiveBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseSnapshotActiveBooksCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersInScopeMin = 0;
+export const bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersInScopeMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersWithResolvedAmountMin = 0;
+export const bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersWithResolvedAmountMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseSnapshotActiveOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseSnapshotActiveOrdersCountMax = 9007199254740991;
@@ -529,8 +793,20 @@ export const bookOrdersControllerStatisticsResponseSummaryBooksCountMax = 900719
 export const bookOrdersControllerStatisticsResponseSummaryCancelledOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseSummaryCancelledOrdersCountMax = 9007199254740991;
 
+export const bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersInScopeMin = 0;
+export const bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersInScopeMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersWithResolvedAmountMin = 0;
+export const bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersWithResolvedAmountMax = 9007199254740991;
+
 export const bookOrdersControllerStatisticsResponseSummaryOrdersCountMin = 0;
 export const bookOrdersControllerStatisticsResponseSummaryOrdersCountMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksInScopeMin = 0;
+export const bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksInScopeMax = 9007199254740991;
+
+export const bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksWithPriceMin = 0;
+export const bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksWithPriceMax = 9007199254740991;
 
 export const bookOrdersControllerStatisticsResponseSummaryReceivedBooksCountMin = 0;
 export const bookOrdersControllerStatisticsResponseSummaryReceivedBooksCountMax = 9007199254740991;
@@ -550,6 +826,33 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
       .object({
         averageLandedBookCost: zod.number(),
         currency: zod.enum(["UAH", "EUR", "USD"]),
+        drilldown: zod
+          .object({
+            targets: zod.array(
+              zod.object({
+                booksCount: zod
+                  .int()
+                  .min(
+                    bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMin,
+                  )
+                  .max(
+                    bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMax,
+                  ),
+                destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                ordersCount: zod
+                  .int()
+                  .min(
+                    bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMin,
+                  )
+                  .max(
+                    bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMax,
+                  ),
+              }),
+            ),
+          })
+          .describe(
+            "Where this store's orders in this currency live. The record itself counts only books whose real cost is known, so this is context navigation and never an exact drill-down.",
+          ),
         eligibleBooksCount: zod
           .int()
           .min(
@@ -559,6 +862,7 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
             bookOrdersControllerStatisticsResponseBestValueStoreByCurrencyItemEligibleBooksCountMax,
           ),
         store: zod.string(),
+        storeKey: zod.string(),
       })
       .describe(
         "One winner per currency, never across currencies. A candidate needs at least two landed-eligible books; ties break by the most landed-eligible books, then by store name ascending.",
@@ -589,6 +893,15 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
         .int()
         .min(bookOrdersControllerStatisticsResponseByStoreItemBooksCountMin)
         .max(bookOrdersControllerStatisticsResponseByStoreItemBooksCountMax),
+      booksCountByCurrency: zod.array(
+        zod.object({
+          count: zod
+            .int()
+            .min(bookOrdersControllerStatisticsResponseByStoreItemBooksCountByCurrencyItemCountMin)
+            .max(bookOrdersControllerStatisticsResponseByStoreItemBooksCountByCurrencyItemCountMax),
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+        }),
+      ),
       deliveryTotalByCurrency: zod.array(
         zod.object({
           currency: zod.enum(["UAH", "EUR", "USD"]),
@@ -601,15 +914,56 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
           total: zod.number(),
         }),
       ),
+      drilldown: zod
+        .object({
+          targets: zod.array(
+            zod.object({
+              booksCount: zod
+                .int()
+                .min(
+                  bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemBooksCountMin,
+                )
+                .max(
+                  bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemBooksCountMax,
+                ),
+              destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+              ordersCount: zod
+                .int()
+                .min(
+                  bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemOrdersCountMin,
+                )
+                .max(
+                  bookOrdersControllerStatisticsResponseByStoreItemDrilldownTargetsItemOrdersCountMax,
+                ),
+            }),
+          ),
+        })
+        .describe(
+          "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+        ),
       landedCoverageByCurrency: zod.array(
         zod.object({
-          countedBooksCount: zod
+          booksInScope: zod
             .int()
             .min(
-              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCountedBooksCountMin,
+              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksInScopeMin,
             )
             .max(
-              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCountedBooksCountMax,
+              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksInScopeMax,
+            )
+            .describe(
+              "Every book of this currency the period counted, whether or not its cost could be broken down. This is the denominator of coveragePercent.",
+            ),
+          booksWithLandedCost: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksWithLandedCostMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemBooksWithLandedCostMax,
+            )
+            .describe(
+              "The books whose cost the allocation could actually explain, so they carry a landed cost. This is the numerator of coveragePercent and can never exceed booksInScope.",
             ),
           coveragePercent: zod
             .number()
@@ -620,17 +974,9 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
               bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemCoveragePercentMax,
             )
             .describe(
-              "Share of landed-eligible books that actually received an allocated landed cost. It is 0, never null, when countedBooksCount is 0.",
+              "booksWithLandedCost over booksInScope. It is 0, never null, when nothing was in scope.",
             ),
           currency: zod.enum(["UAH", "EUR", "USD"]),
-          eligibleBooksCount: zod
-            .int()
-            .min(
-              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemEligibleBooksCountMin,
-            )
-            .max(
-              bookOrdersControllerStatisticsResponseByStoreItemLandedCoverageByCurrencyItemEligibleBooksCountMax,
-            ),
         }),
       ),
       landedEligibleBooksCountByCurrency: zod.array(
@@ -650,7 +996,23 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
         .int()
         .min(bookOrdersControllerStatisticsResponseByStoreItemOrdersCountMin)
         .max(bookOrdersControllerStatisticsResponseByStoreItemOrdersCountMax),
+      ordersCountByCurrency: zod.array(
+        zod.object({
+          count: zod
+            .int()
+            .min(bookOrdersControllerStatisticsResponseByStoreItemOrdersCountByCurrencyItemCountMin)
+            .max(
+              bookOrdersControllerStatisticsResponseByStoreItemOrdersCountByCurrencyItemCountMax,
+            ),
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+        }),
+      ),
       store: zod.string(),
+      storeKey: zod
+        .string()
+        .describe(
+          "A stable key for the same store across blocks. There is no store entity, so this is the canonical name normalized, and it is what shared highlighting and drill-downs match on rather than the display name.",
+        ),
       totalsByCurrency: zod.array(
         zod.object({
           currency: zod.enum(["UAH", "EUR", "USD"]),
@@ -750,6 +1112,33 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
           .min(bookOrdersControllerStatisticsResponseDailyItemBooksCountMin)
           .max(bookOrdersControllerStatisticsResponseDailyItemBooksCountMax),
         date: zod.iso.date().regex(bookOrdersControllerStatisticsResponseDailyItemDateRegExp),
+        drilldown: zod
+          .object({
+            targets: zod.array(
+              zod.object({
+                booksCount: zod
+                  .int()
+                  .min(
+                    bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemBooksCountMin,
+                  )
+                  .max(
+                    bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemBooksCountMax,
+                  ),
+                destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                ordersCount: zod
+                  .int()
+                  .min(
+                    bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemOrdersCountMin,
+                  )
+                  .max(
+                    bookOrdersControllerStatisticsResponseDailyItemDrilldownTargetsItemOrdersCountMax,
+                  ),
+              }),
+            ),
+          })
+          .describe(
+            "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+          ),
         ordersCount: zod
           .int()
           .min(bookOrdersControllerStatisticsResponseDailyItemOrdersCountMin)
@@ -765,26 +1154,798 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
     .describe(
       "Sparse ascending series: only days that carry at least one counted order are present, days with no activity are omitted rather than sent as zero rows, and the frontend fills the gaps visually.",
     ),
+  dynamics: zod.object({
+    buckets: zod.array(
+      zod
+        .object({
+          comparison: zod
+            .object({
+              booksCount: zod
+                .int()
+                .min(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonBooksCountMin,
+                )
+                .max(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonBooksCountMax,
+                ),
+              booksPerOrder: zod.number().nullable(),
+              from: zod.iso
+                .date()
+                .regex(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonFromRegExp,
+                ),
+              ordersCount: zod
+                .int()
+                .min(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonOrdersCountMin,
+                )
+                .max(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonOrdersCountMax,
+                ),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseDynamicsBucketsItemComparisonToRegExp),
+              totalsByCurrency: zod.array(
+                zod.object({
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  total: zod.number(),
+                }),
+              ),
+            })
+            .nullable()
+            .describe(
+              "What one bucket actually covers. from and to are the real bounds after clipping to the period, so a bucket that starts mid-month says so instead of claiming the whole month.",
+            ),
+          current: zod
+            .object({
+              booksCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentBooksCountMin)
+                .max(bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentBooksCountMax),
+              booksPerOrder: zod.number().nullable(),
+              from: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentFromRegExp),
+              ordersCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentOrdersCountMin)
+                .max(
+                  bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentOrdersCountMax,
+                ),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseDynamicsBucketsItemCurrentToRegExp),
+              totalsByCurrency: zod.array(
+                zod.object({
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  total: zod.number(),
+                }),
+              ),
+            })
+            .describe(
+              "What one bucket actually covers. from and to are the real bounds after clipping to the period, so a bucket that starts mid-month says so instead of claiming the whole month.",
+            ),
+          drilldown: zod
+            .object({
+              targets: zod.array(
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemBooksCountMax,
+                    ),
+                  destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseDynamicsBucketsItemDrilldownTargetsItemOrdersCountMax,
+                    ),
+                }),
+              ),
+            })
+            .describe(
+              "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+            ),
+          key: zod.string(),
+        })
+        .describe(
+          "One paired column of the chart. The pairing is decided here, so the frontend never lines up two sparse arrays by index. A bucket with no purchases is still present with zero counts; comparison is null only when the comparison period has no bucket at this position.",
+        ),
+    ),
+    granularity: zod.enum(["week", "month"]),
+  }),
+  insights: zod
+    .object({
+      books: zod
+        .array(
+          zod.union([
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["spend_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["orders_count_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["books_count_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["avg_book_price_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["avg_landed_cost_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["average_books_per_order_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              booksCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsBooksItemSevenBooksCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsBooksItemSevenBooksCountMax),
+              code: zod.enum(["record_month"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              month: zod.string(),
+              ordersCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsBooksItemSevenOrdersCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsBooksItemSevenOrdersCountMax),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemSevenScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemSevenScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+              total: zod.number(),
+            }),
+            zod.object({
+              bucketKey: zod
+                .string()
+                .describe(
+                  "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                ),
+              from: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsBooksItemEightFromRegExp),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsBooksItemEightToRegExp),
+              code: zod.enum(["record_orders_bucket"]),
+              ordersCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsBooksItemEightOrdersCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsBooksItemEightOrdersCountMax),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemEightScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemEightScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              bucketKey: zod
+                .string()
+                .describe(
+                  "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                ),
+              from: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsBooksItemNineFromRegExp),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsBooksItemNineToRegExp),
+              booksCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsBooksItemNineBooksCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsBooksItemNineBooksCountMax),
+              code: zod.enum(["record_books_bucket"]),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemNineScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsBooksItemNineScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["store_movement"]),
+              store: zod.string(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              code: zod.enum(["delivery_share"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              deliveryShareOfSpendPercent: zod.number(),
+              deliveryTotal: zod.number(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              code: zod.enum(["discount_savings"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              discountShareOfRawSubtotalPercent: zod.number().nullable(),
+              discountTotal: zod.number(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+          ]),
+        )
+        .describe(
+          "One already selected and ordered group of insights. The backend owns the business selection: the array is short, ranked best first, and holds at most one signal of each family, so the frontend renders it as it arrives and never re-ranks or truncates it.",
+        ),
+      orders: zod
+        .array(
+          zod.union([
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["spend_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["orders_count_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["books_count_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["avg_book_price_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["avg_landed_cost_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              code: zod.enum(["average_books_per_order_change"]),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              booksCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenBooksCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenBooksCountMax),
+              code: zod.enum(["record_month"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              month: zod.string(),
+              ordersCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenOrdersCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenOrdersCountMax),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemSevenScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+              total: zod.number(),
+            }),
+            zod.object({
+              bucketKey: zod
+                .string()
+                .describe(
+                  "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                ),
+              from: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsOrdersItemEightFromRegExp),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsOrdersItemEightToRegExp),
+              code: zod.enum(["record_orders_bucket"]),
+              ordersCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsOrdersItemEightOrdersCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsOrdersItemEightOrdersCountMax),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemEightScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemEightScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              bucketKey: zod
+                .string()
+                .describe(
+                  "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                ),
+              from: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsOrdersItemNineFromRegExp),
+              to: zod.iso
+                .date()
+                .regex(bookOrdersControllerStatisticsResponseInsightsOrdersItemNineToRegExp),
+              booksCount: zod
+                .int()
+                .min(bookOrdersControllerStatisticsResponseInsightsOrdersItemNineBooksCountMin)
+                .max(bookOrdersControllerStatisticsResponseInsightsOrdersItemNineBooksCountMax),
+              code: zod.enum(["record_books_bucket"]),
+              scope: zod
+                .object({
+                  isPeriodFiltered: zod.boolean(),
+                  isTruncated: zod.boolean(),
+                  period: zod.object({
+                    from: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemNineScopePeriodFromRegExp,
+                      )
+                      .nullable(),
+                    to: zod.iso
+                      .date()
+                      .regex(
+                        bookOrdersControllerStatisticsResponseInsightsOrdersItemNineScopePeriodToRegExp,
+                      )
+                      .nullable(),
+                  }),
+                })
+                .describe(
+                  "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                ),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              absoluteDelta: zod.number().nullable(),
+              current: zod.number().nullable(),
+              percentDelta: zod.number().nullable(),
+              previous: zod.number().nullable(),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              code: zod.enum(["store_movement"]),
+              store: zod.string(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              code: zod.enum(["delivery_share"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              deliveryShareOfSpendPercent: zod.number(),
+              deliveryTotal: zod.number(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+            zod.object({
+              code: zod.enum(["discount_savings"]),
+              currency: zod.enum(["UAH", "EUR", "USD"]),
+              discountShareOfRawSubtotalPercent: zod.number().nullable(),
+              discountTotal: zod.number(),
+              tone: zod.enum(["neutral", "positive", "attention"]),
+            }),
+          ]),
+        )
+        .describe(
+          "One already selected and ordered group of insights. The backend owns the business selection: the array is short, ranked best first, and holds at most one signal of each family, so the frontend renders it as it arrives and never re-ranks or truncates it.",
+        ),
+      spendByCurrency: zod.array(
+        zod.object({
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+          signals: zod
+            .array(
+              zod.union([
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  code: zod.enum(["spend_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  code: zod.enum(["orders_count_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  code: zod.enum(["books_count_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  code: zod.enum(["avg_book_price_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  code: zod.enum(["avg_landed_cost_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  code: zod.enum(["average_books_per_order_change"]),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenBooksCountMax,
+                    ),
+                  code: zod.enum(["record_month"]),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  month: zod.string(),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenOrdersCountMax,
+                    ),
+                  scope: zod
+                    .object({
+                      isPeriodFiltered: zod.boolean(),
+                      isTruncated: zod.boolean(),
+                      period: zod.object({
+                        from: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenScopePeriodFromRegExp,
+                          )
+                          .nullable(),
+                        to: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemSevenScopePeriodToRegExp,
+                          )
+                          .nullable(),
+                      }),
+                    })
+                    .describe(
+                      "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                    ),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                  total: zod.number(),
+                }),
+                zod.object({
+                  bucketKey: zod
+                    .string()
+                    .describe(
+                      "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                    ),
+                  from: zod.iso
+                    .date()
+                    .regex(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightFromRegExp,
+                    ),
+                  to: zod.iso
+                    .date()
+                    .regex(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightToRegExp,
+                    ),
+                  code: zod.enum(["record_orders_bucket"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightOrdersCountMax,
+                    ),
+                  scope: zod
+                    .object({
+                      isPeriodFiltered: zod.boolean(),
+                      isTruncated: zod.boolean(),
+                      period: zod.object({
+                        from: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightScopePeriodFromRegExp,
+                          )
+                          .nullable(),
+                        to: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemEightScopePeriodToRegExp,
+                          )
+                          .nullable(),
+                      }),
+                    })
+                    .describe(
+                      "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                    ),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  bucketKey: zod
+                    .string()
+                    .describe(
+                      "The key of the dynamics bucket this insight is about, so the chart and the insight can point at the same column without matching display labels.",
+                    ),
+                  from: zod.iso
+                    .date()
+                    .regex(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineFromRegExp,
+                    ),
+                  to: zod.iso
+                    .date()
+                    .regex(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineToRegExp,
+                    ),
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineBooksCountMax,
+                    ),
+                  code: zod.enum(["record_books_bucket"]),
+                  scope: zod
+                    .object({
+                      isPeriodFiltered: zod.boolean(),
+                      isTruncated: zod.boolean(),
+                      period: zod.object({
+                        from: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineScopePeriodFromRegExp,
+                          )
+                          .nullable(),
+                        to: zod.iso
+                          .date()
+                          .regex(
+                            bookOrdersControllerStatisticsResponseInsightsSpendByCurrencyItemSignalsItemNineScopePeriodToRegExp,
+                          )
+                          .nullable(),
+                      }),
+                    })
+                    .describe(
+                      "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
+                    ),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  absoluteDelta: zod.number().nullable(),
+                  current: zod.number().nullable(),
+                  percentDelta: zod.number().nullable(),
+                  previous: zod.number().nullable(),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  code: zod.enum(["store_movement"]),
+                  store: zod.string(),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  code: zod.enum(["delivery_share"]),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  deliveryShareOfSpendPercent: zod.number(),
+                  deliveryTotal: zod.number(),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+                zod.object({
+                  code: zod.enum(["discount_savings"]),
+                  currency: zod.enum(["UAH", "EUR", "USD"]),
+                  discountShareOfRawSubtotalPercent: zod.number().nullable(),
+                  discountTotal: zod.number(),
+                  tone: zod.enum(["neutral", "positive", "attention"]),
+                }),
+              ]),
+            )
+            .describe(
+              "One already selected and ordered group of insights. The backend owns the business selection: the array is short, ranked best first, and holds at most one signal of each family, so the frontend renders it as it arrives and never re-ranks or truncates it.",
+            ),
+        }),
+      ),
+    })
+    .describe(
+      "Insights grouped by the context that is selected on the page. Spend is grouped per currency so a page showing UAH never receives a EUR record, and the count metrics have their own groups so switching the chart switches the insights with it.",
+    ),
   landedCost: zod.array(
     zod.object({
-      countedBooksCount: zod
+      booksInScope: zod
         .int()
-        .min(bookOrdersControllerStatisticsResponseLandedCostItemCountedBooksCountMin)
-        .max(bookOrdersControllerStatisticsResponseLandedCostItemCountedBooksCountMax),
+        .min(bookOrdersControllerStatisticsResponseLandedCostItemBooksInScopeMin)
+        .max(bookOrdersControllerStatisticsResponseLandedCostItemBooksInScopeMax)
+        .describe(
+          "Every book of this currency the period counted, whether or not its cost could be broken down. This is the denominator of coveragePercent.",
+        ),
+      booksWithLandedCost: zod
+        .int()
+        .min(bookOrdersControllerStatisticsResponseLandedCostItemBooksWithLandedCostMin)
+        .max(bookOrdersControllerStatisticsResponseLandedCostItemBooksWithLandedCostMax)
+        .describe(
+          "The books whose cost the allocation could actually explain, so they carry a landed cost. This is the numerator of coveragePercent and can never exceed booksInScope.",
+        ),
       coveragePercent: zod
         .number()
         .min(bookOrdersControllerStatisticsResponseLandedCostItemCoveragePercentMin)
         .max(bookOrdersControllerStatisticsResponseLandedCostItemCoveragePercentMax)
         .describe(
-          "Share of landed-eligible books that actually received an allocated landed cost. It is 0, never null, when countedBooksCount is 0.",
+          "booksWithLandedCost over booksInScope. It is 0, never null, when nothing was in scope.",
         ),
       currency: zod.enum(["UAH", "EUR", "USD"]),
-      eligibleBooksCount: zod
-        .int()
-        .min(bookOrdersControllerStatisticsResponseLandedCostItemEligibleBooksCountMin)
-        .max(bookOrdersControllerStatisticsResponseLandedCostItemEligibleBooksCountMax),
+      averageAdjustmentShare: zod
+        .number()
+        .nullable()
+        .describe(
+          "The part of a book's cost the base price, discount and delivery do not explain: the residual that makes the bridge reconcile with averageLandedBookCost. It is zero whenever the order invariant holds, because an order whose books are all priced may not carry a total that disagrees with them, and an order with an unpriced book is left out of the eligible set entirely. A non-zero value here means a rounding residual, not a real adjustment.",
+        ),
+      averageDeliveryShare: zod.number().nullable(),
+      averageDiscountShare: zod.number().nullable(),
+      averageEligibleRawBookPrice: zod
+        .number()
+        .nullable()
+        .describe(
+          "The starting price of exactly the books that received a landed cost, so the bridge from it to averageLandedBookCost compares one population with itself. A book whose price was never recorded contributes zero here and its whole cost shows up in the adjustment stage.",
+        ),
       averageLandedBookCost: zod.number().nullable(),
-      differenceVsAverageRawBookPrice: zod.number().nullable(),
+      deltaFromEligibleRawPrice: zod
+        .number()
+        .nullable()
+        .describe(
+          "averageLandedBookCost minus averageEligibleRawBookPrice. Negative means a book ended up cheaper than its listed price.",
+        ),
     }),
   ),
   lifecycle: zod
@@ -1094,39 +2255,82 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
     .describe(
       "Distribution over the canonical derived order statuses. Orders mode and books mode stay separate objects so a consumer can never render a mixed-unit view.",
     ),
-  meta: zod.object({
-    comparisonPeriod: zod
-      .object({
+  meta: zod
+    .object({
+      activeSource: zod
+        .object({
+          isTruncated: zod.boolean(),
+          loadedOrdersCount: zod
+            .int()
+            .min(bookOrdersControllerStatisticsResponseMetaActiveSourceLoadedOrdersCountMin)
+            .max(bookOrdersControllerStatisticsResponseMetaActiveSourceLoadedOrdersCountMax),
+          maxOrders: zod
+            .int()
+            .gt(bookOrdersControllerStatisticsResponseMetaActiveSourceMaxOrdersExclusiveMin)
+            .max(bookOrdersControllerStatisticsResponseMetaActiveSourceMaxOrdersMax)
+            .nullable(),
+        })
+        .describe(
+          "How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter.",
+        ),
+      comparisonPeriod: zod
+        .object({
+          from: zod.iso
+            .date()
+            .regex(bookOrdersControllerStatisticsResponseMetaComparisonPeriodFromRegExp),
+          mode: zod.enum(["previous_period", "same_period_last_year"]),
+          to: zod.iso
+            .date()
+            .regex(bookOrdersControllerStatisticsResponseMetaComparisonPeriodToRegExp),
+        })
+        .nullable(),
+      comparisonSource: zod
+        .object({
+          isTruncated: zod.boolean(),
+          loadedOrdersCount: zod
+            .int()
+            .min(bookOrdersControllerStatisticsResponseMetaComparisonSourceLoadedOrdersCountMin)
+            .max(bookOrdersControllerStatisticsResponseMetaComparisonSourceLoadedOrdersCountMax),
+          maxOrders: zod
+            .int()
+            .gt(bookOrdersControllerStatisticsResponseMetaComparisonSourceMaxOrdersExclusiveMin)
+            .max(bookOrdersControllerStatisticsResponseMetaComparisonSourceMaxOrdersMax)
+            .nullable(),
+        })
+        .nullable()
+        .describe(
+          "How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter.",
+        ),
+      currentPeriod: zod.object({
         from: zod.iso
           .date()
-          .regex(bookOrdersControllerStatisticsResponseMetaComparisonPeriodFromRegExp),
-        mode: zod.enum(["previous_period", "same_period_last_year"]),
+          .regex(bookOrdersControllerStatisticsResponseMetaCurrentPeriodFromRegExp)
+          .nullable(),
         to: zod.iso
           .date()
-          .regex(bookOrdersControllerStatisticsResponseMetaComparisonPeriodToRegExp),
-      })
-      .nullable(),
-    currentPeriod: zod.object({
-      from: zod.iso
-        .date()
-        .regex(bookOrdersControllerStatisticsResponseMetaCurrentPeriodFromRegExp)
-        .nullable(),
-      to: zod.iso
-        .date()
-        .regex(bookOrdersControllerStatisticsResponseMetaCurrentPeriodToRegExp)
-        .nullable(),
-    }),
-    isTruncated: zod.boolean(),
-    loadedOrdersCount: zod
-      .int()
-      .min(bookOrdersControllerStatisticsResponseMetaLoadedOrdersCountMin)
-      .max(bookOrdersControllerStatisticsResponseMetaLoadedOrdersCountMax),
-    maxOrders: zod
-      .int()
-      .gt(bookOrdersControllerStatisticsResponseMetaMaxOrdersExclusiveMin)
-      .max(bookOrdersControllerStatisticsResponseMetaMaxOrdersMax)
-      .nullable(),
-  }),
+          .regex(bookOrdersControllerStatisticsResponseMetaCurrentPeriodToRegExp)
+          .nullable(),
+      }),
+      currentSource: zod
+        .object({
+          isTruncated: zod.boolean(),
+          loadedOrdersCount: zod
+            .int()
+            .min(bookOrdersControllerStatisticsResponseMetaCurrentSourceLoadedOrdersCountMin)
+            .max(bookOrdersControllerStatisticsResponseMetaCurrentSourceLoadedOrdersCountMax),
+          maxOrders: zod
+            .int()
+            .gt(bookOrdersControllerStatisticsResponseMetaCurrentSourceMaxOrdersExclusiveMin)
+            .max(bookOrdersControllerStatisticsResponseMetaCurrentSourceMaxOrdersMax)
+            .nullable(),
+        })
+        .describe(
+          "How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter.",
+        ),
+    })
+    .describe(
+      "Each source the response was built from reports its own completeness. One flag for the whole response would hide the case where the current period was read in full but the comparison period was cut, or the other way round.",
+    ),
   monthly: zod.array(
     zod.object({
       booksCount: zod
@@ -1146,104 +2350,39 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
       ),
     }),
   ),
-  pulse: zod
-    .array(
-      zod.union([
-        zod.object({
-          absoluteDelta: zod.number().nullable(),
-          current: zod.number().nullable(),
-          percentDelta: zod.number().nullable(),
-          previous: zod.number().nullable(),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          code: zod.enum(["spend_change"]),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-        zod.object({
-          absoluteDelta: zod.number().nullable(),
-          current: zod.number().nullable(),
-          percentDelta: zod.number().nullable(),
-          previous: zod.number().nullable(),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          code: zod.enum(["avg_book_price_change"]),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-        zod.object({
-          absoluteDelta: zod.number().nullable(),
-          current: zod.number().nullable(),
-          percentDelta: zod.number().nullable(),
-          previous: zod.number().nullable(),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          code: zod.enum(["avg_landed_cost_change"]),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-        zod.object({
-          booksCount: zod
-            .int()
-            .min(bookOrdersControllerStatisticsResponsePulseItemFourBooksCountMin)
-            .max(bookOrdersControllerStatisticsResponsePulseItemFourBooksCountMax),
-          code: zod.enum(["record_month"]),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          month: zod.string(),
-          ordersCount: zod
-            .int()
-            .min(bookOrdersControllerStatisticsResponsePulseItemFourOrdersCountMin)
-            .max(bookOrdersControllerStatisticsResponsePulseItemFourOrdersCountMax),
-          scope: zod
-            .object({
-              isPeriodFiltered: zod.boolean(),
-              isTruncated: zod.boolean(),
-              period: zod.object({
-                from: zod.iso
-                  .date()
-                  .regex(bookOrdersControllerStatisticsResponsePulseItemFourScopePeriodFromRegExp)
-                  .nullable(),
-                to: zod.iso
-                  .date()
-                  .regex(bookOrdersControllerStatisticsResponsePulseItemFourScopePeriodToRegExp)
-                  .nullable(),
-              }),
-            })
-            .describe(
-              "Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record.",
-            ),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-          total: zod.number(),
-        }),
-        zod.object({
-          absoluteDelta: zod.number().nullable(),
-          current: zod.number().nullable(),
-          percentDelta: zod.number().nullable(),
-          previous: zod.number().nullable(),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          code: zod.enum(["store_growth"]),
-          store: zod.string(),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-        zod.object({
-          code: zod.enum(["delivery_share"]),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          deliveryShareOfSpendPercent: zod.number(),
-          deliveryTotal: zod.number(),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-        zod.object({
-          code: zod.enum(["discount_savings"]),
-          currency: zod.enum(["UAH", "EUR", "USD"]),
-          discountShareOfRawSubtotalPercent: zod.number().nullable(),
-          discountTotal: zod.number(),
-          tone: zod.enum(["neutral", "positive", "attention"]),
-        }),
-      ]),
-    )
-    .describe(
-      "Deterministic insight codes with typed numeric params. The backend never returns a localized sentence; the frontend maps each code to its own message.",
-    ),
   records: zod.object({
     bestValueStoreByCurrency: zod.array(
       zod
         .object({
           averageLandedBookCost: zod.number(),
           currency: zod.enum(["UAH", "EUR", "USD"]),
+          drilldown: zod
+            .object({
+              targets: zod.array(
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemBooksCountMax,
+                    ),
+                  destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemDrilldownTargetsItemOrdersCountMax,
+                    ),
+                }),
+              ),
+            })
+            .describe(
+              "Where this store's orders in this currency live. The record itself counts only books whose real cost is known, so this is context navigation and never an exact drill-down.",
+            ),
           eligibleBooksCount: zod
             .int()
             .min(
@@ -1253,6 +2392,7 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
               bookOrdersControllerStatisticsResponseRecordsBestValueStoreByCurrencyItemEligibleBooksCountMax,
             ),
           store: zod.string(),
+          storeKey: zod.string(),
         })
         .describe(
           "One winner per currency, never across currencies. A candidate needs at least two landed-eligible books; ties break by the most landed-eligible books, then by store name ascending.",
@@ -1273,14 +2413,18 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
           currency: zod
             .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
             .nullable(),
-          derivedStatus: zod.enum([
-            "active",
-            "partially_shipped",
-            "shipped",
-            "partially_received",
-            "received",
-            "cancelled",
-          ]),
+          derivedStatus: zod
+            .enum([
+              "active",
+              "partially_shipped",
+              "shipped",
+              "partially_received",
+              "received",
+              "cancelled",
+            ])
+            .describe(
+              "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+            ),
           id: zod.string(),
           orderDate: zod.string().nullable(),
           orderNumber: zod.string().nullable(),
@@ -1296,11 +2440,39 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
             .int()
             .min(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksBooksCountMin)
             .max(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksBooksCountMax),
+          drilldown: zod
+            .object({
+              targets: zod.array(
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemBooksCountMax,
+                    ),
+                  destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksDrilldownTargetsItemOrdersCountMax,
+                    ),
+                }),
+              ),
+            })
+            .describe(
+              "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+            ),
           ordersCount: zod
             .int()
             .min(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksOrdersCountMin)
             .max(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByBooksOrdersCountMax),
           store: zod.string(),
+          storeKey: zod.string(),
         })
         .nullable(),
       byOrders: zod
@@ -1309,6 +2481,33 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
             .int()
             .min(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersBooksCountMin)
             .max(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersBooksCountMax),
+          drilldown: zod
+            .object({
+              targets: zod.array(
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemBooksCountMax,
+                    ),
+                  destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersDrilldownTargetsItemOrdersCountMax,
+                    ),
+                }),
+              ),
+            })
+            .describe(
+              "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+            ),
           ordersCount: zod
             .int()
             .min(bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersOrdersCountMin)
@@ -1316,6 +2515,7 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
               bookOrdersControllerStatisticsResponseRecordsMostActiveStoreByOrdersOrdersCountMax,
             ),
           store: zod.string(),
+          storeKey: zod.string(),
         })
         .nullable(),
     }),
@@ -1328,37 +2528,81 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
         currency: zod
           .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
           .nullable(),
-        derivedStatus: zod.enum([
-          "active",
-          "partially_shipped",
-          "shipped",
-          "partially_received",
-          "received",
-          "cancelled",
-        ]),
+        derivedStatus: zod
+          .enum([
+            "active",
+            "partially_shipped",
+            "shipped",
+            "partially_received",
+            "received",
+            "cancelled",
+          ])
+          .describe(
+            "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+          ),
         id: zod.string(),
         orderDate: zod.string().nullable(),
         orderNumber: zod.string().nullable(),
         storeName: zod.string(),
-        totalAmount: zod.number(),
+        totalAmount: zod.number().nullable(),
       })
-      .nullable(),
+      .nullable()
+      .describe(
+        "One order named by its id, which is what navigation uses. orderNumber is a label a user may never have filled in and never decides whether the order can be opened.",
+      ),
     recordMonthByCurrency: zod.array(
-      zod.object({
-        booksCount: zod
-          .int()
-          .min(bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMin)
-          .max(bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMax),
-        currency: zod.enum(["UAH", "EUR", "USD"]),
-        month: zod.string(),
-        ordersCount: zod
-          .int()
-          .min(bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMin)
-          .max(
-            bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMax,
-          ),
-        total: zod.number(),
-      }),
+      zod
+        .object({
+          booksCount: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemBooksCountMax,
+            ),
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+          drilldown: zod
+            .object({
+              targets: zod.array(
+                zod.object({
+                  booksCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemBooksCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemBooksCountMax,
+                    ),
+                  destination: zod.enum(["in_transit", "history_received", "history_cancelled"]),
+                  ordersCount: zod
+                    .int()
+                    .min(
+                      bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemOrdersCountMin,
+                    )
+                    .max(
+                      bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemDrilldownTargetsItemOrdersCountMax,
+                    ),
+                }),
+              ),
+            })
+            .describe(
+              "Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books.",
+            ),
+          month: zod.string(),
+          ordersCount: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseRecordsRecordMonthByCurrencyItemOrdersCountMax,
+            ),
+          total: zod.number(),
+        })
+        .describe(
+          "The heaviest month inside one currency. Its order and book counts are counted in that same currency, so a month that also holds orders in another currency never inflates them.",
+        ),
     ),
     scope: zod
       .object({
@@ -1385,6 +2629,31 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
         .int()
         .min(bookOrdersControllerStatisticsResponseSnapshotActiveBooksCountMin)
         .max(bookOrdersControllerStatisticsResponseSnapshotActiveBooksCountMax),
+      activeMoneyCoverageByCurrency: zod.array(
+        zod
+          .object({
+            currency: zod.enum(["UAH", "EUR", "USD"]),
+            ordersInScope: zod
+              .int()
+              .min(
+                bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersInScopeMin,
+              )
+              .max(
+                bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersInScopeMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookOrdersControllerStatisticsResponseSnapshotActiveMoneyCoverageByCurrencyItemOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How many of the orders in one currency the money totals could actually see. An order whose amount stayed unknown is counted in ordersInScope and left out of every sum, never folded in as a zero.",
+          ),
+      ),
       activeOrdersCount: zod
         .int()
         .min(bookOrdersControllerStatisticsResponseSnapshotActiveOrdersCountMin)
@@ -1445,10 +2714,58 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
         total: zod.number(),
       }),
     ),
+    financialCoverageByCurrency: zod.array(
+      zod
+        .object({
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+          ordersInScope: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersInScopeMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersInScopeMax,
+            ),
+          ordersWithResolvedAmount: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersWithResolvedAmountMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseSummaryFinancialCoverageByCurrencyItemOrdersWithResolvedAmountMax,
+            ),
+        })
+        .describe(
+          "How many of the orders in one currency the money totals could actually see. An order whose amount stayed unknown is counted in ordersInScope and left out of every sum, never folded in as a zero.",
+        ),
+    ),
     ordersCount: zod
       .int()
       .min(bookOrdersControllerStatisticsResponseSummaryOrdersCountMin)
       .max(bookOrdersControllerStatisticsResponseSummaryOrdersCountMax),
+    priceCoverageByCurrency: zod.array(
+      zod
+        .object({
+          booksInScope: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksInScopeMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksInScopeMax,
+            ),
+          booksWithPrice: zod
+            .int()
+            .min(
+              bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksWithPriceMin,
+            )
+            .max(
+              bookOrdersControllerStatisticsResponseSummaryPriceCoverageByCurrencyItemBooksWithPriceMax,
+            ),
+          currency: zod.enum(["UAH", "EUR", "USD"]),
+        })
+        .describe("How many books of one currency carry a recorded price at all."),
+    ),
     receivedBooksCount: zod
       .int()
       .min(bookOrdersControllerStatisticsResponseSummaryReceivedBooksCountMin)
@@ -1479,14 +2796,18 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
       currency: zod
         .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
         .nullable(),
-      derivedStatus: zod.enum([
-        "active",
-        "partially_shipped",
-        "shipped",
-        "partially_received",
-        "received",
-        "cancelled",
-      ]),
+      derivedStatus: zod
+        .enum([
+          "active",
+          "partially_shipped",
+          "shipped",
+          "partially_received",
+          "received",
+          "cancelled",
+        ])
+        .describe(
+          "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+        ),
       id: zod.string(),
       orderDate: zod.string().nullable(),
       orderNumber: zod.string().nullable(),
@@ -1510,14 +2831,18 @@ export const BookOrdersControllerStatisticsResponse = zod.object({
           currency: zod
             .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
             .nullable(),
-          derivedStatus: zod.enum([
-            "active",
-            "partially_shipped",
-            "shipped",
-            "partially_received",
-            "received",
-            "cancelled",
-          ]),
+          derivedStatus: zod
+            .enum([
+              "active",
+              "partially_shipped",
+              "shipped",
+              "partially_received",
+              "received",
+              "cancelled",
+            ])
+            .describe(
+              "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+            ),
           id: zod.string(),
           orderDate: zod.string().nullable(),
           orderNumber: zod.string().nullable(),
@@ -1542,14 +2867,11 @@ export const BookOrdersControllerFindByIdResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -1647,14 +2969,11 @@ export const BookOrdersControllerUpdateResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod

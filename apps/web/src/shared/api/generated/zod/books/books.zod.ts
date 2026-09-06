@@ -4601,6 +4601,16 @@ export const BooksControllerRestoreResponse = zod.object({
 });
 
 /**
+ * @summary Delete one mistaken reading activity event from the reading history
+ */
+export const BookReadingControllerDeleteReadingEventParams = zod.object({
+  id: zod.string(),
+  eventId: zod.string(),
+});
+
+export const BookReadingControllerDeleteReadingEventResponse = zod.void();
+
+/**
  * @summary Get the reading progress history of a book
  */
 export const BookReadingControllerGetReadingHistoryParams = zod.object({
@@ -7503,6 +7513,50 @@ export const BookOwnershipControllerMarkBoughtResponse = zod.object({
   updatedAt: zod.string(),
   userId: zod.string(),
   wishlistAddedAt: zod.string().nullable(),
+});
+
+/**
+ * @summary Record the same loan terms for several books at once
+ */
+export const bookLoanBatchControllerCreateLoansBodyBookIdsItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const bookLoanBatchControllerCreateLoansBodyBookIdsMax = 100;
+
+export const bookLoanBatchControllerCreateLoansBodyExpectedReturnDateRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookLoanBatchControllerCreateLoansBodyLoanContactIdRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const bookLoanBatchControllerCreateLoansBodyLoanDateRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookLoanBatchControllerCreateLoansBody = zod.object({
+  bookIds: zod
+    .array(zod.uuid().regex(bookLoanBatchControllerCreateLoansBodyBookIdsItemRegExp))
+    .min(1)
+    .max(bookLoanBatchControllerCreateLoansBodyBookIdsMax),
+  direction: zod.enum(["borrowed", "lent"]),
+  expectedReturnDate: zod.iso
+    .date()
+    .regex(bookLoanBatchControllerCreateLoansBodyExpectedReturnDateRegExp)
+    .nullish(),
+  loanContactId: zod.uuid().regex(bookLoanBatchControllerCreateLoansBodyLoanContactIdRegExp),
+  loanDate: zod.iso.date().regex(bookLoanBatchControllerCreateLoansBodyLoanDateRegExp),
+  note: zod.string().nullish(),
+  remindToReturn: zod.boolean().optional(),
+});
+
+export const bookLoanBatchControllerCreateLoansResponseCreatedBookIdsItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+
+export const BookLoanBatchControllerCreateLoansResponse = zod.object({
+  createdBookIds: zod.array(
+    zod.uuid().regex(bookLoanBatchControllerCreateLoansResponseCreatedBookIdsItemRegExp),
+  ),
 });
 
 /**

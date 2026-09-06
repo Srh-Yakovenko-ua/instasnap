@@ -20,4 +20,14 @@ export type LoanContactsViewDtoItemsItem = {
   loanCount: number;
   name: string;
   updatedAt: string;
+  /**
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  activeBorrowedCount: number;
+  /**
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  activeLentCount: number;
 };

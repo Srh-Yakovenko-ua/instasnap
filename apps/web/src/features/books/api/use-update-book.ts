@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { listKeys } from "@/features/lists/api/list-keys";
 import { seriesKeys } from "@/features/series/api/series-keys";
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 import { booksControllerUpdate } from "@/shared/api/generated/endpoints/books/books";
 
 import { matchesReadingQueueKey } from "./reading-queue-keys";
@@ -18,6 +19,7 @@ export function useUpdateBook(id: string) {
       void queryClient.invalidateQueries({ queryKey: listKeys.root });
       void queryClient.invalidateQueries({ queryKey: seriesKeys.root });
       void queryClient.invalidateQueries({ predicate: matchesReadingQueueKey });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }

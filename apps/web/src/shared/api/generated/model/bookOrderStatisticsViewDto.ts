@@ -10,11 +10,12 @@ import type { BookOrderStatisticsViewDtoByStoreItem } from "./bookOrderStatistic
 import type { BookOrderStatisticsViewDtoComparison } from "./bookOrderStatisticsViewDtoComparison";
 import type { BookOrderStatisticsViewDtoCostsItem } from "./bookOrderStatisticsViewDtoCostsItem";
 import type { BookOrderStatisticsViewDtoDailyItem } from "./bookOrderStatisticsViewDtoDailyItem";
+import type { BookOrderStatisticsViewDtoDynamics } from "./bookOrderStatisticsViewDtoDynamics";
+import type { BookOrderStatisticsViewDtoInsights } from "./bookOrderStatisticsViewDtoInsights";
 import type { BookOrderStatisticsViewDtoLandedCostItem } from "./bookOrderStatisticsViewDtoLandedCostItem";
 import type { BookOrderStatisticsViewDtoLifecycle } from "./bookOrderStatisticsViewDtoLifecycle";
 import type { BookOrderStatisticsViewDtoMeta } from "./bookOrderStatisticsViewDtoMeta";
 import type { BookOrderStatisticsViewDtoMonthlyItem } from "./bookOrderStatisticsViewDtoMonthlyItem";
-import type { BookOrderStatisticsViewDtoPulseItem } from "./bookOrderStatisticsViewDtoPulseItem";
 import type { BookOrderStatisticsViewDtoRecords } from "./bookOrderStatisticsViewDtoRecords";
 import type { BookOrderStatisticsViewDtoSnapshot } from "./bookOrderStatisticsViewDtoSnapshot";
 import type { BookOrderStatisticsViewDtoSummary } from "./bookOrderStatisticsViewDtoSummary";
@@ -29,13 +30,15 @@ export interface BookOrderStatisticsViewDto {
   costs: BookOrderStatisticsViewDtoCostsItem[];
   /** Sparse ascending series: only days that carry at least one counted order are present, days with no activity are omitted rather than sent as zero rows, and the frontend fills the gaps visually. */
   daily: BookOrderStatisticsViewDtoDailyItem[];
+  dynamics: BookOrderStatisticsViewDtoDynamics;
+  /** Insights grouped by the context that is selected on the page. Spend is grouped per currency so a page showing UAH never receives a EUR record, and the count metrics have their own groups so switching the chart switches the insights with it. */
+  insights: BookOrderStatisticsViewDtoInsights;
   landedCost: BookOrderStatisticsViewDtoLandedCostItem[];
   /** Distribution over the canonical derived order statuses. Orders mode and books mode stay separate objects so a consumer can never render a mixed-unit view. */
   lifecycle: BookOrderStatisticsViewDtoLifecycle;
+  /** Each source the response was built from reports its own completeness. One flag for the whole response would hide the case where the current period was read in full but the comparison period was cut, or the other way round. */
   meta: BookOrderStatisticsViewDtoMeta;
   monthly: BookOrderStatisticsViewDtoMonthlyItem[];
-  /** Deterministic insight codes with typed numeric params. The backend never returns a localized sentence; the frontend maps each code to its own message. */
-  pulse: BookOrderStatisticsViewDtoPulseItem[];
   records: BookOrderStatisticsViewDtoRecords;
   /** Money that is still on its way right now. This block deliberately ignores the historical from/to period filter, so it stays a current snapshot and never turns into a period-bound number. No comparison is emitted for it. */
   snapshot: BookOrderStatisticsViewDtoSnapshot;

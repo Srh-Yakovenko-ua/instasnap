@@ -16,7 +16,10 @@ export type BookOrderStatisticsViewDtoRecords = {
   bestValueStoreByCurrency: BookOrderStatisticsViewDtoRecordsBestValueStoreByCurrencyItem[];
   largestOrderByCurrency: BookOrderStatisticsViewDtoRecordsLargestOrderByCurrencyItem[];
   mostActiveStore: BookOrderStatisticsViewDtoRecordsMostActiveStore;
-  /** @nullable */
+  /**
+   * One order named by its id, which is what navigation uses. orderNumber is a label a user may never have filled in and never decides whether the order can be opened.
+   * @nullable
+   */
   mostBooksInOrder: BookOrderStatisticsViewDtoRecordsMostBooksInOrder;
   recordMonthByCurrency: BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItem[];
   /** Bounds of a record fact. When isPeriodFiltered or isTruncated is true the record holds only inside this scope and must not be presented as an all-time record. */

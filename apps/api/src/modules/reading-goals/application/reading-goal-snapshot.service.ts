@@ -20,7 +20,6 @@ export type ReadingGoalQualificationChange = {
 
 export type ReadingGoalSnapshotCandidate = {
   bookId: string;
-  finishedAt: Nullable<Date>;
   position: number;
 };
 
@@ -57,7 +56,11 @@ export class ReadingGoalSnapshotService {
         ...window,
         finishedAt: row.finishedAt,
       });
-      if (isSameQualification(row.qualifiedFinishedAt, qualifiedFinishedAt)) {
+      const qualifiedReadingCycleId = qualifiedFinishedAt === null ? null : row.readingCycleId;
+      if (
+        isSameQualification(row.qualifiedFinishedAt, qualifiedFinishedAt) &&
+        row.qualifiedReadingCycleId === qualifiedReadingCycleId
+      ) {
         continue;
       }
       const written = await this.readingGoalBooksRepository.updateQualifiedFinishedAt(
@@ -66,6 +69,7 @@ export class ReadingGoalSnapshotService {
           goalId: goal.id,
           previousQualifiedFinishedAt: row.qualifiedFinishedAt,
           qualifiedFinishedAt,
+          qualifiedReadingCycleId,
         },
         tx,
       );
@@ -85,16 +89,12 @@ export class ReadingGoalSnapshotService {
     if (candidates.length === 0) {
       return;
     }
-    const window = qualificationWindow(goal);
     const rows: ReadingGoalSnapshotBookInput[] = candidates.map((candidate) => ({
       bookId: candidate.bookId,
       position: candidate.position,
-      qualifiedFinishedAt: resolveQualifiedFinishedAt({
-        ...window,
-        finishedAt: candidate.finishedAt,
-      }),
     }));
     await this.readingGoalBooksRepository.createMany({ goalId: goal.id, rows }, tx);
+    await this.resync({ goal, tx });
   }
 }
 

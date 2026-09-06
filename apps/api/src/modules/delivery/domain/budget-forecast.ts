@@ -1,6 +1,6 @@
-import type { BookBudgetProgress, Nullable } from "@app/shared";
+import type { BookBudgetOutlook, BookBudgetProgress, Nullable } from "@app/shared";
 
-import { BOOK_BUDGET_RULES, toBudgetMonth } from "@app/shared";
+import { BOOK_BUDGET_RULES, BookBudgetOutlookSchema, toBudgetMonth } from "@app/shared";
 import {
   differenceInCalendarDays,
   format,
@@ -13,6 +13,8 @@ import { toIsoDate } from "../../../core/iso-date.js";
 import { fromMinorUnits, toMinorUnits } from "./money-minor-units.js";
 
 const ISO_DAY_FORMAT = "yyyy-MM-dd";
+
+const OUTLOOK = BookBudgetOutlookSchema.enum;
 
 const BUDGET_ARITHMETIC = Object.freeze({
   emptyDenominator: 0,
@@ -32,11 +34,13 @@ export type BudgetMonthWindow = {
 export function computeBudgetProgress({
   budget,
   deliverySpentToDate,
+  isSpendComplete,
   now,
   spentToDate,
 }: {
   budget: number;
   deliverySpentToDate: number;
+  isSpendComplete: boolean;
   now: Date;
   spentToDate: number;
 }): BookBudgetProgress {
@@ -50,10 +54,16 @@ export function computeBudgetProgress({
     deliveryShareOfBudgetPercent: toShareOfBudgetPercent({ budget, part: deliverySpentToDate }),
     elapsedDays: monthWindow.elapsedDays,
     forecast,
+    isForecastComplete: isSpendComplete,
+    outlook: toOutlook({ budget, forecast, spentToDate }),
     projectedOverage:
       forecast === null
         ? null
         : roundMoney(Math.max(forecast - budget, BUDGET_ARITHMETIC.zeroFloor)),
+    projectedRemaining:
+      forecast === null
+        ? null
+        : roundMoney(Math.max(budget - forecast, BUDGET_ARITHMETIC.zeroFloor)),
     remaining: Math.max(remainingSigned, BUDGET_ARITHMETIC.zeroFloor),
     remainingSigned,
     spentToDate,
@@ -89,6 +99,24 @@ function forecastMonthSpend({
 
 function roundMoney(value: number): number {
   return fromMinorUnits(toMinorUnits(value));
+}
+
+function toOutlook({
+  budget,
+  forecast,
+  spentToDate,
+}: {
+  budget: number;
+  forecast: Nullable<number>;
+  spentToDate: number;
+}): BookBudgetOutlook {
+  if (spentToDate > budget) {
+    return OUTLOOK.exceeded;
+  }
+  if (forecast === null) {
+    return OUTLOOK.forecast_pending;
+  }
+  return forecast > budget ? OUTLOOK.at_risk : OUTLOOK.on_track;
 }
 
 function toShareOfBudgetPercent({

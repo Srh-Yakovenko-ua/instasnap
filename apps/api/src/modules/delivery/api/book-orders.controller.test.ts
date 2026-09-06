@@ -692,9 +692,9 @@ describe("GET /api/delivery/orders/statistics contract", () => {
       comparison: view.comparison,
       costs: view.costs,
       daily: view.daily,
+      insights: view.insights,
       landedCost: view.landedCost,
       monthly: view.monthly,
-      pulse: view.pulse,
       topOrders: view.topOrders,
       topOrdersByCurrency: view.topOrdersByCurrency,
     }).toEqual({
@@ -703,9 +703,9 @@ describe("GET /api/delivery/orders/statistics contract", () => {
       comparison: null,
       costs: [],
       daily: [],
+      insights: { books: [], orders: [], spendByCurrency: [] },
       landedCost: [],
       monthly: [],
-      pulse: [],
       topOrders: [],
       topOrdersByCurrency: [],
     });
@@ -718,8 +718,10 @@ describe("GET /api/delivery/orders/statistics contract", () => {
 
     const view = await statisticsOf();
 
-    expect(view.meta).toMatchObject({ isTruncated: false, loadedOrdersCount: 9 });
-    expect(view.meta.maxOrders).toBeGreaterThan(view.meta.loadedOrdersCount);
+    expect(view.meta.currentSource).toMatchObject({ isTruncated: false, loadedOrdersCount: 9 });
+    expect(view.meta.currentSource.maxOrders).toBeGreaterThan(
+      view.meta.currentSource.loadedOrdersCount,
+    );
   });
 
   it("marks the record scope as filtered so nothing gets called an all-time record", async () => {
@@ -756,7 +758,9 @@ describe("GET /api/delivery/orders/statistics contract", () => {
     await createUndatedOrder();
     const after = await statisticsOf();
 
-    expect(after.meta.loadedOrdersCount).toBe(before.meta.loadedOrdersCount + 1);
+    expect(after.meta.currentSource.loadedOrdersCount).toBe(
+      before.meta.currentSource.loadedOrdersCount + 1,
+    );
     expect(totalsOf(after).UAH).toBe((totalsOf(before).UAH ?? 0) + UNDATED_ORDER_PRICE);
   });
 
@@ -779,7 +783,9 @@ describe("GET /api/delivery/orders/statistics contract", () => {
     await createUndatedOrder();
     const after = await statisticsOf(currentMonth);
 
-    expect(after.meta.loadedOrdersCount).toBe(before.meta.loadedOrdersCount);
+    expect(after.meta.currentSource.loadedOrdersCount).toBe(
+      before.meta.currentSource.loadedOrdersCount,
+    );
     expect(totalsOf(after)).toEqual(totalsOf(before));
   });
 

@@ -5,6 +5,7 @@
  * REST API for the book-nest project
  * OpenAPI spec version: 1.0
  */
+import type { BookOrderStatisticsViewDtoSnapshotActiveMoneyCoverageByCurrencyItem } from "./bookOrderStatisticsViewDtoSnapshotActiveMoneyCoverageByCurrencyItem";
 import type { BookOrderStatisticsViewDtoSnapshotActiveTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoSnapshotActiveTotalsByCurrencyItem";
 
 /**
@@ -16,6 +17,7 @@ export type BookOrderStatisticsViewDtoSnapshot = {
    * @maximum 9007199254740991
    */
   activeBooksCount: number;
+  activeMoneyCoverageByCurrency: BookOrderStatisticsViewDtoSnapshotActiveMoneyCoverageByCurrencyItem[];
   /**
    * @minimum 0
    * @maximum 9007199254740991

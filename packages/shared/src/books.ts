@@ -485,6 +485,57 @@ export const UpdateLoanInputSchema = z
 
 export type UpdateLoanInput = z.infer<typeof UpdateLoanInputSchema>;
 
+export const LOAN_BATCH_MAX = LIST_PAGE_SIZE_MAX;
+
+export const CreateLoansBatchInputSchema = z
+  .object({
+    bookIds: z.array(z.uuid()).min(1).max(LOAN_BATCH_MAX),
+    direction: LoanDirectionSchema,
+    expectedReturnDate: z.iso.date().nullable().optional(),
+    loanContactId: z.uuid(),
+    loanDate: notInFutureDate("Loan date must not be in the future"),
+    note: LoanNoteSchema.nullable().optional(),
+    remindToReturn: z.boolean().optional(),
+  })
+  .refine(isReturnNotBeforeLoan, {
+    error: RETURN_BEFORE_LOAN_MESSAGE,
+    path: ["expectedReturnDate"],
+  })
+  .refine(
+    (value) =>
+      value.remindToReturn !== true ||
+      (value.expectedReturnDate !== undefined && value.expectedReturnDate !== null),
+    {
+      error: REMINDER_NEEDS_RETURN_DATE_MESSAGE,
+      path: ["expectedReturnDate"],
+    },
+  );
+
+export type CreateLoansBatchInput = z.infer<typeof CreateLoansBatchInputSchema>;
+
+export const CreateLoansBatchResultSchema = z.object({
+  createdBookIds: z.array(z.uuid()),
+});
+
+export type CreateLoansBatchResult = z.infer<typeof CreateLoansBatchResultSchema>;
+
+export const LOAN_BATCH_CONFLICT_CODE = "BATCH_LOAN_CONFLICT";
+
+export const LoanBatchConflictReasonSchema = z.enum([
+  "active_loan_exists",
+  "book_not_found",
+  "borrow_requires_available_ownership",
+  "lend_requires_owned",
+]);
+
+export type LoanBatchConflictReason = z.infer<typeof LoanBatchConflictReasonSchema>;
+
+export const LoanBatchConflictDetailsSchema = z.object({
+  conflicts: z.array(z.object({ bookId: z.uuid(), reason: LoanBatchConflictReasonSchema })).min(1),
+});
+
+export type LoanBatchConflictDetails = z.infer<typeof LoanBatchConflictDetailsSchema>;
+
 export const LOAN_ERROR_CODES = {
   activeLoanExists: "LOAN_ACTIVE_EXISTS",
   bookNotFound: "LOAN_BOOK_NOT_FOUND",

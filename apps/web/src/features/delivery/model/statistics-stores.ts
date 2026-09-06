@@ -1,10 +1,21 @@
-import type { BookOrderStatisticsStore, Currency, Nullable } from "@app/shared";
+import type {
+  BookOrderStatisticsStore,
+  Currency,
+  Nullable,
+  StatisticsDrilldownBreakdown,
+} from "@app/shared";
 
 import { BOOK_ORDER_BEST_VALUE_STORE_RULES } from "@app/shared";
 
 import { currencyAverageOf, currencyTotalOf } from "./statistics-currency";
 
 export const STORE_METRICS = ["spend", "orders", "books"] as const;
+
+export type StoreExclusion = {
+  eligibleBooksCount: number;
+  store: string;
+  storeKey: string;
+};
 
 export type StoreMetric = (typeof STORE_METRICS)[number];
 
@@ -13,62 +24,67 @@ export type StoreRow = {
   averageLandedBookCost: Nullable<number>;
   averageOrderAmount: Nullable<number>;
   booksCount: number;
-  deltaPercent: Nullable<number>;
-  deltaValue: Nullable<number>;
+  booksPerOrder: Nullable<number>;
+  drilldown: StatisticsDrilldownBreakdown;
   ordersCount: number;
   share: number;
   store: string;
+  storeKey: string;
   value: number;
 };
 
 export type StoreScatter = {
+  excluded: StoreExclusion[];
   points: StoreScatterPoint[];
-  withoutLandedData: string[];
 };
 
 export type StoreScatterPoint = {
   averageLandedBookCost: number;
   averageOrderAmount: number;
-  booksCount: number;
   coveragePercent: number;
-  ordersCount: number;
+  currencyBooksCount: number;
+  currencyOrdersCount: number;
+  landedEligibleBooksCount: number;
   store: string;
+  storeKey: string;
 };
 
+export function isMoneyStoreMetric(metric: StoreMetric): boolean {
+  return metric === "spend";
+}
+
 export function storeRows({
-  comparisonStores,
   currency,
   metric,
   stores,
 }: {
-  comparisonStores: Nullable<readonly BookOrderStatisticsStore[]>;
   currency: Currency;
   metric: StoreMetric;
   stores: readonly BookOrderStatisticsStore[];
 }): StoreRow[] {
-  const previousByStore = new Map(
-    (comparisonStores ?? []).map((store) => [
-      store.store,
-      storeMetricValue({ currency, metric, store }),
-    ]),
-  );
+  const isMoney = isMoneyStoreMetric(metric);
 
   const rows = stores
     .map((store) => {
       const value = storeMetricValue({ currency, metric, store });
-      const previous = comparisonStores === null ? null : (previousByStore.get(store.store) ?? 0);
+      const ordersCount = isMoney
+        ? countOf({ currency, rows: store.ordersCountByCurrency })
+        : store.ordersCount;
+      const booksCount = isMoney
+        ? countOf({ currency, rows: store.booksCountByCurrency })
+        : store.booksCount;
 
       return {
         averageBookPrice: currencyAverageOf(store.averageBookPriceByCurrency, currency),
         averageLandedBookCost: currencyAverageOf(store.averageLandedBookCostByCurrency, currency),
         averageOrderAmount: currencyAverageOf(store.averageOrderAmountByCurrency, currency),
-        booksCount: store.booksCount,
-        deltaPercent:
-          previous === null || previous === 0 ? null : ((value - previous) / previous) * 100,
-        deltaValue: previous === null ? null : value - previous,
-        ordersCount: store.ordersCount,
+        booksCount,
+        booksPerOrder: ordersCount === 0 ? null : booksCount / ordersCount,
+        drilldown: store.drilldown,
+        ordersCount,
         share: 0,
         store: store.store,
+        storeKey: store.storeKey,
         value,
       };
     })
@@ -87,7 +103,7 @@ export function storeScatter({
   stores: readonly BookOrderStatisticsStore[];
 }): StoreScatter {
   const points: StoreScatterPoint[] = [];
-  const withoutLandedData: string[] = [];
+  const excluded: StoreExclusion[] = [];
 
   for (const store of stores) {
     const averageLandedBookCost = currencyAverageOf(
@@ -96,31 +112,51 @@ export function storeScatter({
     );
     const averageOrderAmount = currencyAverageOf(store.averageOrderAmountByCurrency, currency);
     const coverage = store.landedCoverageByCurrency.find((entry) => entry.currency === currency);
-    const eligibleBooksCount =
-      store.landedEligibleBooksCountByCurrency.find((entry) => entry.currency === currency)
-        ?.count ?? 0;
+    const landedEligibleBooksCount = countOf({
+      currency,
+      rows: store.landedEligibleBooksCountByCurrency,
+    });
+    const currencyOrdersCount = countOf({ currency, rows: store.ordersCountByCurrency });
 
     if (
       averageLandedBookCost === null ||
       averageOrderAmount === null ||
       coverage === undefined ||
-      eligibleBooksCount < BOOK_ORDER_BEST_VALUE_STORE_RULES.minimumEligibleBooks
+      landedEligibleBooksCount < BOOK_ORDER_BEST_VALUE_STORE_RULES.minimumEligibleBooks
     ) {
-      if (store.ordersCount > 0) withoutLandedData.push(store.store);
+      if (currencyOrdersCount > 0) {
+        excluded.push({
+          eligibleBooksCount: landedEligibleBooksCount,
+          store: store.store,
+          storeKey: store.storeKey,
+        });
+      }
       continue;
     }
 
     points.push({
       averageLandedBookCost,
       averageOrderAmount,
-      booksCount: coverage.countedBooksCount,
       coveragePercent: coverage.coveragePercent,
-      ordersCount: store.ordersCount,
+      currencyBooksCount: coverage.booksInScope,
+      currencyOrdersCount,
+      landedEligibleBooksCount,
       store: store.store,
+      storeKey: store.storeKey,
     });
   }
 
-  return { points, withoutLandedData };
+  return { excluded, points };
+}
+
+function countOf({
+  currency,
+  rows,
+}: {
+  currency: Currency;
+  rows: readonly { count: number; currency: Currency }[];
+}): number {
+  return rows.find((entry) => entry.currency === currency)?.count ?? 0;
 }
 
 function storeMetricValue({

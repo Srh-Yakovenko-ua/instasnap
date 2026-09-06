@@ -1,5 +1,6 @@
 import type {
   ActiveMoneyAgeBucket,
+  BookOrderDerivedStatus,
   Currency,
   InTransitDeliveryStructure,
   InTransitFilter,
@@ -21,6 +22,7 @@ import { assertNever } from "../../../core/assert-never.js";
 import { ilikeContains } from "../../../core/database/like-pattern.js";
 import { addDaysToIsoDate, toIsoDate } from "../../../core/iso-date.js";
 import { Prisma } from "../../../generated/prisma/client.js";
+import { orderStateSql } from "./order-state-sql.js";
 
 const SHIPMENT_STATUS = ShipmentStatusSchema.enum;
 
@@ -123,6 +125,8 @@ export type InTransitAdvancedFilter = {
   expectedTo: string | undefined;
   orderedFrom: string | undefined;
   orderedTo: string | undefined;
+  orderId: string | undefined;
+  orderState: BookOrderDerivedStatus | undefined;
   priceCurrency: Currency | undefined;
   priceMax: number | undefined;
   priceMin: number | undefined;
@@ -364,6 +368,8 @@ function advancedInTransitConditions({
   expectedTo,
   orderedFrom,
   orderedTo,
+  orderId,
+  orderState,
   priceCurrency,
   priceMax,
   priceMin,
@@ -372,6 +378,14 @@ function advancedInTransitConditions({
   structure,
 }: InTransitAdvancedFilter): Prisma.Sql[] {
   const conditions: Prisma.Sql[] = [];
+
+  if (orderId !== undefined) {
+    conditions.push(Prisma.sql`book_order.id = ${orderId}::uuid`);
+  }
+
+  if (orderState !== undefined) {
+    conditions.push(orderStateSql(orderState));
+  }
 
   if (store !== undefined) {
     conditions.push(Prisma.sql`lower(book_order.store_name) = ANY(${lowered(store)}::text[])`);

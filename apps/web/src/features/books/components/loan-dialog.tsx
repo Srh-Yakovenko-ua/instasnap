@@ -3,15 +3,16 @@
 import type {
   BookView,
   CreateLoanInput,
+  CreateLoansBatchInput,
   LoanContactView,
   LoanDirection,
-  Nullable,
 } from "@app/shared";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, type UseFormReturn, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import type { LoanContactSelection } from "@/features/loans/model/loan-contact-selection";
@@ -30,14 +31,17 @@ import { FieldError } from "@/components/ui/field-error";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { CreateLoanContactStep } from "@/features/loans/components/contact/create-loan-contact-step";
 import { LoanContactPicker } from "@/features/loans/components/loan-contact-picker";
 
+import { useCreateLoansBatch } from "../api/use-create-loans-batch";
 import { useCreateLoan } from "../api/use-loan";
+import { toLoanBatchConflicts } from "../model/loan-batch-error";
 import { toLoanErrorKey } from "../model/loan-error";
 import { ISO_DATE_PATTERN, todayIso } from "../model/reading-progress";
 import { BookDateField } from "./book-date-field";
 import { BookThumb } from "./book-picker";
-import { LoanBookStep } from "./loan-book-step";
+import { LoanBooksStep } from "./loan-books-step";
 
 const NOTE_MAX = 300;
 
@@ -51,8 +55,9 @@ type LoanDialogProps = {
   open: boolean;
 };
 
-type LoanFormPerson =
-  { contact: LoanContactView; kind: "fixed"; onBack: () => void } | { kind: "pick" };
+type LoanFormTarget =
+  | { book: BookView; kind: "book" }
+  | { books: BookView[]; contact: LoanContactView; kind: "contactBooks"; onBack: () => void };
 
 type LoanMessages = {
   contactRequired: string;
@@ -62,6 +67,8 @@ type LoanMessages = {
   reminderNeedsDate: string;
   returnBeforeLoan: string;
 };
+
+type LoanStep = "books" | "create-contact" | "form";
 
 type LoanValues = {
   expectedReturnDate: string;
@@ -75,7 +82,11 @@ type LoanValues = {
 export function LoanDialog({ context, direction, onOpenChange, open }: LoanDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className={
+          context.kind === "contact" ? "max-h-[92vh] overflow-y-auto sm:max-w-3xl" : "sm:max-w-md"
+        }
+      >
         {open ? (
           <LoanDialogBody
             context={context}
@@ -86,6 +97,26 @@ export function LoanDialog({ context, direction, onOpenChange, open }: LoanDialo
       </DialogContent>
     </Dialog>
   );
+}
+
+function buildBatchPayload(
+  direction: LoanDirection,
+  books: BookView[],
+  values: LoanValues,
+): CreateLoansBatchInput {
+  const payload: CreateLoansBatchInput = {
+    bookIds: books.map((book) => book.id),
+    direction,
+    loanContactId: values.loanContactId,
+    loanDate: values.loanDate,
+  };
+  const note = values.note.trim();
+
+  if (values.expectedReturnDate.length > 0) payload.expectedReturnDate = values.expectedReturnDate;
+  if (note.length > 0) payload.note = note;
+  if (values.remindToReturn) payload.remindToReturn = true;
+
+  return payload;
 }
 
 function buildPayload(direction: LoanDirection, values: LoanValues): CreateLoanInput {
@@ -133,44 +164,6 @@ function buildSchema(messages: LoanMessages) {
     });
 }
 
-function ContactFirstFlow({
-  contact,
-  direction,
-  onDone,
-}: {
-  contact: LoanContactView;
-  direction: LoanDirection;
-  onDone: () => void;
-}) {
-  const [book, setBook] = useState<Nullable<BookView>>(null);
-  const [search, setSearch] = useState("");
-  const [step, setStep] = useState<"book" | "form">("book");
-
-  if (step === "form" && book !== null) {
-    return (
-      <LoanForm
-        book={book}
-        direction={direction}
-        onDone={onDone}
-        person={{ contact, kind: "fixed", onBack: () => setStep("book") }}
-      />
-    );
-  }
-
-  return (
-    <LoanBookStep
-      direction={direction}
-      onCancel={onDone}
-      onNext={() => setStep("form")}
-      onSearchChange={setSearch}
-      onSelect={setBook}
-      personName={contact.name}
-      search={search}
-      selectedBookId={book?.id ?? null}
-    />
-  );
-}
-
 function LoanDialogBody({
   context,
   direction,
@@ -180,42 +173,14 @@ function LoanDialogBody({
   direction: LoanDirection;
   onDone: () => void;
 }) {
-  if (context.kind === "contact") {
-    return <ContactFirstFlow contact={context.contact} direction={direction} onDone={onDone} />;
-  }
-
-  return (
-    <LoanForm book={context.book} direction={direction} onDone={onDone} person={{ kind: "pick" }} />
-  );
-}
-
-function LoanForm({
-  book,
-  direction,
-  onDone,
-  person,
-}: {
-  book: BookView;
-  direction: LoanDirection;
-  onDone: () => void;
-  person: LoanFormPerson;
-}) {
-  const t = useTranslations("books.details.loan");
   const tErrors = useTranslations("books.details.loan.errors");
-  const tActions = useTranslations("books.actions");
   const tContact = useTranslations("loans.contactPicker");
-  const createLoan = useCreateLoan();
-  const [serverError, setServerError] = useState<null | string>(null);
+  const fixedContact = context.kind === "contact" ? context.contact : null;
+  const [selected, setSelected] = useState<BookView[]>([]);
+  const [createName, setCreateName] = useState("");
+  const [step, setStep] = useState<LoanStep>(fixedContact === null ? "form" : "books");
 
-  const variant = direction === "lent" ? "lent" : "borrowed";
-  const fixedContact = person.kind === "fixed" ? person.contact : null;
-
-  const {
-    control,
-    formState: { errors },
-    handleSubmit,
-    setValue,
-  } = useForm<LoanValues>({
+  const form = useForm<LoanValues>({
     defaultValues: {
       expectedReturnDate: "",
       loanContactId: fixedContact?.id ?? "",
@@ -237,6 +202,89 @@ function LoanForm({
     ),
   });
 
+  if (step === "create-contact") {
+    return (
+      <CreateLoanContactStep
+        initialName={createName}
+        onBack={() => setStep("form")}
+        onCancel={onDone}
+        onResolved={({ contact }) => {
+          form.setValue("loanContactId", contact.id, { shouldValidate: true });
+          form.setValue("loanContactName", contact.name);
+          setStep("form");
+        }}
+      />
+    );
+  }
+
+  if (context.kind === "contact" && (step === "books" || selected.length === 0)) {
+    return (
+      <LoanBooksStep
+        direction={direction}
+        onCancel={onDone}
+        onNext={() => setStep("form")}
+        onSelectedChange={setSelected}
+        personName={context.contact.name}
+        selected={selected}
+      />
+    );
+  }
+
+  return (
+    <LoanForm
+      direction={direction}
+      form={form}
+      onDone={onDone}
+      onRequestCreate={(name) => {
+        setCreateName(name);
+        setStep("create-contact");
+      }}
+      target={
+        context.kind === "contact"
+          ? {
+              books: selected,
+              contact: context.contact,
+              kind: "contactBooks",
+              onBack: () => setStep("books"),
+            }
+          : { book: context.book, kind: "book" }
+      }
+    />
+  );
+}
+
+function LoanForm({
+  direction,
+  form,
+  onDone,
+  onRequestCreate,
+  target,
+}: {
+  direction: LoanDirection;
+  form: UseFormReturn<LoanValues>;
+  onDone: () => void;
+  onRequestCreate: (name: string) => void;
+  target: LoanFormTarget;
+}) {
+  const t = useTranslations("books.details.loan");
+  const tErrors = useTranslations("books.details.loan.errors");
+  const tActions = useTranslations("books.actions");
+  const tBatch = useTranslations("books.details.loan.batch");
+  const createLoan = useCreateLoan();
+  const createLoansBatch = useCreateLoansBatch();
+  const [serverError, setServerError] = useState<null | string>(null);
+  const [blockedBooks, setBlockedBooks] = useState<BookView[]>([]);
+
+  const variant = direction === "lent" ? "lent" : "borrowed";
+  const isPending = createLoan.isPending || createLoansBatch.isPending;
+
+  const {
+    control,
+    formState: { errors },
+    handleSubmit,
+    setValue,
+  } = form;
+
   const loanContactId = useWatch({ control, name: "loanContactId" });
   const loanContactName = useWatch({ control, name: "loanContactName" });
   const contactSelection: LoanContactSelection | null =
@@ -251,24 +299,44 @@ function LoanForm({
     setValue("loanContactName", selection?.name ?? "");
   }
 
+  function handleError(error: unknown, books: BookView[]) {
+    const conflicts = toLoanBatchConflicts(error);
+    const blockedIds = new Set(conflicts.map((conflict) => conflict.bookId));
+    setBlockedBooks(books.filter((entry) => blockedIds.has(entry.id)));
+    setServerError(conflicts.length > 0 ? tBatch("conflictIntro") : tErrors(toLoanErrorKey(error)));
+  }
+
   const onSubmit = handleSubmit((values) => {
     setServerError(null);
-    createLoan.mutate(
-      { id: book.id, payload: buildPayload(direction, values) },
-      {
-        onError: (error) => setServerError(tErrors(toLoanErrorKey(error))),
-        onSuccess: onDone,
+    setBlockedBooks([]);
+
+    if (target.kind === "book") {
+      createLoan.mutate(
+        { id: target.book.id, payload: buildPayload(direction, values) },
+        {
+          onError: (error) => handleError(error, [target.book]),
+          onSuccess: onDone,
+        },
+      );
+      return;
+    }
+
+    createLoansBatch.mutate(buildBatchPayload(direction, target.books, values), {
+      onError: (error) => handleError(error, target.books),
+      onSuccess: (result) => {
+        toast.success(tBatch(`${variant}.success`, { count: result.createdBookIds.length }));
+        onDone();
       },
-    );
+    });
   });
 
   return (
     <form className="flex flex-col gap-5" noValidate onSubmit={onSubmit}>
       <DialogHeader>
-        {person.kind === "fixed" ? (
+        {target.kind === "contactBooks" ? (
           <button
             className="inline-flex w-fit cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={person.onBack}
+            onClick={target.onBack}
             type="button"
           >
             <UiIcon aria-hidden name="arrow-left" size={16} />
@@ -276,45 +344,56 @@ function LoanForm({
           </button>
         ) : null}
         <DialogTitle>{t(`${variant}.title`)}</DialogTitle>
-        <DialogDescription>{t(`${variant}.description`)}</DialogDescription>
+        <DialogDescription>
+          {target.kind === "book" ? t(`${variant}.description`) : tBatch(`${variant}.description`)}
+        </DialogDescription>
       </DialogHeader>
 
-      {fixedContact === null ? (
+      {target.kind === "book" ? (
         <div className="flex flex-col gap-2">
           <Label htmlFor="loan-contact-picker">{t(`${variant}.personName`)}</Label>
           <LoanContactPicker
             describedBy={errors.loanContactId ? "loan-contact-picker-error" : undefined}
+            direction={direction}
             id="loan-contact-picker"
             invalid={errors.loanContactId !== undefined}
             label={t(`${variant}.personName`)}
             onChange={handleContactChange}
+            onRequestCreate={onRequestCreate}
             placeholder={t(`${variant}.personNamePlaceholder`)}
             value={contactSelection}
           />
           <FieldError error={errors.loanContactId} id="loan-contact-picker-error" />
         </div>
       ) : (
-        <dl className="flex flex-col gap-3 rounded-md border border-border bg-secondary/40 p-3.5">
+        <div className="flex flex-col gap-3 rounded-md border border-border bg-secondary/40 p-3.5">
           <div className="flex items-center justify-between gap-3">
-            <dt className="text-xs text-muted-foreground">{t(`${variant}.personName`)}</dt>
-            <dd className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+            <span className="text-xs text-muted-foreground">{t(`${variant}.personName`)}</span>
+            <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
               <UiIcon
                 aria-hidden
                 className="shrink-0 text-muted-foreground"
                 name="user"
                 size={16}
               />
-              <span className="truncate">{fixedContact.name}</span>
-            </dd>
+              <span className="truncate">{target.contact.name}</span>
+            </span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-xs text-muted-foreground">{t("fields.book")}</dt>
-            <dd className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-              <BookThumb book={book} />
-              <span className="truncate">{book.title}</span>
-            </dd>
-          </div>
-        </dl>
+          <p className="text-xs text-muted-foreground">
+            {tBatch("appliesTo", { count: target.books.length })}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {target.books.map((entry) => (
+              <li
+                className="flex max-w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5"
+                key={entry.id}
+              >
+                <BookThumb book={entry} />
+                <span className="truncate text-xs font-medium text-ink">{entry.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -407,16 +486,28 @@ function LoanForm({
       />
 
       {serverError === null ? null : (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-          {serverError}
-        </p>
+        <div
+          className="flex flex-col gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          <p>{serverError}</p>
+          {blockedBooks.length === 0 ? null : (
+            <ul className="list-inside list-disc">
+              {blockedBooks.map((entry) => (
+                <li className="truncate" key={entry.id}>
+                  {entry.title}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <DialogFooter>
         <Button onClick={onDone} type="button" variant="secondary">
           {tActions("cancel")}
         </Button>
-        <Button disabled={createLoan.isPending} loading={createLoan.isPending} type="submit">
+        <Button disabled={isPending} loading={isPending} type="submit">
           {t("submit")}
         </Button>
       </DialogFooter>

@@ -1,199 +1,116 @@
-import type { BookOrderStatisticsPulseSignal } from "@app/shared";
+import type { BookOrderStatisticsInsights, BookOrderStatisticsPulseSignal } from "@app/shared";
 
 import { describe, expect, it } from "vitest";
 
-import { pulseItems } from "./statistics-pulse";
+import { pulseBucketKey, pulseDirection, pulseSignalsFor, signedPercent } from "./statistics-pulse";
 
-const FORMAT = {
-  comparison: "1–20 липня 2026",
-  money: (amount: number, currency: string) => `${amount} ${currency}`,
-  month: (monthKey: string) => `місяць ${monthKey}`,
-  percent: (value: number) => `${value}%`,
+const SPEND_UAH: BookOrderStatisticsPulseSignal = {
+  absoluteDelta: 400,
+  code: "spend_change",
+  currency: "UAH",
+  current: 1400,
+  percentDelta: 40,
+  previous: 1000,
+  tone: "neutral",
 };
 
-const SCOPE = {
-  isPeriodFiltered: false,
-  isTruncated: false,
-  period: { from: null, to: null },
+const SPEND_EUR: BookOrderStatisticsPulseSignal = {
+  absoluteDelta: -20,
+  code: "spend_change",
+  currency: "EUR",
+  current: 80,
+  percentDelta: -20,
+  previous: 100,
+  tone: "neutral",
 };
 
-function items(pulse: BookOrderStatisticsPulseSignal[]) {
-  return pulseItems(pulse, FORMAT);
-}
+const ORDERS_CHANGE: BookOrderStatisticsPulseSignal = {
+  absoluteDelta: 3,
+  code: "orders_count_change",
+  current: 15,
+  percentDelta: 25,
+  previous: 12,
+  tone: "neutral",
+};
 
-describe("pulseItems", () => {
-  it("reads a rise as an increase and prefers the percentage", () => {
-    const [item] = items([
-      {
-        absoluteDelta: 1840,
-        code: "spend_change",
-        currency: "UAH",
-        current: 5840,
-        percentDelta: 46,
-        previous: 4000,
-        tone: "neutral",
-      },
+const BOOKS_BUCKET: BookOrderStatisticsPulseSignal = {
+  booksCount: 31,
+  bucketKey: "2026-08",
+  code: "record_books_bucket",
+  from: "2026-08-01",
+  scope: { isPeriodFiltered: true, isTruncated: false, period: { from: null, to: null } },
+  to: "2026-08-31",
+  tone: "neutral",
+};
+
+const INSIGHTS: BookOrderStatisticsInsights = {
+  books: [BOOKS_BUCKET],
+  orders: [ORDERS_CHANGE],
+  spendByCurrency: [
+    { currency: "UAH", signals: [SPEND_UAH] },
+    { currency: "EUR", signals: [SPEND_EUR] },
+  ],
+};
+
+describe("pulseSignalsFor", () => {
+  it("hands back the group of the selected currency, never another one's", () => {
+    expect(pulseSignalsFor({ currency: "UAH", insights: INSIGHTS, metric: "spend" })).toEqual([
+      SPEND_UAH,
     ]);
-
-    expect(item?.messageKey).toBe("spend_change.up");
-    expect(item?.values).toMatchObject({
-      change: "46%",
-      comparison: FORMAT.comparison,
-      currency: "UAH",
-    });
+    expect(pulseSignalsFor({ currency: "EUR", insights: INSIGHTS, metric: "spend" })).toEqual([
+      SPEND_EUR,
+    ]);
   });
 
-  it("reads a fall as a decrease", () => {
-    const [item] = items([
-      {
-        absoluteDelta: -300,
-        code: "avg_book_price_change",
-        currency: "UAH",
-        current: 700,
-        percentDelta: -30,
-        previous: 1000,
-        tone: "positive",
-      },
-    ]);
-
-    expect(item?.messageKey).toBe("avg_book_price_change.down");
-    expect(item?.values.change).toBe("30%");
+  it("says nothing rather than borrowing another currency's insights", () => {
+    expect(pulseSignalsFor({ currency: "USD", insights: INSIGHTS, metric: "spend" })).toEqual([]);
   });
 
-  it("falls back to the amount when the percentage cannot be computed", () => {
-    const [item] = items([
-      {
-        absoluteDelta: 1840,
-        code: "spend_change",
-        currency: "UAH",
-        current: 1840,
-        percentDelta: null,
-        previous: 0,
-        tone: "neutral",
-      },
+  it("switches the whole group when the chart switches metric", () => {
+    expect(pulseSignalsFor({ currency: "UAH", insights: INSIGHTS, metric: "orders" })).toEqual([
+      ORDERS_CHANGE,
     ]);
-
-    expect(item?.values.change).toBe("1840 UAH");
+    expect(pulseSignalsFor({ currency: "UAH", insights: INSIGHTS, metric: "books" })).toEqual([
+      BOOKS_BUCKET,
+    ]);
   });
 
-  it("says nothing moved when the change is zero", () => {
-    const [item] = items([
-      {
-        absoluteDelta: 0,
-        code: "avg_landed_cost_change",
-        currency: "EUR",
-        current: 20,
-        percentDelta: 0,
-        previous: 20,
-        tone: "neutral",
-      },
-    ]);
+  it("takes the group exactly as the backend ranked it, without re-cutting it", () => {
+    const many = Array.from({ length: 6 }, () => SPEND_UAH);
 
-    expect(item?.messageKey).toBe("avg_landed_cost_change.flat");
-  });
-
-  it("keeps a record inside the selected period when the scope says so", () => {
-    const [item] = items([
-      {
-        booksCount: 24,
-        code: "record_month",
-        currency: "UAH",
-        month: "2026-08",
-        ordersCount: 15,
-        scope: { ...SCOPE, isPeriodFiltered: true },
-        tone: "neutral",
-        total: 12378,
-      },
-    ]);
-
-    expect(item?.messageKey).toBe("record_month.period");
-    expect(item?.values).toEqual({ month: "місяць 2026-08", total: "12378 UAH" });
-  });
-
-  it("calls an unfiltered record an all-time one", () => {
-    const [item] = items([
-      {
-        booksCount: 24,
-        code: "record_month",
-        currency: "UAH",
-        month: "2026-08",
-        ordersCount: 15,
-        scope: SCOPE,
-        tone: "neutral",
-        total: 12378,
-      },
-    ]);
-
-    expect(item?.messageKey).toBe("record_month.allTime");
-  });
-
-  it("stays vague about a truncated record", () => {
-    const [item] = items([
-      {
-        booksCount: 24,
-        code: "record_month",
-        currency: "UAH",
-        month: "2026-08",
-        ordersCount: 15,
-        scope: { ...SCOPE, isTruncated: true },
-        tone: "attention",
-        total: 12378,
-      },
-    ]);
-
-    expect(item?.messageKey).toBe("record_month.period");
-  });
-
-  it("drops a store whose spending did not move", () => {
     expect(
-      items([
-        {
-          absoluteDelta: 0,
-          code: "store_growth",
-          currency: "UAH",
-          current: 100,
-          percentDelta: 0,
-          previous: 100,
-          store: "Vivat",
-          tone: "neutral",
-        },
-      ]),
-    ).toEqual([]);
+      pulseSignalsFor({
+        currency: "UAH",
+        insights: { ...INSIGHTS, spendByCurrency: [{ currency: "UAH", signals: many }] },
+        metric: "spend",
+      }),
+    ).toHaveLength(many.length);
+  });
+});
+
+describe("pulseBucketKey", () => {
+  it("points a bucket insight at the column it is about", () => {
+    expect(pulseBucketKey(BOOKS_BUCKET)).toBe("2026-08");
   });
 
-  it("picks the discount wording that matches the data it has", () => {
-    const [withPercent] = items([
-      {
-        code: "discount_savings",
-        currency: "UAH",
-        discountShareOfRawSubtotalPercent: 3,
-        discountTotal: 500,
-        tone: "positive",
-      },
-    ]);
-    const [plain] = items([
-      {
-        code: "discount_savings",
-        currency: "UAH",
-        discountShareOfRawSubtotalPercent: null,
-        discountTotal: 500,
-        tone: "positive",
-      },
-    ]);
+  it("leaves an insight that belongs to no column unlinked", () => {
+    expect(pulseBucketKey(SPEND_UAH)).toBeNull();
+    expect(pulseBucketKey(ORDERS_CHANGE)).toBeNull();
+  });
+});
 
-    expect(withPercent?.messageKey).toBe("discount_savings.withPercent");
-    expect(plain?.messageKey).toBe("discount_savings.plain");
+describe("pulseDirection and signedPercent", () => {
+  it("reads a missing or zero movement as flat rather than as a fall", () => {
+    expect(pulseDirection(null)).toBe("flat");
+    expect(pulseDirection(0)).toBe("flat");
   });
 
-  it("shows at most four insights", () => {
-    const signal: BookOrderStatisticsPulseSignal = {
-      code: "delivery_share",
-      currency: "UAH",
-      deliveryShareOfSpendPercent: 7,
-      deliveryTotal: 500,
-      tone: "attention",
-    };
+  it("keeps the sign apart from the magnitude", () => {
+    expect(signedPercent(SPEND_UAH)).toEqual({ direction: "up", magnitude: 40 });
+    expect(signedPercent(SPEND_EUR)).toEqual({ direction: "down", magnitude: 20 });
+  });
 
-    expect(items(Array.from({ length: 6 }, () => signal))).toHaveLength(4);
+  it("refuses a percentage the backend could not compute", () => {
+    expect(signedPercent({ absoluteDelta: 100, percentDelta: null })).toBeNull();
   });
 });

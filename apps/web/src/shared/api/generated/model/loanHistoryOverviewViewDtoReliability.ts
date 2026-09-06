@@ -23,8 +23,10 @@ export type LoanHistoryOverviewViewDtoReliability = {
    */
   onTimeCount: number;
   /**
+   * Share of the loans that had a due date and came back on time, so onTimeCount / (onTimeCount + lateCount). Null when no completed loan carried a due date, which keeps a missing percentage apart from a real 0%.
    * @minimum 0
    * @maximum 100
+   * @nullable
    */
-  onTimePercent: number;
+  onTimePercent: number | null;
 };

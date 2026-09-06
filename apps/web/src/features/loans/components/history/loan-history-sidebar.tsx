@@ -6,20 +6,17 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { UiIcon } from "@/components/icons";
-import { Button } from "@/components/ui/button";
+import { TooltipHint } from "@/components/tooltip-hint";
 import {
   MobilePageOverviewPanel,
   MobilePageOverviewTrigger,
   useMobilePageOverviewPanel,
 } from "@/components/ui/mobile-page-overview-panel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
 type LoanHistorySidebarProps = {
-  activeContactId: string;
   isLoading: boolean;
   onPersonOpen: (contactId: string) => void;
-  onPersonSelect: (contactId: string) => void;
   overview: LoanHistoryOverviewView | undefined;
 };
 
@@ -41,7 +38,6 @@ export function LoanHistoryOverviewPanel(props: LoanHistorySidebarProps) {
           <LoanHistorySidebarSections
             {...props}
             onPersonOpen={(contactId) => panel.closeThen(() => props.onPersonOpen(contactId))}
-            onPersonSelect={(contactId) => panel.closeThen(() => props.onPersonSelect(contactId))}
           />
         </div>
       </MobilePageOverviewPanel>
@@ -97,19 +93,15 @@ function DurationBlock({
 }
 
 function LoanHistorySidebarSections({
-  activeContactId,
   isLoading,
   onPersonOpen,
-  onPersonSelect,
   overview,
 }: LoanHistorySidebarProps) {
   return (
     <>
       <PeopleBlock
-        activeContactId={activeContactId}
         isLoading={isLoading}
         onPersonOpen={onPersonOpen}
-        onPersonSelect={onPersonSelect}
         people={overview?.topPeople ?? []}
       />
       <DurationBlock duration={overview?.duration} isLoading={isLoading} />
@@ -128,16 +120,12 @@ function MetricRow({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function PeopleBlock({
-  activeContactId,
   isLoading,
   onPersonOpen,
-  onPersonSelect,
   people,
 }: {
-  activeContactId: string;
   isLoading: boolean;
   onPersonOpen: (contactId: string) => void;
-  onPersonSelect: (contactId: string) => void;
   people: LoanHistoryOverviewView["topPeople"];
 }) {
   const t = useTranslations("loans.history.sidebar.people");
@@ -153,49 +141,37 @@ function PeopleBlock({
 
       {!isLoading && people.length > 0 ? (
         <ul className="-mx-1.5 flex flex-col gap-0.5">
-          {people.map((person) => {
-            const isActive = person.contactId === activeContactId;
-
-            return (
-              <li key={person.contactId}>
-                <div
-                  className={cn(
-                    "flex items-center gap-0.5 rounded-md transition-colors",
-                    isActive && "bg-secondary",
-                  )}
+          {people.map((person) => (
+            <li key={person.contactId}>
+              <TooltipHint label={tContact("openPersonCard")}>
+                <button
+                  aria-label={tContact("openContact", { name: person.personName })}
+                  className="group/contact flex w-full min-w-0 cursor-pointer flex-col gap-0.5 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none hover:bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
+                  onClick={() => onPersonOpen(person.contactId)}
+                  type="button"
                 >
-                  <button
-                    aria-label={tContact("openContact", { name: person.personName })}
-                    className="group/person flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none hover:bg-secondary focus-visible:ring-3 focus-visible:ring-ring/50"
-                    onClick={() => onPersonOpen(person.contactId)}
-                    type="button"
-                  >
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-ink transition-colors group-hover/person:text-primary">
+                  <span className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-ink transition-colors group-hover/contact:text-primary">
                         {person.personName}
                       </span>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {t("count", { count: person.totalCount })}
-                      </span>
+                      <UiIcon
+                        className="shrink-0 text-muted-foreground transition-colors group-hover/contact:text-primary"
+                        name="chevron-right"
+                        size={12}
+                      />
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {t("breakdown", { borrowed: person.borrowedCount, lent: person.lentCount })}
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {t("count", { count: person.totalCount })}
                     </span>
-                  </button>
-                  <Button
-                    aria-label={t("filter", { name: person.personName })}
-                    aria-pressed={isActive}
-                    className="size-7 shrink-0 text-muted-foreground"
-                    onClick={() => onPersonSelect(person.contactId)}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <UiIcon name="funnel" size={16} />
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {t("breakdown", { borrowed: person.borrowedCount, lent: person.lentCount })}
+                  </span>
+                </button>
+              </TooltipHint>
+            </li>
+          ))}
         </ul>
       ) : null}
     </SidebarBlock>
@@ -225,13 +201,23 @@ function ReliabilityBlock({
       ) : (
         <>
           <p className="font-heading text-sm font-semibold text-ink">
-            {t("onTimePercent", { percent: reliability.onTimePercent })}
+            {reliability.onTimePercent === null
+              ? t("noDueDateOnly")
+              : t("onTimePercent", { percent: reliability.onTimePercent })}
           </p>
-          <dl className="flex flex-col gap-1.5">
-            <MetricRow label={t("onTime")} value={reliability.onTimeCount} />
-            <MetricRow label={t("late")} value={reliability.lateCount} />
-            <MetricRow label={t("noDueDate")} value={reliability.noDueDateCount} />
-          </dl>
+          {reliability.onTimePercent === null ? null : (
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {t("breakdown", { late: reliability.lateCount, onTime: reliability.onTimeCount })}
+            </p>
+          )}
+          {reliability.noDueDateCount === 0 ? null : (
+            <div className="flex flex-col gap-0.5 border-t border-border pt-2.5">
+              <p className="text-sm text-muted-foreground tabular-nums">
+                {t("noDueDate", { count: reliability.noDueDateCount })}
+              </p>
+              <p className="text-xs text-muted-foreground">{t("noDueDateNote")}</p>
+            </div>
+          )}
         </>
       )}
     </SidebarBlock>

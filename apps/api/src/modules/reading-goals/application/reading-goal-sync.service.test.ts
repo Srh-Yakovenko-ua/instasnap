@@ -15,6 +15,10 @@ import {
 } from "../../../core/iso-date.js";
 import { TRASH_RETENTION } from "../../../core/trash-retention.js";
 import { createAuthTestContext } from "../../../test/auth-test-context.js";
+import {
+  insertFinishedReadingCycle,
+  moveFinishedReadingCycle,
+} from "../../../test/reading-cycles.js";
 import { truncateAllTables } from "../../../test/truncate.js";
 import { AuthModule } from "../../auth/auth.module.js";
 import { ListsModule } from "../../lists/lists.module.js";
@@ -117,6 +121,7 @@ async function createBook({
     await prisma.bookReadingProgress.create({
       data: { bookId: book.id, finishedAt: parseIsoDate(finishedIsoDate) },
     });
+    await insertFinishedReadingCycle(prisma, { bookId: book.id, finishedIsoDate, userId });
   }
   return book.id;
 }
@@ -225,6 +230,11 @@ async function setFinishedAt({
     create: { bookId, finishedAt },
     update: { finishedAt },
     where: { bookId },
+  });
+  await moveFinishedReadingCycle(prisma, {
+    bookId,
+    finishedIsoDate: isoDate,
+    userId: owner.userId,
   });
 }
 

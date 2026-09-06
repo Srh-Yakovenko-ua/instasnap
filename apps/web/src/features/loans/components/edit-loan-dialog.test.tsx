@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import type { LoanContactView, LoanListItemView } from "@app/shared";
+import type { LoanContactListItemView, LoanListItemView } from "@app/shared";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,18 +13,22 @@ const BOOK_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 const CONTACT_IDS = {
   ihor: "22222222-2222-4222-8222-222222222222",
+  marta: "33333333-3333-4333-8333-333333333333",
   olya: "11111111-1111-4111-8111-111111111111",
 } as const;
 
+const contactCreate = messages.loans.contactCreate;
+const loanCopy = messages.books.details.loan;
+
 const fetchMock = vi.fn();
 
-let searchResults: LoanContactView[] = [];
+let searchResults: LoanContactListItemView[] = [];
 
 function contactPicker() {
   return screen.getByLabelText(messages.books.details.loan.lent.personName);
 }
 
-function contactsPage(items: LoanContactView[]) {
+function contactsPage(items: LoanContactListItemView[]) {
   return {
     counts: { active: items.length, all: items.length, archived: 0 },
     items,
@@ -35,8 +39,10 @@ function contactsPage(items: LoanContactView[]) {
   };
 }
 
-function contactView(overrides: Partial<LoanContactView> = {}): LoanContactView {
+function contactView(overrides: Partial<LoanContactListItemView> = {}): LoanContactListItemView {
   return {
+    activeBorrowedCount: 0,
+    activeLentCount: 0,
     archivedAt: null,
     contact: null,
     createdAt: "2026-01-10T10:00:00.000Z",
@@ -91,7 +97,9 @@ function loanItem(): LoanListItemView {
 }
 
 function renderDialog() {
-  renderWithProviders(<EditLoanDialog loan={loanItem()} onOpenChange={vi.fn()} open />);
+  const onOpenChange = vi.fn();
+  renderWithProviders(<EditLoanDialog loan={loanItem()} onOpenChange={onOpenChange} open />);
+  return { onOpenChange };
 }
 
 beforeEach(() => {
@@ -100,6 +108,11 @@ beforeEach(() => {
   fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
+    if (url.endsWith("/api/loans/contacts") && method === "POST") {
+      return Promise.resolve(
+        jsonResponse(contactView({ id: CONTACT_IDS.marta, loanCount: 0, name: "Марта" }), 201),
+      );
+    }
     if (url.includes("/api/loans/contacts")) {
       return Promise.resolve(jsonResponse(contactsPage(searchResults)));
     }
@@ -143,6 +156,44 @@ describe("EditLoanDialog", () => {
 
     await waitFor(() => expect(editCall()).toBeDefined());
     expect(JSON.parse(String(editCall()?.[1].body))).not.toHaveProperty("contact");
+  });
+
+  it("creates a contact inside the edit dialog instead of opening a second one", async () => {
+    searchResults = [];
+    renderDialog();
+
+    await userEvent.type(screen.getByLabelText(loanCopy.fields.note), "поверне у травні");
+    await userEvent.click(screen.getByRole("button", { name: messages.loans.contactPicker.clear }));
+    await userEvent.type(contactPicker(), "Марта");
+    await userEvent.click(await screen.findByText("Створити «Марта»"));
+
+    expect(await screen.findByRole("heading", { name: contactCreate.title })).toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: contactCreate.submit }));
+
+    expect(await screen.findByLabelText(loanCopy.fields.note)).toHaveValue("поверне у травні");
+    expect(contactPicker()).toHaveValue("Марта");
+
+    await userEvent.click(screen.getByRole("button", { name: loanCopy.submit }));
+
+    await waitFor(() => expect(editCall()).toBeDefined());
+    expect(JSON.parse(String(editCall()?.[1].body))).toMatchObject({
+      loanContactId: CONTACT_IDS.marta,
+      note: "поверне у травні",
+    });
+  });
+
+  it("closes the whole edit flow when the contact step is cancelled", async () => {
+    searchResults = [];
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.click(screen.getByRole("button", { name: messages.loans.contactPicker.clear }));
+    await userEvent.type(contactPicker(), "Марта");
+    await userEvent.click(await screen.findByText("Створити «Марта»"));
+    await userEvent.click(await screen.findByRole("button", { name: contactCreate.cancel }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("moves the loan to the contact picked from the list", async () => {

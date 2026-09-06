@@ -2,7 +2,6 @@ import type {
   BookView,
   CreateLoanInput,
   ExtendLoanInput,
-  LoanDirection,
   OwnershipStatus,
   SetLoanReminderInput,
   UpdateLoanInput,
@@ -12,21 +11,20 @@ import { LOAN_ERROR_CODES, OwnershipStatusSchema, ownershipStatusUsesLoan } from
 import { Injectable } from "@nestjs/common";
 
 import type { BookLoanModel } from "../../../generated/prisma/models.js";
+import type { LoanCreateRule } from "../domain/loan-create-rules.js";
 import type { GuardedChangeOutcome } from "../infrastructure/books.repository.js";
 
 import { TransactionRunner } from "../../../core/database/transaction-runner.js";
 import { ConflictError, NotFoundError } from "../../../core/exceptions/errors.js";
 import { rethrowUniqueConstraintAs } from "../../../core/prisma-errors.js";
 import { LoanContactResolver } from "../../loans/index.js";
+import { LOAN_CREATE_RULES } from "../domain/loan-create-rules.js";
 import { extendReturnDate, resolveReminderFields } from "../domain/loan-quick-actions.js";
 import { buildLoanEditData, computeLoanChange } from "../domain/loan-transition.js";
 import { BooksRepository } from "../infrastructure/books.repository.js";
 import { BookViewAssembler } from "./book-view-assembler.js";
 
 const BOOK_NOT_FOUND_MESSAGE = "Book not found";
-const BORROW_REQUIRES_NONE_MESSAGE =
-  'Book must have ownership status "none" or "want to buy" to be borrowed';
-const LEND_REQUIRES_OWNED_MESSAGE = 'Book must have ownership status "owned" to be lent';
 const RETURN_REQUIRES_LOAN_MESSAGE = "Book must be borrowed or lent to be returned";
 const ACTIVE_LOAN_EXISTS_MESSAGE = "This book already has an active loan";
 const LOAN_NOT_FOUND_MESSAGE = "Loan not found";
@@ -48,11 +46,11 @@ export class BookLoanService {
   ) {}
 
   async createLoan(userId: string, bookId: string, input: CreateLoanInput): Promise<BookView> {
-    const guard = loanCreateGuard(input.direction);
+    const rule = LOAN_CREATE_RULES[input.direction];
     const book = await this.booksRepository.findOwnedByIdOrThrow(userId, bookId);
     const ownershipStatus = OwnershipStatusSchema.parse(book.ownershipStatus);
-    if (!guard.expectedStatuses.includes(ownershipStatus)) {
-      throw guard.conflictError;
+    if (!rule.expectedStatuses.includes(ownershipStatus)) {
+      throw toLoanCreateConflict(rule);
     }
 
     const now = new Date();
@@ -80,7 +78,7 @@ export class BookLoanService {
           userId,
           bookId,
           patch,
-          { expectedStatuses: guard.expectedStatuses },
+          { expectedStatuses: rule.expectedStatuses },
           client,
         );
       });
@@ -97,7 +95,7 @@ export class BookLoanService {
       throw new NotFoundError(BOOK_NOT_FOUND_MESSAGE, { code: LOAN_ERROR_CODES.bookNotFound });
     }
     if (outcome === "status-conflict") {
-      throw guard.conflictError;
+      throw toLoanCreateConflict(rule);
     }
 
     return this.viewAssembler.loadView({ bookId, userId });
@@ -217,22 +215,6 @@ export class BookLoanService {
   }
 }
 
-function loanCreateGuard(direction: LoanDirection): {
-  conflictError: ConflictError;
-  expectedStatuses: OwnershipStatus[];
-} {
-  if (direction === "lent") {
-    return {
-      conflictError: new ConflictError(LEND_REQUIRES_OWNED_MESSAGE, {
-        code: LOAN_ERROR_CODES.lendRequiresOwned,
-      }),
-      expectedStatuses: ["owned"],
-    };
-  }
-  return {
-    conflictError: new ConflictError(BORROW_REQUIRES_NONE_MESSAGE, {
-      code: LOAN_ERROR_CODES.borrowRequiresFreeBook,
-    }),
-    expectedStatuses: ["none", "want_to_buy"],
-  };
+function toLoanCreateConflict(rule: LoanCreateRule): ConflictError {
+  return new ConflictError(rule.conflictMessage, { code: rule.conflictCode });
 }

@@ -4,6 +4,7 @@ import { BookListsViewSchema, CustomListCardSchema } from "@app/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listKeys } from "@/features/lists/api/list-keys";
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 import {
   bookListsControllerGetLists,
   bookListsControllerSetLists,
@@ -46,6 +47,7 @@ export function useSetBookLists(bookId: string) {
       void queryClient.invalidateQueries({ queryKey: bookKeys.detail(bookId) });
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
       void queryClient.invalidateQueries({ queryKey: listKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }

@@ -15,7 +15,7 @@ export const BOOK_PICKER_SCROLL_AREA =
   "rounded-lg border border-border [&>[data-slot=scroll-area-viewport]>div]:block!";
 
 type BookPickerResultsProps = {
-  emptyLabel: string;
+  emptyLabel: ReactNode;
   isPending: boolean;
   loadingLabel: string;
   onToggle: (book: BookView) => void;
@@ -50,7 +50,11 @@ export function BookPickerResults({
         return (
           <li key={book.id}>
             <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent p-2 transition-colors hover:border-accent-border hover:bg-secondary/50">
-              <Checkbox checked={selectedIds.has(book.id)} onCheckedChange={() => onToggle(book)} />
+              <Checkbox
+                aria-label={book.title}
+                checked={selectedIds.has(book.id)}
+                onCheckedChange={() => onToggle(book)}
+              />
               <BookThumb book={book} />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <BookPickerCaption book={book} />

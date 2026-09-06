@@ -1,4 +1,4 @@
-import type { LoanFilter, LoanSort, LoanType } from "@app/shared";
+import type { LoanFilter, LoanReminderFilter, LoanSort, LoanType, Nullable } from "@app/shared";
 
 import { LoanTypeSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
@@ -59,7 +59,13 @@ export type LoanPersonCounts = z.infer<typeof LoanPersonCountsRowSchema>;
 
 export type LoansFilterInput = {
   contactId: string | undefined;
+  expectedReturnDateFrom: Nullable<Date>;
+  expectedReturnDateTo: Nullable<Date>;
   filter: LoanFilter;
+  hasNote: boolean | undefined;
+  loanDateFrom: Nullable<Date>;
+  loanDateTo: Nullable<Date>;
+  reminder: LoanReminderFilter | undefined;
   search: string | undefined;
   soonEnd: Date;
   today: Date;
@@ -262,43 +268,6 @@ const LOAN_SORT_ORDER_BY: Record<LoanSort, Prisma.BookLoanOrderByWithRelationInp
   title: [{ book: { title: "asc" } }, ID_TIEBREAKER],
 };
 
-function applyLoanFilter({
-  filter,
-  soonEnd,
-  today,
-  where,
-}: {
-  filter: LoanFilter;
-  soonEnd: Date;
-  today: Date;
-  where: Prisma.BookLoanWhereInput;
-}): void {
-  switch (filter) {
-    case "all":
-      return;
-    case "has_reminder":
-      where.remindToReturn = true;
-      return;
-    case "no_return_date":
-      where.expectedReturnDate = null;
-      return;
-    case "overdue":
-      where.expectedReturnDate = { lt: today };
-      return;
-    case "return_soon":
-      where.expectedReturnDate = { gte: today, lte: soonEnd };
-      return;
-    case "without_reminder":
-      where.expectedReturnDate = { not: null };
-      where.remindToReturn = false;
-      return;
-    default: {
-      const _exhaustiveCheck: never = filter;
-      return _exhaustiveCheck;
-    }
-  }
-}
-
 function buildActiveLoansWhere({
   type,
   userId,
@@ -319,6 +288,48 @@ function buildActiveLoansWhere({
   return where;
 }
 
+function buildDayRangeConditions(
+  field: "expectedReturnDate" | "loanDate",
+  from: Nullable<Date>,
+  to: Nullable<Date>,
+): Prisma.BookLoanWhereInput[] {
+  const conditions: Prisma.BookLoanWhereInput[] = [];
+  if (from !== null) conditions.push({ [field]: { gte: from } });
+  if (to !== null) conditions.push({ [field]: { lte: to } });
+  return conditions;
+}
+
+function buildHasNoteConditions(hasNote: boolean | undefined): Prisma.BookLoanWhereInput[] {
+  if (hasNote === undefined) return [];
+  if (hasNote) return [{ note: { not: null } }, { NOT: { note: "" } }];
+  return [{ OR: [{ note: null }, { note: "" }] }];
+}
+
+function buildLoanFilterConditions({
+  filter,
+  soonEnd,
+  today,
+}: {
+  filter: LoanFilter;
+  soonEnd: Date;
+  today: Date;
+}): Prisma.BookLoanWhereInput[] {
+  switch (filter) {
+    case "all":
+      return [];
+    case "no_return_date":
+      return [{ expectedReturnDate: null }];
+    case "overdue":
+      return [{ expectedReturnDate: { lt: today } }];
+    case "return_soon":
+      return [{ expectedReturnDate: { gte: today, lte: soonEnd } }];
+    default: {
+      const _exhaustiveCheck: never = filter;
+      return _exhaustiveCheck;
+    }
+  }
+}
+
 function buildLoanSearchConditions(search: string): Prisma.BookLoanWhereInput[] {
   const contains = { contains: escapeLikePattern(search), mode: "insensitive" } as const;
   return [
@@ -333,7 +344,13 @@ function buildLoanSearchConditions(search: string): Prisma.BookLoanWhereInput[] 
 
 function buildLoansWhere({
   contactId,
+  expectedReturnDateFrom,
+  expectedReturnDateTo,
   filter,
+  hasNote,
+  loanDateFrom,
+  loanDateTo,
+  reminder,
   search,
   soonEnd,
   today,
@@ -342,7 +359,17 @@ function buildLoansWhere({
 }: LoansFilterInput): Prisma.BookLoanWhereInput {
   const where = buildActiveLoansWhere({ type, userId });
 
-  applyLoanFilter({ filter, soonEnd, today, where });
+  const conditions = [
+    ...buildLoanFilterConditions({ filter, soonEnd, today }),
+    ...buildDayRangeConditions("loanDate", loanDateFrom, loanDateTo),
+    ...buildDayRangeConditions("expectedReturnDate", expectedReturnDateFrom, expectedReturnDateTo),
+    ...buildReminderConditions(reminder),
+    ...buildHasNoteConditions(hasNote),
+  ];
+
+  if (conditions.length > 0) {
+    where.AND = conditions;
+  }
 
   if (contactId !== undefined) {
     where.loanContactId = contactId;
@@ -353,4 +380,12 @@ function buildLoansWhere({
   }
 
   return where;
+}
+
+function buildReminderConditions(
+  reminder: LoanReminderFilter | undefined,
+): Prisma.BookLoanWhereInput[] {
+  if (reminder === undefined) return [];
+  if (reminder === "on") return [{ remindToReturn: true }];
+  return [{ expectedReturnDate: { not: null }, remindToReturn: false }];
 }

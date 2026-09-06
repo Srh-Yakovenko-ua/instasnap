@@ -71,6 +71,20 @@ export const Clickable: Story = {
   },
 };
 
+export const WithFooter: Story = {
+  args: {
+    icon: "wallet",
+    label: "Spent",
+    value: "40,008 UAH",
+    caption: "Other: 170.4 EUR",
+    microfact: "3 orders with no known amount",
+    footer: <span className="text-xs text-muted-foreground">↑ 163.9% · was 15,162 UAH</span>,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("↑ 163.9% · was 15,162 UAH")).toBeVisible();
+  },
+};
+
 export const Compact: Story = {
   args: { icon: "bookmark", label: "In queue", value: 12, caption: "to read", size: "compact" },
 };

@@ -5,6 +5,7 @@
  * REST API for the book-nest project
  * OpenAPI spec version: 1.0
  */
+import type { BookOrderStatisticsViewDtoRecordsMostActiveStoreByBooksDrilldown } from "./bookOrderStatisticsViewDtoRecordsMostActiveStoreByBooksDrilldown";
 
 /**
  * @nullable
@@ -15,10 +16,13 @@ export type BookOrderStatisticsViewDtoRecordsMostActiveStoreByBooks = {
    * @maximum 9007199254740991
    */
   booksCount: number;
+  /** Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books. */
+  drilldown: BookOrderStatisticsViewDtoRecordsMostActiveStoreByBooksDrilldown;
   /**
    * @minimum 0
    * @maximum 9007199254740991
    */
   ordersCount: number;
   store: string;
+  storeKey: string;
 } | null;

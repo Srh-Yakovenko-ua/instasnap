@@ -4,20 +4,25 @@ import type {
   BulkReadingStatusInput,
   BulkTagsInput,
 } from "@app/shared";
+import type { Mock } from "vitest";
 
 import { describe, expect, it, vi } from "vitest";
 
 import type { TransactionRunner } from "../../../core/database/transaction-runner.js";
 import type { ListsService } from "../../lists/application/lists.service.js";
 import type { TagsService } from "../../tags/application/tags.service.js";
+import type { BookWithRelations } from "../infrastructure/books.repository.js";
 import type { BulkBooksRepository } from "../infrastructure/bulk-books.repository.js";
 import type { BookPurgeScheduler } from "./book-purge.scheduler.js";
 
 import { BadRequestError } from "../../../core/exceptions/errors.js";
 import { Prisma } from "../../../generated/prisma/client.js";
 import { fakeOf } from "../../../test/fake.js";
+import { UserSettingsContextService } from "../../profile/index.js";
 import { ReadingGoalSyncService } from "../../reading-goals/index.js";
+import { BooksRepository } from "../infrastructure/books.repository.js";
 import { BulkBooksService } from "./bulk-books.service.js";
+import { ReadingLifecycleCoordinator } from "./reading-lifecycle.coordinator.js";
 
 const TX = fakeOf<Prisma.TransactionClient>();
 
@@ -27,14 +32,20 @@ const BOOK_B = "22222222-2222-4222-8222-222222222202";
 const TAG_ID = "33333333-3333-4333-8333-333333333301";
 const LIST_ID = "44444444-4444-4444-8444-444444444401";
 
+type BooksRepositoryMock = {
+  acquireBookLock: Mock<BooksRepository["acquireBookLock"]>;
+  applyReadingChange: Mock<BooksRepository["applyReadingChange"]>;
+  findOwnedById: Mock<BooksRepository["findOwnedById"]>;
+};
+
 type BulkRepository = {
   addTags: ReturnType<typeof vi.fn>;
   addToLists: ReturnType<typeof vi.fn>;
   addToReadingQueue: ReturnType<typeof vi.fn>;
+  clearReadingProgress: ReturnType<typeof vi.fn>;
   findOwnedIds: ReturnType<typeof vi.fn>;
   setFavorite: ReturnType<typeof vi.fn>;
   setOwnershipStatus: ReturnType<typeof vi.fn>;
-  setReadingStatus: ReturnType<typeof vi.fn>;
   softDelete: ReturnType<typeof vi.fn>;
 };
 
@@ -44,14 +55,15 @@ function buildService(
     addToLists?: number;
     addToReadingQueue?: number;
     listIds?: string[];
+    ownedBook?: BookWithRelations;
     ownedBookIds?: string[];
     setFavorite?: number;
     setOwnershipStatus?: number;
-    setReadingStatus?: number;
     softDeletedIds?: string[];
     tagIds?: string[];
   } = {},
 ): {
+  booksRepository: BooksRepositoryMock;
   bulkBooksRepository: BulkRepository;
   listsService: { resolveListsForBook: ReturnType<typeof vi.fn> };
   purgeScheduler: { scheduleMany: ReturnType<typeof vi.fn> };
@@ -63,11 +75,18 @@ function buildService(
     addTags: vi.fn().mockResolvedValue(overrides.addTags ?? 0),
     addToLists: vi.fn().mockResolvedValue(overrides.addToLists ?? 0),
     addToReadingQueue: vi.fn().mockResolvedValue(overrides.addToReadingQueue ?? 0),
+    clearReadingProgress: vi.fn().mockResolvedValue(undefined),
     findOwnedIds: vi.fn().mockResolvedValue(overrides.ownedBookIds ?? [BOOK_A]),
     setFavorite: vi.fn().mockResolvedValue(overrides.setFavorite ?? 0),
     setOwnershipStatus: vi.fn().mockResolvedValue(overrides.setOwnershipStatus ?? 0),
-    setReadingStatus: vi.fn().mockResolvedValue(overrides.setReadingStatus ?? 0),
     softDelete: vi.fn().mockResolvedValue(overrides.softDeletedIds ?? []),
+  };
+  const booksRepository: BooksRepositoryMock = {
+    acquireBookLock: vi.fn<BooksRepository["acquireBookLock"]>().mockResolvedValue(undefined),
+    applyReadingChange: vi.fn<BooksRepository["applyReadingChange"]>().mockResolvedValue(undefined),
+    findOwnedById: vi
+      .fn<BooksRepository["findOwnedById"]>()
+      .mockResolvedValue(overrides.ownedBook ?? null),
   };
   const tagsService = {
     resolveOrCreateMany: vi.fn().mockResolvedValue(overrides.tagIds ?? []),
@@ -93,9 +112,13 @@ function buildService(
     purgeScheduler as unknown as BookPurgeScheduler,
     transactionRunner as unknown as TransactionRunner,
     readingGoalSyncService,
+    fakeOf<BooksRepository>(booksRepository),
+    fakeOf<ReadingLifecycleCoordinator>({ apply: vi.fn().mockResolvedValue(undefined) }),
+    fakeOf<UserSettingsContextService>({ today: vi.fn().mockResolvedValue("2026-07-07") }),
   );
 
   return {
+    booksRepository,
     bulkBooksRepository,
     listsService,
     purgeScheduler,
@@ -103,6 +126,14 @@ function buildService(
     service,
     tagsService,
   };
+}
+
+function ownedReadingBook(): BookWithRelations {
+  return fakeOf<BookWithRelations>({
+    pagesCount: 320,
+    readingProgress: null,
+    readingStatus: "reading",
+  });
 }
 
 describe("BulkBooksService.addTags", () => {
@@ -236,37 +267,48 @@ describe("BulkBooksService.setFavorite", () => {
 
 describe("BulkBooksService.setReadingStatus", () => {
   it("clears progress when the new status does not use reading progress", async () => {
-    const { bulkBooksRepository, service } = buildService({ setReadingStatus: 1 });
+    const { bulkBooksRepository, service } = buildService({ ownedBook: ownedReadingBook() });
     const input: BulkReadingStatusInput = { bookIds: [BOOK_A], readingStatus: "not_started" };
 
     await service.setReadingStatus({ input, userId: USER_ID });
 
-    expect(bulkBooksRepository.setReadingStatus).toHaveBeenCalledWith(
-      {
-        bookIds: [BOOK_A],
-        clearProgress: true,
-        readingStatus: "not_started",
-        userId: USER_ID,
-      },
+    expect(bulkBooksRepository.clearReadingProgress).toHaveBeenCalledWith(
+      { bookIds: [BOOK_A], userId: USER_ID },
       TX,
     );
   });
 
   it("keeps progress when the new status uses reading progress", async () => {
-    const { bulkBooksRepository, service } = buildService({ setReadingStatus: 1 });
+    const { bulkBooksRepository, service } = buildService({ ownedBook: ownedReadingBook() });
     const input: BulkReadingStatusInput = { bookIds: [BOOK_A], readingStatus: "reading" };
 
     await service.setReadingStatus({ input, userId: USER_ID });
 
-    expect(bulkBooksRepository.setReadingStatus).toHaveBeenCalledWith(
-      {
-        bookIds: [BOOK_A],
-        clearProgress: false,
-        readingStatus: "reading",
-        userId: USER_ID,
-      },
+    expect(bulkBooksRepository.clearReadingProgress).not.toHaveBeenCalled();
+  });
+
+  it("writes the requested status for every owned book", async () => {
+    const { booksRepository, service } = buildService({ ownedBook: ownedReadingBook() });
+    const input: BulkReadingStatusInput = { bookIds: [BOOK_A], readingStatus: "not_started" };
+
+    await service.setReadingStatus({ input, userId: USER_ID });
+
+    expect(booksRepository.applyReadingChange).toHaveBeenCalledWith(
+      USER_ID,
+      BOOK_A,
+      expect.objectContaining({ book: { readingStatus: "not_started" } }),
       TX,
     );
+  });
+
+  it("skips a book that disappeared between the ownership check and the write", async () => {
+    const { booksRepository, service } = buildService();
+    const input: BulkReadingStatusInput = { bookIds: [BOOK_A], readingStatus: "not_started" };
+
+    const result = await service.setReadingStatus({ input, userId: USER_ID });
+
+    expect(result).toEqual({ affected: 0 });
+    expect(booksRepository.applyReadingChange).not.toHaveBeenCalled();
   });
 });
 

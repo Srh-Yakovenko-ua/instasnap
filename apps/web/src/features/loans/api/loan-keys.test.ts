@@ -28,7 +28,8 @@ describe("matchesLoans", () => {
   it("matches the history keys this feature builds", () => {
     expect(matchesLoans({ queryKey: loanKeys.history.list({ result: "all" }) })).toBe(true);
     expect(matchesLoans({ queryKey: loanKeys.history.overview({}) })).toBe(true);
-    expect(matchesLoans({ queryKey: loanKeys.history.people })).toBe(true);
+    expect(matchesLoans({ queryKey: loanKeys.history.people({}) })).toBe(true);
+    expect(matchesLoans({ queryKey: loanKeys.history.peoples })).toBe(true);
     expect(matchesLoans({ queryKey: loanKeys.history.detail("loan-1") })).toBe(true);
   });
 
@@ -36,6 +37,12 @@ describe("matchesLoans", () => {
     expect(matchesLoans({ queryKey: loanKeys.contacts.all })).toBe(true);
     expect(matchesLoans({ queryKey: loanKeys.contacts.detail("contact-1") })).toBe(true);
     expect(matchesLoans({ queryKey: loanKeys.contacts.search("") })).toBe(true);
+  });
+
+  it("prefixes every people key with the root a correction invalidates", () => {
+    expect(loanKeys.history.people({ type: "lent_to_someone" }).slice(0, 2)).toEqual([
+      ...loanKeys.history.peoples,
+    ]);
   });
 
   it("ignores keys of other features", () => {

@@ -20,7 +20,6 @@ const SnapshotEntryRowSchema = z.object({
 export type ReadingGoalSnapshotBookInput = {
   bookId: string;
   position: number;
-  qualifiedFinishedAt: Nullable<Date>;
 };
 
 const snapshotBookArgs = {
@@ -47,6 +46,9 @@ export type ReadingGoalSnapshotBookRow = Prisma.ReadingGoalBookGetPayload<typeof
 const SnapshotEntryWithProgressRowSchema = SnapshotEntryRowSchema.extend({
   bookId: z.uuid(),
   finishedAt: z.date().nullable(),
+  latestFinishedAt: z.date().nullable(),
+  qualifiedReadingCycleId: z.uuid().nullable(),
+  readingCycleId: z.uuid().nullable(),
 });
 
 export type ReadingGoalSnapshotEntryRow = z.infer<typeof SnapshotEntryRowSchema>;
@@ -55,11 +57,15 @@ export type ReadingGoalSnapshotEntryWithProgressRow = z.infer<
   typeof SnapshotEntryWithProgressRowSchema
 >;
 
-export type ReadingGoalSnapshotProgressRow = {
-  bookId: string;
-  finishedAt: Nullable<Date>;
-  qualifiedFinishedAt: Nullable<Date>;
-};
+const SnapshotProgressRowSchema = z.object({
+  bookId: z.uuid(),
+  finishedAt: z.date().nullable(),
+  qualifiedFinishedAt: z.date().nullable(),
+  qualifiedReadingCycleId: z.uuid().nullable(),
+  readingCycleId: z.uuid().nullable(),
+});
+
+export type ReadingGoalSnapshotProgressRow = z.infer<typeof SnapshotProgressRowSchema>;
 
 export type ReadingGoalSnapshotQualificationRow = {
   bookId: string;
@@ -72,6 +78,7 @@ type UpdateQualifiedFinishedAtInput = {
   goalId: string;
   previousQualifiedFinishedAt: Nullable<Date>;
   qualifiedFinishedAt: Nullable<Date>;
+  qualifiedReadingCycleId: Nullable<string>;
 };
 
 @Injectable()
@@ -145,15 +152,41 @@ export class ReadingGoalBooksRepository {
         goal_book.book_id AS "bookId",
         goal_book.goal_id AS "goalId",
         goal_book.qualified_finished_at AS "qualifiedFinishedAt",
+        goal_book.qualified_reading_cycle_id AS "qualifiedReadingCycleId",
         goal.archived_at AS "archivedAt",
         goal.created_at AS "createdAt",
         goal.deadline AS "deadline",
         goal.target_count AS "targetCount",
-        CASE WHEN book.deleted_at IS NULL THEN progress.finished_at END AS "finishedAt"
+        qualifying_cycle.finished_at AS "finishedAt",
+        qualifying_cycle.id AS "readingCycleId",
+        any_cycle.finished_at AS "latestFinishedAt"
       FROM reading_goal_books goal_book
       JOIN reading_goals goal ON goal.id = goal_book.goal_id
       JOIN books book ON book.id = goal_book.book_id
-      LEFT JOIN book_reading_progress progress ON progress.book_id = goal_book.book_id
+      LEFT JOIN LATERAL (
+        SELECT cycle.id, cycle.finished_at
+        FROM book_reading_cycles cycle
+        WHERE cycle.book_id = goal_book.book_id
+          AND cycle.user_id = goal.user_id
+          AND cycle.state = 'finished'
+          AND cycle.finished_at IS NOT NULL
+          AND book.deleted_at IS NULL
+          AND cycle.finished_at >= (goal.created_at AT TIME ZONE 'UTC')::date
+          AND cycle.finished_at <= goal.deadline
+        ORDER BY cycle.finished_at ASC, cycle.id ASC
+        LIMIT 1
+      ) qualifying_cycle ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT cycle.finished_at
+        FROM book_reading_cycles cycle
+        WHERE cycle.book_id = goal_book.book_id
+          AND cycle.user_id = goal.user_id
+          AND cycle.state = 'finished'
+          AND cycle.finished_at IS NOT NULL
+          AND book.deleted_at IS NULL
+        ORDER BY cycle.finished_at DESC, cycle.id DESC
+        LIMIT 1
+      ) any_cycle ON TRUE
       WHERE goal_book.book_id = ANY(${bookIds}::uuid[])
         AND goal.user_id = ${userId}::uuid
         AND goal.archived_at IS NULL
@@ -166,21 +199,33 @@ export class ReadingGoalBooksRepository {
     { goalId }: { goalId: string },
     client: Prisma.TransactionClient = this.prisma,
   ): Promise<ReadingGoalSnapshotProgressRow[]> {
-    const rows = await client.readingGoalBook.findMany({
-      orderBy: [{ position: "asc" }, { bookId: "asc" }],
-      select: {
-        book: { select: { deletedAt: true, readingProgress: { select: { finishedAt: true } } } },
-        bookId: true,
-        qualifiedFinishedAt: true,
-      },
-      where: { goalId },
-    });
-    return rows.map((row) => ({
-      bookId: row.bookId,
-      finishedAt:
-        row.book.deletedAt === null ? (row.book.readingProgress?.finishedAt ?? null) : null,
-      qualifiedFinishedAt: row.qualifiedFinishedAt,
-    }));
+    const rows = await client.$queryRaw`
+      SELECT
+        goal_book.book_id AS "bookId",
+        goal_book.qualified_finished_at AS "qualifiedFinishedAt",
+        goal_book.qualified_reading_cycle_id AS "qualifiedReadingCycleId",
+        qualifying_cycle.finished_at AS "finishedAt",
+        qualifying_cycle.id AS "readingCycleId"
+      FROM reading_goal_books goal_book
+      JOIN reading_goals goal ON goal.id = goal_book.goal_id
+      JOIN books book ON book.id = goal_book.book_id
+      LEFT JOIN LATERAL (
+        SELECT cycle.id, cycle.finished_at
+        FROM book_reading_cycles cycle
+        WHERE cycle.book_id = goal_book.book_id
+          AND cycle.user_id = goal.user_id
+          AND cycle.state = 'finished'
+          AND cycle.finished_at IS NOT NULL
+          AND book.deleted_at IS NULL
+          AND cycle.finished_at >= (goal.created_at AT TIME ZONE 'UTC')::date
+          AND cycle.finished_at <= goal.deadline
+        ORDER BY cycle.finished_at ASC, cycle.id ASC
+        LIMIT 1
+      ) qualifying_cycle ON TRUE
+      WHERE goal_book.goal_id = ${goalId}::uuid
+      ORDER BY goal_book.position ASC, goal_book.book_id ASC
+    `;
+    return z.array(SnapshotProgressRowSchema).parse(rows);
   }
 
   findSnapshotQualifications(
@@ -203,12 +248,13 @@ export class ReadingGoalBooksRepository {
       goalId,
       previousQualifiedFinishedAt,
       qualifiedFinishedAt,
+      qualifiedReadingCycleId,
     }: UpdateQualifiedFinishedAtInput,
     client: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
     return client.readingGoalBook
       .updateMany({
-        data: { qualifiedFinishedAt },
+        data: { qualifiedFinishedAt, qualifiedReadingCycleId },
         where: {
           bookId,
           goalId,

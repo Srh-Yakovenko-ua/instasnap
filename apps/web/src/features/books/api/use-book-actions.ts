@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { listKeys } from "@/features/lists/api/list-keys";
 import { seriesKeys } from "@/features/series/api/series-keys";
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 import {
   booksControllerDelete,
   booksControllerUpdate,
@@ -58,6 +59,7 @@ export function useBulkAddToList() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
       void queryClient.invalidateQueries({ queryKey: listKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }
@@ -83,6 +85,7 @@ export function useBulkDeleteBooks() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
       void queryClient.invalidateQueries({ queryKey: seriesKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }
@@ -95,6 +98,7 @@ export function useBulkOwnershipStatus() {
       BulkActionResultSchema.parse(await bulkBooksControllerOwnershipStatus(input)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }
@@ -108,6 +112,7 @@ export function useBulkReadingStatus() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
       void queryClient.invalidateQueries({ queryKey: seriesKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }
@@ -132,6 +137,7 @@ export function useDeleteBook() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: bookKeys.root });
       void queryClient.invalidateQueries({ queryKey: seriesKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }

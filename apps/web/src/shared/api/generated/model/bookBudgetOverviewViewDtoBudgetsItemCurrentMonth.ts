@@ -5,6 +5,7 @@
  * REST API for the book-nest project
  * OpenAPI spec version: 1.0
  */
+import type { BookBudgetOverviewViewDtoBudgetsItemCurrentMonthOutlook } from "./bookBudgetOverviewViewDtoBudgetsItemCurrentMonthOutlook";
 
 /**
  * @nullable
@@ -31,8 +32,17 @@ export type BookBudgetOverviewViewDtoBudgetsItemCurrentMonth = {
    * @nullable
    */
   forecast: number | null;
+  /** False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend. */
+  isForecastComplete: boolean;
+  /** Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything. */
+  outlook: BookBudgetOverviewViewDtoBudgetsItemCurrentMonthOutlook;
   /** @nullable */
   projectedOverage: number | null;
+  /**
+   * What the pace leaves unspent by month end, floored at zero. Null while pending.
+   * @nullable
+   */
+  projectedRemaining: number | null;
   remaining: number;
   /** Budget minus spend without a floor, so an overage reads as a negative number. */
   remainingSigned: number;
@@ -42,4 +52,10 @@ export type BookBudgetOverviewViewDtoBudgetsItemCurrentMonth = {
   month: string;
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$ */
   validFromMonth: string;
+  /**
+   * The first month this budget no longer covers. Null while it runs open ended.
+   * @nullable
+   * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+   */
+  validToMonth: string | null;
 } | null;

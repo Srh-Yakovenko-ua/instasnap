@@ -107,12 +107,12 @@ describe("useStatisticsParams", () => {
     expect(result.current.hasActiveFilters).toBe(true);
   });
 
-  it("clears the filters and leaves the period alone", async () => {
-    const { result } = renderParams("?period=last_month&currency=EUR");
+  it("keeps the budget currency apart from the display currency", async () => {
+    const { result } = renderParams("?money=UAH");
 
-    result.current.clearFilters();
+    result.current.setBudgetCurrency("EUR");
 
-    await waitFor(() => expect(result.current.filterCount).toBe(0));
-    expect(result.current.state.period).toBe("last_month");
+    await waitFor(() => expect(result.current.budgetCurrency).toBe("EUR"));
+    expect(result.current.requestedDisplayCurrency).toBe("UAH");
   });
 });

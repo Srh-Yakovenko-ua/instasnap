@@ -11,8 +11,6 @@ import { CurrencySchema } from "@app/shared";
 
 const CURRENCY_ORDER: readonly Currency[] = CurrencySchema.options;
 
-const FALLBACK_CURRENCY: Currency = CurrencySchema.enum.UAH;
-
 export function currencyAverageOf(
   averages: readonly CurrencyAverage[],
   currency: Currency,
@@ -39,17 +37,6 @@ export function otherCurrencyTotals(
   currency: Currency,
 ): CurrencyTotal[] {
   return totals.filter((entry) => entry.currency !== currency);
-}
-
-export function resolveMoneyCurrency({
-  available,
-  preferred,
-}: {
-  available: readonly Currency[];
-  preferred: Nullable<Currency>;
-}): Currency {
-  if (preferred !== null && available.includes(preferred)) return preferred;
-  return available[0] ?? FALLBACK_CURRENCY;
 }
 
 export function statisticsCurrencies(view: BookOrderStatisticsView): Currency[] {

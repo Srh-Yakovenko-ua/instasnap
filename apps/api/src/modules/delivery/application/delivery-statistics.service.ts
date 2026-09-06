@@ -5,13 +5,14 @@ import type {
   BookOrderStatisticsView,
   Nullable,
   StatisticsComparisonPeriod,
+  StatisticsPeriod,
+  StatisticsSourceQuality,
 } from "@app/shared";
 
 import { Injectable } from "@nestjs/common";
 
-import type { OrderStatisticsRecord } from "../domain/statistics-scope.js";
+import type { OrderStatisticsRecordsPage } from "../domain/order-statistics-page.js";
 
-import { parseIsoDate } from "../../../core/iso-date.js";
 import { buildActiveMoneyAge } from "../domain/active-age.js";
 import {
   computeBookOrderStatistics,
@@ -33,17 +34,20 @@ export class DeliveryStatisticsService {
     userId: string;
   }): Promise<ActiveMoneyAgeResponse> {
     const now = new Date();
-    const records = await this.deliveryStatisticsRepository.listActiveOrderRecords({
+    const page = await this.deliveryStatisticsRepository.listActiveOrderRecords({
       currency: query.currency,
-      status: undefined,
+      orderState: query.orderState,
       store: query.store,
       userId,
     });
 
-    return buildActiveMoneyAge({
-      now,
-      orders: records.map((record) => classifyOrder({ includeCancelled: false, record })),
-    });
+    return {
+      ...buildActiveMoneyAge({
+        now,
+        orders: page.records.map((record) => classifyOrder({ includeCancelled: false, record })),
+      }),
+      source: toSourceQuality(page),
+    };
   }
 
   async statistics({
@@ -60,44 +64,49 @@ export class DeliveryStatisticsService {
       to: query.to,
     });
 
-    const [page, activeRecords, previousRecords] = await Promise.all([
+    const [page, activePage, comparisonPage] = await Promise.all([
       this.deliveryStatisticsRepository.listOrderRecords({
         currency: query.currency,
-        from: toPeriodBound(requestedPeriod.from),
-        status: query.status,
+        from: requestedPeriod.from,
+        orderState: query.orderState,
         store: query.store,
-        to: toPeriodBound(requestedPeriod.to),
+        to: requestedPeriod.to,
         userId,
       }),
       this.deliveryStatisticsRepository.listActiveOrderRecords({
         currency: query.currency,
-        status: query.status,
+        orderState: query.orderState,
         store: query.store,
         userId,
       }),
-      this.loadComparisonRecords({ comparisonPeriod, query, userId }),
+      this.loadComparisonPage({ comparisonPeriod, query, userId }),
     ]);
-
-    const { isTruncated, loadedOrdersCount, maxOrders, records } = page;
 
     return {
       ...computeBookOrderStatistics({
-        activeRecords,
+        activeRecords: activePage.records,
+        comparisonPeriod: toComparisonPeriod(comparisonPeriod),
         includeCancelled: query.includeCancelled,
-        previousRecords,
-        records,
+        previousRecords: comparisonPage === null ? null : comparisonPage.records,
+        records: page.records,
         scope: {
           isPeriodFiltered: isPeriodFiltered(query),
-          isTruncated,
+          isTruncated: page.isTruncated,
           period: currentPeriod,
         },
         topLimit: ORDER_STATISTICS_TOP_LIMIT,
       }),
-      meta: { comparisonPeriod, currentPeriod, isTruncated, loadedOrdersCount, maxOrders },
+      meta: {
+        activeSource: toSourceQuality(activePage),
+        comparisonPeriod,
+        comparisonSource: comparisonPage === null ? null : toSourceQuality(comparisonPage),
+        currentPeriod,
+        currentSource: toSourceQuality(page),
+      },
     };
   }
 
-  private async loadComparisonRecords({
+  private async loadComparisonPage({
     comparisonPeriod,
     query,
     userId,
@@ -105,21 +114,19 @@ export class DeliveryStatisticsService {
     comparisonPeriod: Nullable<StatisticsComparisonPeriod>;
     query: BookOrderStatisticsQuery;
     userId: string;
-  }): Promise<Nullable<OrderStatisticsRecord[]>> {
+  }): Promise<Nullable<OrderStatisticsRecordsPage>> {
     if (comparisonPeriod === null) {
       return null;
     }
 
-    const { records } = await this.deliveryStatisticsRepository.listOrderRecords({
+    return this.deliveryStatisticsRepository.listOrderRecords({
       currency: query.currency,
-      from: toPeriodBound(comparisonPeriod.from),
-      status: query.status,
+      from: comparisonPeriod.from,
+      orderState: query.orderState,
       store: query.store,
-      to: toPeriodBound(comparisonPeriod.to),
+      to: comparisonPeriod.to,
       userId,
     });
-
-    return records;
   }
 }
 
@@ -128,11 +135,23 @@ function isPeriodFiltered(query: BookOrderStatisticsQuery): boolean {
     query.from !== undefined ||
     query.to !== undefined ||
     query.currency !== undefined ||
-    query.status !== undefined ||
+    query.orderState !== undefined ||
     query.store !== undefined
   );
 }
 
-function toPeriodBound(isoDay: string | undefined): Date | undefined {
-  return isoDay === undefined ? undefined : parseIsoDate(isoDay);
+function toComparisonPeriod(
+  comparisonPeriod: Nullable<StatisticsComparisonPeriod>,
+): Nullable<StatisticsPeriod> {
+  return comparisonPeriod === null
+    ? null
+    : { from: comparisonPeriod.from, to: comparisonPeriod.to };
+}
+
+function toSourceQuality({
+  isTruncated,
+  loadedOrdersCount,
+  maxOrders,
+}: OrderStatisticsRecordsPage): StatisticsSourceQuality {
+  return { isTruncated, loadedOrdersCount, maxOrders };
 }

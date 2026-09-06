@@ -52,7 +52,12 @@ export function StatisticsDelta({
           {formatPercentValue(Math.abs(delta.percent), locale)}
         </span>
       )}
-      {previousText === null ? null : <span>{previousText}</span>}
+      {previousText === null ? null : (
+        <>
+          {delta.percent === null ? null : <span aria-hidden="true">·</span>}
+          <span>{previousText}</span>
+        </>
+      )}
     </span>
   );
 }

@@ -1,3 +1,5 @@
+import type { Locale } from "date-fns";
+
 import {
   differenceInCalendarDays,
   differenceInCalendarMonths,
@@ -6,6 +8,7 @@ import {
   differenceInMinutes,
   differenceInSeconds,
 } from "date-fns";
+import { enUS, uk } from "date-fns/locale";
 
 type RelativeTimeStep = {
   difference: (target: Date, reference: Date) => number;
@@ -22,6 +25,12 @@ const RELATIVE_TIME_STEPS = [
   { difference: differenceInCalendarDays, limit: 31, unit: "day" },
   { difference: differenceInCalendarMonths, limit: 12, unit: "month" },
 ] as const satisfies readonly RelativeTimeStep[];
+
+const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, uk };
+
+export function dateFnsLocale(locale: string): Locale {
+  return DATE_FNS_LOCALES[locale] ?? uk;
+}
 
 export function formatDate(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
