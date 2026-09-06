@@ -16,6 +16,7 @@ export interface BookOrderViewDto {
   currency: BookOrderViewDtoCurrency;
   /** @nullable */
   deliveryPrice: number | null;
+  /** The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet. */
   derivedStatus: BookOrderViewDtoDerivedStatus;
   /** @nullable */
   discount: number | null;

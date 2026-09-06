@@ -6,7 +6,11 @@
  * OpenAPI spec version: 1.0
  */
 import type { BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemCurrency } from "./bookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemCurrency";
+import type { BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemDrilldown } from "./bookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemDrilldown";
 
+/**
+ * The heaviest month inside one currency. Its order and book counts are counted in that same currency, so a month that also holds orders in another currency never inflates them.
+ */
 export type BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItem = {
   /**
    * @minimum 0
@@ -14,6 +18,8 @@ export type BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItem = {
    */
   booksCount: number;
   currency: BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemCurrency;
+  /** Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books. */
+  drilldown: BookOrderStatisticsViewDtoRecordsRecordMonthByCurrencyItemDrilldown;
   month: string;
   /**
    * @minimum 0

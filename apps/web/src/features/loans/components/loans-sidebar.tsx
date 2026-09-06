@@ -22,7 +22,6 @@ import { MobilePageOverviewLink } from "@/components/ui/mobile-page-overview-pan
 import { Skeleton } from "@/components/ui/skeleton";
 import { todayIso } from "@/features/books/model/reading-progress";
 import { cn } from "@/lib/utils";
-import { LoansControllerListFilter } from "@/shared/api/generated/model";
 
 import type { LoanDirection } from "../model/loan-pages";
 
@@ -32,13 +31,13 @@ const LOAN_ATTENTION_LOOK = {
   no_return_date: { icon: "circle-slash", toneClass: "text-warning" },
   overdue: { icon: "alert-triangle", toneClass: "text-error" },
   without_reminder: { icon: "bell-off", toneClass: "text-muted-foreground" },
-} as const satisfies Partial<
-  Record<LoansControllerListFilter, { icon: UiIconName; toneClass: string }>
->;
+} as const satisfies Record<LoanAttentionKey, { icon: UiIconName; toneClass: string }>;
+
+export type LoanAttentionKey = "no_return_date" | "overdue" | "without_reminder";
 
 export type LoansAttention = {
-  activeFilter: LoansControllerListFilter;
-  onFilterSelect: (filter: LoanAttentionFilter) => void;
+  activeKey: Nullable<LoanAttentionKey>;
+  onSelect: (key: LoanAttentionKey) => void;
   stats: Nullable<LoanDirectionSummary>;
 };
 
@@ -49,12 +48,10 @@ export type LoansPeople = {
   onPersonSelect: (contactId: string) => void;
 };
 
-type LoanAttentionFilter = keyof typeof LOAN_ATTENTION_LOOK;
-
 type LoanAttentionSource = {
   count: number;
   detail?: string;
-  id: LoanAttentionFilter;
+  id: LoanAttentionKey;
   label: string;
 };
 
@@ -128,9 +125,9 @@ export function LoansSidebarSections({
 }
 
 function BorrowedAttention({
-  activeFilter,
+  activeKey,
   isLoading,
-  onFilterSelect,
+  onSelect,
   stats,
 }: LoansAttention & { isLoading: boolean }) {
   const t = useTranslations("loans.sidebar.attention.borrowed");
@@ -143,7 +140,7 @@ function BorrowedAttention({
 
   return (
     <LoansAttentionBlock
-      activeFilter={activeFilter}
+      activeKey={activeKey}
       allClearText={t("allClearText")}
       isLoading={isLoading}
       items={toAttentionItems([
@@ -160,15 +157,15 @@ function BorrowedAttention({
           label: t("no_return_date.label", { count: counts.noReturnDate }),
         },
       ])}
-      onFilterSelect={onFilterSelect}
+      onSelect={onSelect}
     />
   );
 }
 
 function LentAttention({
-  activeFilter,
+  activeKey,
   isLoading,
-  onFilterSelect,
+  onSelect,
   stats,
 }: LoansAttention & { isLoading: boolean }) {
   const t = useTranslations("loans.sidebar.attention.lent");
@@ -183,7 +180,7 @@ function LentAttention({
 
   return (
     <LoansAttentionBlock
-      activeFilter={activeFilter}
+      activeKey={activeKey}
       allClearText={t("allClearText")}
       isLoading={isLoading}
       items={toAttentionItems([
@@ -206,7 +203,7 @@ function LentAttention({
           label: t("without_reminder.label", { count: counts.noReminderWithDate }),
         },
       ])}
-      onFilterSelect={onFilterSelect}
+      onSelect={onSelect}
     />
   );
 }
@@ -238,28 +235,28 @@ function LoanRows({
 }
 
 function LoansAttentionBlock({
-  activeFilter,
+  activeKey,
   allClearText,
   isLoading,
   items,
-  onFilterSelect,
+  onSelect,
 }: {
-  activeFilter: LoansControllerListFilter;
+  activeKey: Nullable<LoanAttentionKey>;
   allClearText: string;
   isLoading: boolean;
-  items: AttentionItem<LoanAttentionFilter>[];
-  onFilterSelect: (filter: LoanAttentionFilter) => void;
+  items: AttentionItem<LoanAttentionKey>[];
+  onSelect: (key: LoanAttentionKey) => void;
 }) {
   const t = useTranslations("loans.sidebar.attention");
 
   return (
     <AttentionBlock
-      activeId={items.find((item) => item.id === activeFilter)?.id ?? null}
+      activeId={items.find((item) => item.id === activeKey)?.id ?? null}
       allClearLabel={allClearText}
       allClearTitle={t("allClear.title")}
       isLoading={isLoading}
       items={items}
-      onSelect={onFilterSelect}
+      onSelect={onSelect}
       title={t("title")}
     />
   );
@@ -439,7 +436,7 @@ function SidebarLoanRow({ loan, meta }: { loan: LoanListItemView; meta: ReactNod
   );
 }
 
-function toAttentionItems(sources: LoanAttentionSource[]): AttentionItem<LoanAttentionFilter>[] {
+function toAttentionItems(sources: LoanAttentionSource[]): AttentionItem<LoanAttentionKey>[] {
   return sources
     .filter((source) => source.count > 0)
     .map(({ detail, id, label }) => ({ ...LOAN_ATTENTION_LOOK[id], detail, id, label }));

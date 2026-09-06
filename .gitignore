@@ -73,3 +73,6 @@ docs/tasks/
 
 # maintenance flag files are created on the server, never committed
 deploy/maintenance/*.on
+
+# local-only setup notes, contains real secrets
+book-nest-new-laptop-setup.md

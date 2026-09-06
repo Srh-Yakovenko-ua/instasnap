@@ -27,11 +27,13 @@ export type LandedCostResult =
   { allocations: LandedCostAllocation[]; status: "allocated" } | { status: "unavailable" };
 
 type CurrencyLandedBucket = {
-  countedBooksCount: number;
+  adjustmentMinorUnits: number;
+  booksInScope: number;
+  booksWithLandedCost: number;
+  deliveryMinorUnits: number;
+  discountMinorUnits: number;
+  eligibleRawPriceMinorUnits: number;
   landedMinorUnits: number;
-  rawPricedBooksCount: number;
-  rawPriceMinorUnits: number;
-  realCostBooksCount: number;
 };
 
 export function allocateLandedCost({
@@ -54,20 +56,8 @@ export function allocateLandedCost({
   const deliveryMinorUnits = toMinorUnits(deliveryPrice ?? 0);
   const discountMinorUnits = toMinorUnits(discount ?? 0);
 
-  const soleItem = items.at(0);
-  const hasUnpricedItem = items.some((item) => item.price === null);
-  if (hasUnpricedItem && (items.length > 1 || soleItem === undefined)) {
+  if (items.some((item) => item.price === null)) {
     return { status: "unavailable" };
-  }
-
-  if (hasUnpricedItem && soleItem !== undefined) {
-    const allocation = wholeTotalAllocation({
-      deliveryMinorUnits,
-      discountMinorUnits,
-      item: soleItem,
-      totalMinorUnits,
-    });
-    return { allocations: [allocation], status: "allocated" };
   }
 
   const rawPrices = items.map((item) => toMinorUnits(item.price ?? 0));
@@ -114,15 +104,7 @@ export function buildLandedCostSummary(
 
   for (const order of orders) {
     const bucket = buckets.get(order.currency) ?? emptyBucket();
-    bucket.countedBooksCount += order.countedItems.length;
-
-    for (const item of order.countedItems) {
-      if (item.price === null) {
-        continue;
-      }
-      bucket.rawPriceMinorUnits += toMinorUnits(item.price);
-      bucket.rawPricedBooksCount += 1;
-    }
+    bucket.booksInScope += order.countedItems.length;
 
     const landed = allocateLandedCost({
       countedItems: order.countedItems,
@@ -133,8 +115,12 @@ export function buildLandedCostSummary(
 
     if (landed.status === "allocated") {
       for (const allocation of landed.allocations) {
+        bucket.adjustmentMinorUnits += allocation.adjustmentShare;
+        bucket.deliveryMinorUnits += allocation.deliveryShare;
+        bucket.discountMinorUnits += allocation.discountShare;
+        bucket.eligibleRawPriceMinorUnits += allocation.rawPrice;
         bucket.landedMinorUnits += allocation.realCost;
-        bucket.realCostBooksCount += 1;
+        bucket.booksWithLandedCost += 1;
       }
     }
 
@@ -149,21 +135,23 @@ export function buildLandedCostSummary(
 
 function emptyBucket(): CurrencyLandedBucket {
   return {
-    countedBooksCount: 0,
+    adjustmentMinorUnits: 0,
+    booksInScope: 0,
+    booksWithLandedCost: 0,
+    deliveryMinorUnits: 0,
+    discountMinorUnits: 0,
+    eligibleRawPriceMinorUnits: 0,
     landedMinorUnits: 0,
-    rawPricedBooksCount: 0,
-    rawPriceMinorUnits: 0,
-    realCostBooksCount: 0,
   };
 }
 
 function toCoveragePercent(bucket: CurrencyLandedBucket): number {
-  if (bucket.countedBooksCount === 0) {
+  if (bucket.booksInScope === 0) {
     return EMPTY_COVERAGE_PERCENT;
   }
   return Math.min(
     FULL_COVERAGE_PERCENT,
-    (bucket.realCostBooksCount / bucket.countedBooksCount) * FULL_COVERAGE_PERCENT,
+    (bucket.booksWithLandedCost / bucket.booksInScope) * FULL_COVERAGE_PERCENT,
   );
 }
 
@@ -174,45 +162,28 @@ function toLandedCostRow({
   bucket: CurrencyLandedBucket;
   currency: Currency;
 }): BookOrderStatisticsLandedCost {
-  const averageLandedBookCost =
-    bucket.realCostBooksCount === 0
+  const perEligibleBook = (minorUnits: number) =>
+    bucket.booksWithLandedCost === 0
       ? null
-      : fromMinorUnits(bucket.landedMinorUnits / bucket.realCostBooksCount);
-  const averageRawBookPrice =
-    bucket.rawPricedBooksCount === 0
-      ? null
-      : fromMinorUnits(bucket.rawPriceMinorUnits / bucket.rawPricedBooksCount);
+      : fromMinorUnits(minorUnits / bucket.booksWithLandedCost);
+  const averageLandedBookCost = perEligibleBook(bucket.landedMinorUnits);
+  const averageEligibleRawBookPrice = perEligibleBook(bucket.eligibleRawPriceMinorUnits);
 
   return {
+    averageAdjustmentShare: perEligibleBook(bucket.adjustmentMinorUnits),
+    averageDeliveryShare: perEligibleBook(bucket.deliveryMinorUnits),
+    averageDiscountShare: perEligibleBook(bucket.discountMinorUnits),
+    averageEligibleRawBookPrice,
     averageLandedBookCost,
-    countedBooksCount: bucket.countedBooksCount,
+    booksInScope: bucket.booksInScope,
+    booksWithLandedCost: bucket.booksWithLandedCost,
     coveragePercent: toCoveragePercent(bucket),
     currency,
-    differenceVsAverageRawBookPrice:
-      averageLandedBookCost === null || averageRawBookPrice === null
+    deltaFromEligibleRawPrice:
+      averageLandedBookCost === null || averageEligibleRawBookPrice === null
         ? null
-        : fromMinorUnits(toMinorUnits(averageLandedBookCost) - toMinorUnits(averageRawBookPrice)),
-    eligibleBooksCount: bucket.realCostBooksCount,
-  };
-}
-
-function wholeTotalAllocation({
-  deliveryMinorUnits,
-  discountMinorUnits,
-  item,
-  totalMinorUnits,
-}: {
-  deliveryMinorUnits: number;
-  discountMinorUnits: number;
-  item: OrderStatisticsItemRecord;
-  totalMinorUnits: number;
-}): LandedCostAllocation {
-  return {
-    adjustmentShare: totalMinorUnits + discountMinorUnits - deliveryMinorUnits,
-    deliveryShare: deliveryMinorUnits,
-    discountShare: discountMinorUnits,
-    itemId: item.id,
-    rawPrice: 0,
-    realCost: totalMinorUnits,
+        : fromMinorUnits(
+            toMinorUnits(averageLandedBookCost) - toMinorUnits(averageEligibleRawBookPrice),
+          ),
   };
 }

@@ -17,7 +17,10 @@ import { createBookFormDefaults, CreateBookFormSchema } from "../model/create-bo
 import { makeBookView } from "./book-details.fixtures";
 import { OwnershipStatusSection } from "./ownership-status-section";
 
+const CONTACT_ID = "11111111-1111-4111-8111-111111111111";
 const NOTE_LABEL = messages.books.ownershipStatus.fields.note;
+const PERSON_LABEL = messages.books.loanInfo.fields.personName;
+const PERSON_REQUIRED = messages.loans.contactPicker.required;
 const STORE_URL = "https://www.yakaboo.ua/ostannie-bazhannja.html";
 
 const fetchMock = vi.fn();
@@ -56,6 +59,29 @@ function borrowedBook() {
     },
     ownershipStatus: "borrowed_from_someone",
   });
+}
+
+function contactsPage() {
+  return {
+    counts: { active: 1, all: 1, archived: 0 },
+    items: [
+      {
+        activeBorrowedCount: 0,
+        activeLentCount: 0,
+        archivedAt: null,
+        contact: null,
+        createdAt: "2026-01-10T10:00:00.000Z",
+        id: CONTACT_ID,
+        loanCount: 0,
+        name: "Ігор",
+        updatedAt: "2026-01-10T10:00:00.000Z",
+      },
+    ],
+    page: 1,
+    pagesCount: 1,
+    pageSize: 20,
+    totalCount: 1,
+  };
 }
 
 function Harness({
@@ -210,5 +236,96 @@ describe("OwnershipStatusSection purchase note removal", () => {
     });
     expect(payload.purchaseInfo).not.toHaveProperty("note");
     expect(JSON.stringify(payload.purchaseInfo)).not.toContain("note");
+  });
+});
+
+describe("OwnershipStatusSection contact creation", () => {
+  it("opens the contact dialog on a page where nothing else is modal", async () => {
+    const borrowed = bookViewToFormState(borrowedBook());
+    renderSection(borrowed.values, borrowed.loanContactSelection);
+
+    await userEvent.click(screen.getByRole("button", { name: messages.loans.contactPicker.clear }));
+    await userEvent.type(screen.getByLabelText(messages.books.loanInfo.fields.personName), "Марта");
+    await userEvent.click(await screen.findByText("Створити «Марта»"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(messages.loans.contactCreate.title);
+    expect(screen.getByLabelText(messages.loans.contactCreate.name)).toHaveValue("Марта");
+  });
+});
+
+function LoanContactHarness() {
+  const form = useForm<CreateBookFormValues, unknown, CreateBookFormOutput>({
+    defaultValues: {
+      ...createBookFormDefaults,
+      authors: [{ name: "Автор" }],
+      ownershipStatus: "lent_to_someone",
+      title: "Книга",
+    },
+    mode: "onTouched",
+    resolver: zodResolver(CreateBookFormSchema),
+    reValidateMode: "onChange",
+  });
+  const [loanContact, setLoanContact] = useState<LoanContactSelection | null>(null);
+
+  function handleLoanContactChange(selection: LoanContactSelection | null) {
+    setLoanContact(selection);
+    form.setValue(
+      "loanInfo.loanContactId",
+      selection?.kind === "picked" ? selection.contactId : undefined,
+      { shouldDirty: true },
+    );
+    void form.trigger(["loanInfo.loanContactId", "loanInfo.personName"]);
+  }
+
+  return (
+    <form onSubmit={form.handleSubmit(() => {})}>
+      <OwnershipStatusSection
+        control={form.control}
+        errors={form.formState.errors}
+        loanContact={loanContact}
+        mode="create"
+        onLoanContactChange={handleLoanContactChange}
+        register={form.register}
+        setValue={form.setValue}
+      />
+      <button type="submit">submit</button>
+    </form>
+  );
+}
+
+describe("OwnershipStatusSection loan person error", () => {
+  beforeEach(() => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            String(input).includes("/api/loans/contacts") ? contactsPage() : { items: [] },
+          ),
+          { headers: { "Content-Type": "application/json" }, status: 200 },
+        ),
+      ),
+    );
+  });
+
+  it("asks for the person in the reader's language, not the schema's", async () => {
+    renderWithProviders(<LoanContactHarness />);
+
+    await userEvent.click(screen.getByRole("button", { name: "submit" }));
+
+    expect(await screen.findByText(PERSON_REQUIRED)).toBeInTheDocument();
+    expect(screen.queryByText("Enter the person's name")).not.toBeInTheDocument();
+  });
+
+  it("drops the missing-person error once a contact is picked", async () => {
+    renderWithProviders(<LoanContactHarness />);
+
+    await userEvent.click(screen.getByRole("button", { name: "submit" }));
+    expect(await screen.findByText(PERSON_REQUIRED)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(PERSON_LABEL));
+    await userEvent.click(await screen.findByText("Ігор"));
+
+    expect(screen.queryByText(PERSON_REQUIRED)).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,7 @@ import type { BookOrderStatisticsView } from "@app/shared";
 
 import { describe, expect, it } from "vitest";
 
-import { resolveMoneyCurrency, statisticsCurrencies } from "./statistics-currency";
+import { statisticsCurrencies } from "./statistics-currency";
 
 function view(overrides: Partial<BookOrderStatisticsView>): BookOrderStatisticsView {
   const emptySummary = {
@@ -15,7 +15,9 @@ function view(overrides: Partial<BookOrderStatisticsView>): BookOrderStatisticsV
     booksCount: 0,
     cancelledOrdersCount: 0,
     cancelledTotalsByCurrency: [],
+    financialCoverageByCurrency: [],
     ordersCount: 0,
+    priceCoverageByCurrency: [],
     receivedBooksCount: 0,
     receivedTotalsByCurrency: [],
     shipmentsCount: 0,
@@ -38,17 +40,18 @@ function view(overrides: Partial<BookOrderStatisticsView>): BookOrderStatisticsV
     comparison: null,
     costs: [],
     daily: [],
+    dynamics: { buckets: [], granularity: "month" },
+    insights: { books: [], orders: [], spendByCurrency: [] },
     landedCost: [],
     lifecycle: { books: emptyStages, comparison: null, orders: emptyStages },
     meta: {
+      activeSource: { isTruncated: false, loadedOrdersCount: 0, maxOrders: 5000 },
       comparisonPeriod: null,
+      comparisonSource: null,
       currentPeriod: { from: null, to: null },
-      isTruncated: false,
-      loadedOrdersCount: 0,
-      maxOrders: null,
+      currentSource: { isTruncated: false, loadedOrdersCount: 0, maxOrders: 5000 },
     },
     monthly: [],
-    pulse: [],
     records: {
       bestValueStoreByCurrency: [],
       largestOrderByCurrency: [],
@@ -59,6 +62,7 @@ function view(overrides: Partial<BookOrderStatisticsView>): BookOrderStatisticsV
     },
     snapshot: {
       activeBooksCount: 0,
+      activeMoneyCoverageByCurrency: [],
       activeOrdersCount: 0,
       activeShipmentsCount: 0,
       activeTotalsByCurrency: [],
@@ -108,19 +112,5 @@ describe("statisticsCurrencies", () => {
     expect(
       statisticsCurrencies(view({ topOrdersByCurrency: [{ currency: "USD", orders: [] }] })),
     ).toEqual([]);
-  });
-});
-
-describe("resolveMoneyCurrency", () => {
-  it("honours the reader's pick when the data has it", () => {
-    expect(resolveMoneyCurrency({ available: ["UAH", "EUR"], preferred: "EUR" })).toBe("EUR");
-  });
-
-  it("falls back to the first available currency when the pick has no data", () => {
-    expect(resolveMoneyCurrency({ available: ["UAH", "EUR"], preferred: "USD" })).toBe("UAH");
-  });
-
-  it("still names a currency when there is no data at all", () => {
-    expect(resolveMoneyCurrency({ available: [], preferred: null })).toBe("UAH");
   });
 });

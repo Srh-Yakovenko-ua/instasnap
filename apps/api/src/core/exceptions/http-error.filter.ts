@@ -74,6 +74,7 @@ export class HttpErrorFilter implements ExceptionFilter {
     const body: ApiError = {
       message: hidesInternals(httpError) ? "Internal server error" : httpError.message,
       ...(httpError.code !== undefined && { code: httpError.code }),
+      ...(httpError.details !== undefined && { details: httpError.details }),
       ...(request.requestId !== undefined && { requestId: request.requestId }),
     };
 

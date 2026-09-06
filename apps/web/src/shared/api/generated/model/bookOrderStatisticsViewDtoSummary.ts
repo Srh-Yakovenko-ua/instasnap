@@ -9,6 +9,8 @@ import type { BookOrderStatisticsViewDtoSummaryActiveTotalsByCurrencyItem } from
 import type { BookOrderStatisticsViewDtoSummaryAverageBookPriceByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryAverageBookPriceByCurrencyItem";
 import type { BookOrderStatisticsViewDtoSummaryAverageOrderAmountByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryAverageOrderAmountByCurrencyItem";
 import type { BookOrderStatisticsViewDtoSummaryCancelledTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryCancelledTotalsByCurrencyItem";
+import type { BookOrderStatisticsViewDtoSummaryFinancialCoverageByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryFinancialCoverageByCurrencyItem";
+import type { BookOrderStatisticsViewDtoSummaryPriceCoverageByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryPriceCoverageByCurrencyItem";
 import type { BookOrderStatisticsViewDtoSummaryReceivedTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryReceivedTotalsByCurrencyItem";
 import type { BookOrderStatisticsViewDtoSummaryTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoSummaryTotalsByCurrencyItem";
 
@@ -39,11 +41,13 @@ export type BookOrderStatisticsViewDtoSummary = {
    */
   cancelledOrdersCount: number;
   cancelledTotalsByCurrency: BookOrderStatisticsViewDtoSummaryCancelledTotalsByCurrencyItem[];
+  financialCoverageByCurrency: BookOrderStatisticsViewDtoSummaryFinancialCoverageByCurrencyItem[];
   /**
    * @minimum 0
    * @maximum 9007199254740991
    */
   ordersCount: number;
+  priceCoverageByCurrency: BookOrderStatisticsViewDtoSummaryPriceCoverageByCurrencyItem[];
   /**
    * @minimum 0
    * @maximum 9007199254740991

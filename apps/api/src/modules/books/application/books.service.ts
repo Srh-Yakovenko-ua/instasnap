@@ -1,15 +1,20 @@
-import type { BookView, CreateBookInput, UpdateBookInput } from "@app/shared";
+import type { BookView, CreateBookInput, Nullable, UpdateBookInput } from "@app/shared";
 
 import { OwnershipStatusSchema, ReadingStatusSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
+
+import type { Prisma } from "../../../generated/prisma/client.js";
+import type { ReadingLifecycleDates } from "../domain/reading-lifecycle-date.js";
 
 import {
   HEAVY_TRANSACTION_OPTIONS,
   TransactionRunner,
 } from "../../../core/database/transaction-runner.js";
 import { NotFoundError } from "../../../core/exceptions/errors.js";
+import { toCreateDate } from "../../../core/iso-date.js";
 import { SingleBookOrderService } from "../../delivery/index.js";
 import { LoanContactResolver } from "../../loans/index.js";
+import { UserSettingsContextService } from "../../profile/index.js";
 import { ReadingGoalSyncService } from "../../reading-goals/index.js";
 import {
   buildDeliveryInfoData,
@@ -38,11 +43,13 @@ import {
   assertLoanPersonPresent,
 } from "../domain/book-update-guards.js";
 import { resolveFavoriteChange } from "../domain/favorite.js";
+import { resolveReadingLifecycleDate } from "../domain/reading-lifecycle-date.js";
 import { resolveWishlistAddedAtChange } from "../domain/wishlist-added-at.js";
 import { BooksRepository, type BookWithRelations } from "../infrastructure/books.repository.js";
 import { BookCoverCleanup } from "./book-cover-cleanup.js";
 import { BookRelationsResolver, type SeriesPlacement } from "./book-relations-resolver.js";
 import { BookViewAssembler } from "./book-view-assembler.js";
+import { ReadingLifecycleCoordinator } from "./reading-lifecycle.coordinator.js";
 
 @Injectable()
 export class BooksService {
@@ -55,10 +62,13 @@ export class BooksService {
     private readonly transactionRunner: TransactionRunner,
     private readonly readingGoalSyncService: ReadingGoalSyncService,
     private readonly loanContactResolver: LoanContactResolver,
+    private readonly readingLifecycleCoordinator: ReadingLifecycleCoordinator,
+    private readonly userSettingsContextService: UserSettingsContextService,
   ) {}
 
   async create(userId: string, input: CreateBookInput): Promise<BookView> {
     const now = new Date();
+    const today = await this.userSettingsContextService.today(userId);
     const favoriteChange = resolveFavoriteChange({ current: false, next: input.isFavorite, now });
     const wishlistChange = resolveWishlistAddedAtChange({
       current: null,
@@ -157,6 +167,24 @@ export class BooksService {
           now,
           client,
         );
+        await this.readingLifecycleCoordinator.apply(
+          {
+            bookId: created.id,
+            currentStatus: "not_started",
+            date: resolveReadingLifecycleDate({
+              dates: toLifecycleDates(readingProgress),
+              readingStatus: input.readingStatus,
+              today,
+            }),
+            event: null,
+            existingStartedAt: readingProgress?.startedAt ?? null,
+            rating: readingProgress?.rating ?? null,
+            targetStatus: input.readingStatus,
+            userId,
+          },
+          client,
+        );
+
         if (deliveryDraft === null) {
           return created;
         }
@@ -195,6 +223,9 @@ export class BooksService {
     }
 
     const readingStatus = input.readingStatus ?? ReadingStatusSchema.parse(current.readingStatus);
+    const touchesLifecycle =
+      input.readingStatus !== undefined || input.readingProgress !== undefined;
+    const today = await this.userSettingsContextService.today(userId);
     const ownershipStatus =
       input.ownershipStatus ?? OwnershipStatusSchema.parse(current.ownershipStatus);
 
@@ -220,6 +251,9 @@ export class BooksService {
     let book: BookWithRelations;
     try {
       book = await this.transactionRunner.run(async (client) => {
+        const locked = touchesLifecycle
+          ? await this.lockLifecycle({ bookId, client, userId })
+          : null;
         const resolved = await this.relationsResolver.resolveForUpdate(
           { bookId, current, input, resolvedAuthors, userId },
           client,
@@ -281,6 +315,26 @@ export class BooksService {
           client,
         );
 
+        if (locked !== null) {
+          const dates = mergeLifecycleDates({
+            current: locked.readingProgress,
+            input: input.readingProgress,
+          });
+          await this.readingLifecycleCoordinator.apply(
+            {
+              bookId,
+              currentStatus: ReadingStatusSchema.parse(locked.readingStatus),
+              date: resolveReadingLifecycleDate({ dates, readingStatus, today }),
+              event: null,
+              existingStartedAt: locked.readingProgress?.startedAt ?? null,
+              rating: input.readingProgress?.rating ?? locked.readingProgress?.rating ?? null,
+              targetStatus: readingStatus,
+              userId,
+            },
+            client,
+          );
+        }
+
         await this.readingGoalSyncService.syncBooks({ bookIds: [bookId], client, userId });
 
         return updated;
@@ -304,4 +358,53 @@ export class BooksService {
 
     return this.viewAssembler.viewOf(book);
   }
+
+  private async lockLifecycle({
+    bookId,
+    client,
+    userId,
+  }: {
+    bookId: string;
+    client: Prisma.TransactionClient;
+    userId: string;
+  }): Promise<BookWithRelations> {
+    await this.booksRepository.acquireBookLock(bookId, client);
+    return this.booksRepository.findOwnedByIdOrThrow(userId, bookId, client);
+  }
+}
+
+function mergeLifecycleDates({
+  current,
+  input,
+}: {
+  current: Nullable<ReadingLifecycleDates>;
+  input: UpdateBookInput["readingProgress"];
+}): ReadingLifecycleDates {
+  const base = toLifecycleDates(current);
+  if (input === undefined || input === null) {
+    return base;
+  }
+
+  return {
+    abandonedAt: overrideDate(input.abandonedAt, base.abandonedAt),
+    finishedAt: overrideDate(input.finishedAt, base.finishedAt),
+    pausedAt: overrideDate(input.pausedAt, base.pausedAt),
+    startedAt: overrideDate(input.startedAt, base.startedAt),
+  };
+}
+
+function overrideDate(
+  value: Nullable<string> | undefined,
+  fallback: Nullable<Date>,
+): Nullable<Date> {
+  return value === undefined ? fallback : toCreateDate(value);
+}
+
+function toLifecycleDates(progress: Nullable<ReadingLifecycleDates>): ReadingLifecycleDates {
+  return {
+    abandonedAt: progress?.abandonedAt ?? null,
+    finishedAt: progress?.finishedAt ?? null,
+    pausedAt: progress?.pausedAt ?? null,
+    startedAt: progress?.startedAt ?? null,
+  };
 }

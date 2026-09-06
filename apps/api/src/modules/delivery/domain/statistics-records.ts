@@ -1,33 +1,45 @@
 import type {
-  BookOrderStatisticsMonth,
   BookOrderStatisticsMostActiveStore,
+  BookOrderStatisticsOrderIdentity,
   BookOrderStatisticsRecordMonth,
   BookOrderStatisticsRecords,
   BookOrderStatisticsRecordScope,
   BookOrderStatisticsStore,
   BookOrderStatisticsStoreLeader,
-  BookOrderStatisticsTopOrder,
   BookOrderStatisticsTopOrdersByCurrency,
+  Currency,
   Nullable,
 } from "@app/shared";
 
 import { CurrencySchema } from "@app/shared";
 
-import type { ClassifiedOrder } from "./statistics-scope.js";
+import type { AmountAccumulator, ClassifiedOrder } from "./statistics-scope.js";
 
+import { toNullableIsoDate } from "../../../core/iso-date.js";
 import { UKRAINIAN_COLLATION } from "../../../core/ukrainian-collation.js";
+import { buildDrilldownBreakdown } from "./statistics-drilldown.js";
+import { addOrderAmount, totalsFromAmounts } from "./statistics-scope.js";
 import { buildBestValueStoreByCurrency } from "./statistics-stores.js";
+
+const MONTH_KEY_LENGTH = 7;
+
+type MonthCurrencyBucket = {
+  booksCount: number;
+  currency: Currency;
+  month: string;
+  orderAmounts: AmountAccumulator;
+  orders: ClassifiedOrder[];
+  ordersCount: number;
+};
 
 export function buildPurchaseRecords({
   byStore,
   includedOrders,
-  monthly,
   scope,
   topOrdersByCurrency,
 }: {
   byStore: readonly BookOrderStatisticsStore[];
   includedOrders: readonly ClassifiedOrder[];
-  monthly: readonly BookOrderStatisticsMonth[];
   scope: BookOrderStatisticsRecordScope;
   topOrdersByCurrency: BookOrderStatisticsTopOrdersByCurrency;
 }): BookOrderStatisticsRecords {
@@ -38,8 +50,8 @@ export function buildPurchaseRecords({
       return largest === undefined ? [] : [{ currency: group.currency, order: largest }];
     }),
     mostActiveStore: buildMostActiveStore(byStore),
-    mostBooksInOrder: buildMostBooksInOrder(topOrdersByCurrency),
-    recordMonthByCurrency: buildRecordMonthByCurrency(monthly),
+    mostBooksInOrder: buildMostBooksInOrder(includedOrders),
+    recordMonthByCurrency: buildRecordMonthByCurrency(includedOrders),
     scope,
   };
 }
@@ -54,38 +66,41 @@ function buildMostActiveStore(
 }
 
 function buildMostBooksInOrder(
-  topOrdersByCurrency: BookOrderStatisticsTopOrdersByCurrency,
-): Nullable<BookOrderStatisticsTopOrder> {
-  const orders = topOrdersByCurrency.flatMap((group) => group.orders);
+  orders: readonly ClassifiedOrder[],
+): Nullable<BookOrderStatisticsOrderIdentity> {
+  const winner = [...orders].sort(compareByBooksCount).at(0);
 
-  return (
-    [...orders].sort(
-      (left, right) =>
-        right.booksCount - left.booksCount ||
-        (right.orderDate ?? "").localeCompare(left.orderDate ?? "") ||
-        left.id.localeCompare(right.id),
-    )[0] ?? null
-  );
+  return winner === undefined || winner.countedItems.length === 0 ? null : toOrderIdentity(winner);
 }
 
 function buildRecordMonthByCurrency(
-  monthly: readonly BookOrderStatisticsMonth[],
+  orders: readonly ClassifiedOrder[],
 ): BookOrderStatisticsRecordMonth[] {
-  const best = new Map<string, BookOrderStatisticsRecordMonth>();
+  const buckets = new Map<string, MonthCurrencyBucket>();
 
-  for (const bucket of monthly) {
-    for (const { currency, total } of bucket.totalsByCurrency) {
-      const candidate: BookOrderStatisticsRecordMonth = {
-        booksCount: bucket.booksCount,
-        currency,
-        month: bucket.month,
-        ordersCount: bucket.ordersCount,
-        total,
-      };
-      const current = best.get(currency);
-      if (current === undefined || isBetterRecordMonth({ candidate, current })) {
-        best.set(currency, candidate);
-      }
+  for (const order of orders) {
+    const month = monthOf(order);
+    if (month === null) {
+      continue;
+    }
+    const key = `${month}:${order.currency}`;
+    const bucket = buckets.get(key) ?? emptyMonthBucket({ currency: order.currency, month });
+    bucket.booksCount += order.countedItems.length;
+    bucket.orders.push(order);
+    bucket.ordersCount += 1;
+    addOrderAmount({ accumulator: bucket.orderAmounts, order });
+    buckets.set(key, bucket);
+  }
+
+  const best = new Map<Currency, BookOrderStatisticsRecordMonth>();
+  for (const bucket of buckets.values()) {
+    const candidate = toRecordMonth(bucket);
+    if (candidate === null) {
+      continue;
+    }
+    const current = best.get(bucket.currency);
+    if (current === undefined || isBetterRecordMonth({ candidate, current })) {
+      best.set(bucket.currency, candidate);
     }
   }
 
@@ -93,6 +108,26 @@ function buildRecordMonthByCurrency(
     const record = best.get(currency);
     return record === undefined ? [] : [record];
   });
+}
+
+function compareByBooksCount(left: ClassifiedOrder, right: ClassifiedOrder): number {
+  return (
+    right.countedItems.length - left.countedItems.length ||
+    (toNullableIsoDate(right.record.orderDate) ?? "").localeCompare(
+      toNullableIsoDate(left.record.orderDate) ?? "",
+    ) ||
+    left.record.id.localeCompare(right.record.id)
+  );
+}
+
+function emptyMonthBucket({
+  currency,
+  month,
+}: {
+  currency: Currency;
+  month: string;
+}): MonthCurrencyBucket {
+  return { booksCount: 0, currency, month, orderAmounts: new Map(), orders: [], ordersCount: 0 };
 }
 
 function isBetterRecordMonth({
@@ -106,6 +141,11 @@ function isBetterRecordMonth({
     return candidate.total > current.total;
   }
   return candidate.month.localeCompare(current.month) > 0;
+}
+
+function monthOf(order: ClassifiedOrder): Nullable<string> {
+  const orderedOn = toNullableIsoDate(order.record.orderDate);
+  return orderedOn === null ? null : orderedOn.slice(0, MONTH_KEY_LENGTH);
 }
 
 function pickStoreLeader({
@@ -126,7 +166,39 @@ function pickStoreLeader({
 
   return {
     booksCount: leader.booksCount,
+    drilldown: leader.drilldown,
     ordersCount: leader.ordersCount,
     store: leader.store,
+    storeKey: leader.storeKey,
   };
+}
+
+function toOrderIdentity(order: ClassifiedOrder): BookOrderStatisticsOrderIdentity {
+  return {
+    booksCount: order.countedItems.length,
+    currency: order.record.currency,
+    derivedStatus: order.derivedStatus,
+    id: order.record.id,
+    orderDate: toNullableIsoDate(order.record.orderDate),
+    orderNumber: order.record.orderNumber,
+    storeName: order.record.storeName,
+    totalAmount: order.amount,
+  };
+}
+
+function toRecordMonth(bucket: MonthCurrencyBucket): Nullable<BookOrderStatisticsRecordMonth> {
+  const total = totalsFromAmounts(bucket.orderAmounts).find(
+    (row) => row.currency === bucket.currency,
+  );
+
+  return total === undefined
+    ? null
+    : {
+        booksCount: bucket.booksCount,
+        currency: bucket.currency,
+        drilldown: buildDrilldownBreakdown(bucket.orders),
+        month: bucket.month,
+        ordersCount: bucket.ordersCount,
+        total: total.total,
+      };
 }

@@ -9,15 +9,20 @@ import type {
   BulkReadingStatusInput,
   BulkTagsInput,
   QueuePriority,
+  ReadingStatus,
 } from "@app/shared";
 
+import { ReadingStatusSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
 import { parseISO } from "date-fns";
+
+import type { Prisma } from "../../../generated/prisma/client.js";
 
 import { TransactionRunner } from "../../../core/database/transaction-runner.js";
 import { BadRequestError } from "../../../core/exceptions/errors.js";
 import { TRASH_RETENTION } from "../../../core/trash-retention.js";
 import { ListsService } from "../../lists/index.js";
+import { UserSettingsContextService } from "../../profile/index.js";
 import { ReadingGoalSyncService } from "../../reading-goals/index.js";
 import { TagsService } from "../../tags/index.js";
 import {
@@ -26,8 +31,11 @@ import {
   ownershipStatusUsesLoan,
   readingStatusUsesProgress,
 } from "../domain/book-blocks.js";
+import { computeReadingStatusChange } from "../domain/reading-status-transition.js";
+import { BooksRepository } from "../infrastructure/books.repository.js";
 import { BulkBooksRepository } from "../infrastructure/bulk-books.repository.js";
 import { BookPurgeScheduler } from "./book-purge.scheduler.js";
+import { ReadingLifecycleCoordinator } from "./reading-lifecycle.coordinator.js";
 
 const DEFAULT_QUEUE_PRIORITY: QueuePriority = "normal";
 
@@ -40,6 +48,9 @@ export class BulkBooksService {
     private readonly purgeScheduler: BookPurgeScheduler,
     private readonly transactionRunner: TransactionRunner,
     private readonly readingGoalSyncService: ReadingGoalSyncService,
+    private readonly booksRepository: BooksRepository,
+    private readonly readingLifecycleCoordinator: ReadingLifecycleCoordinator,
+    private readonly userSettingsContextService: UserSettingsContextService,
   ) {}
 
   async addTags({
@@ -181,23 +192,34 @@ export class BulkBooksService {
     input: BulkReadingStatusInput;
     userId: string;
   }): Promise<BulkActionResult> {
-    const affected = await this.transactionRunner.run(async (tx) => {
-      const updated = await this.bulkBooksRepository.setReadingStatus(
-        {
-          bookIds: input.bookIds,
-          clearProgress: !readingStatusUsesProgress(input.readingStatus),
-          readingStatus: input.readingStatus,
-          userId,
-        },
-        tx,
-      );
-      await this.readingGoalSyncService.syncBooks({
-        bookIds: input.bookIds,
-        client: tx,
-        userId,
-      });
-      return updated;
+    const ownedBookIds = await this.bulkBooksRepository.findOwnedIds({
+      bookIds: input.bookIds,
+      userId,
     });
+    if (ownedBookIds.length === 0) {
+      return { affected: 0 };
+    }
+
+    const today = await this.userSettingsContextService.today(userId);
+    const orderedBookIds = [...ownedBookIds].sort();
+
+    const affected = await this.transactionRunner.run(async (tx) => {
+      let applied = 0;
+      for (const bookId of orderedBookIds) {
+        const changed = await this.applyReadingStatus({
+          bookId,
+          readingStatus: input.readingStatus,
+          today,
+          tx,
+          userId,
+        });
+        applied += changed ? 1 : 0;
+      }
+
+      await this.readingGoalSyncService.syncBooks({ bookIds: orderedBookIds, client: tx, userId });
+      return applied;
+    });
+
     return { affected };
   }
 
@@ -259,5 +281,55 @@ export class BulkBooksService {
 
       return { failed, updated };
     });
+  }
+
+  private async applyReadingStatus({
+    bookId,
+    readingStatus,
+    today,
+    tx,
+    userId,
+  }: {
+    bookId: string;
+    readingStatus: ReadingStatus;
+    today: string;
+    tx: Prisma.TransactionClient;
+    userId: string;
+  }): Promise<boolean> {
+    await this.booksRepository.acquireBookLock(bookId, tx);
+    const book = await this.booksRepository.findOwnedById(userId, bookId, tx);
+    if (book === null) {
+      return false;
+    }
+
+    const currentStatus = ReadingStatusSchema.parse(book.readingStatus);
+    const patch = computeReadingStatusChange({
+      date: today,
+      existingStartedAt: book.readingProgress?.startedAt ?? null,
+      hasExistingProgress: book.readingProgress !== null,
+      pagesCount: book.pagesCount,
+      targetStatus: readingStatus,
+    });
+
+    await this.booksRepository.applyReadingChange(userId, bookId, patch, tx);
+    if (!readingStatusUsesProgress(readingStatus)) {
+      await this.bulkBooksRepository.clearReadingProgress({ bookIds: [bookId], userId }, tx);
+    }
+
+    await this.readingLifecycleCoordinator.apply(
+      {
+        bookId,
+        currentStatus,
+        date: today,
+        event: null,
+        existingStartedAt: book.readingProgress?.startedAt ?? null,
+        rating: book.readingProgress?.rating ?? null,
+        targetStatus: readingStatus,
+        userId,
+      },
+      tx,
+    );
+
+    return true;
   }
 }

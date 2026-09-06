@@ -1,30 +1,46 @@
 "use client";
 
-import type { BookOrderStatisticsView, Nullable } from "@app/shared";
+import type { BookOrderStatisticsView, Currency, Nullable } from "@app/shared";
+import type { ReactNode } from "react";
 
+import { resolveStatisticsDisplayCurrency } from "@app/shared";
 import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
+import { useState } from "react";
 
 import { TitleLeaf } from "@/components/title-leaf";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+import type { StatisticsDrilldownContext } from "../model/statistics-drilldown";
+import type { DynamicsMetric } from "../model/statistics-dynamics";
+import type { StatisticsScopeState } from "../model/statistics-scope-state";
+import type { UseStatisticsParamsResult } from "../model/use-statistics-params";
 
 import { useActiveMoneyAge } from "../api/use-active-money-age";
 import { useBookBudgets } from "../api/use-book-budgets";
 import { useStatistics } from "../api/use-statistics";
-import { resolveMoneyCurrency, statisticsCurrencies } from "../model/statistics-currency";
+import { statisticsCurrencies } from "../model/statistics-currency";
+import { statisticsEmptyKind } from "../model/statistics-empty";
 import { formatPeriodRange } from "../model/statistics-format";
+import { toStatisticsScopeState } from "../model/statistics-scope-state";
 import { hasAnyOrders } from "../model/statistics-view-model";
 import { useStatisticsParams } from "../model/use-statistics-params";
 import { StatisticsActiveAge } from "./statistics/statistics-active-age";
 import { StatisticsBudget } from "./statistics/statistics-budget";
 import { StatisticsCosts } from "./statistics/statistics-costs";
+import { StatisticsDisplayCurrency } from "./statistics/statistics-display-currency";
 import { StatisticsKpi } from "./statistics/statistics-kpi";
 import { StatisticsLifecycle } from "./statistics/statistics-lifecycle";
 import { StatisticsPulse } from "./statistics/statistics-pulse";
 import { StatisticsRecords } from "./statistics/statistics-records";
 import {
-  StatisticsEmpty,
+  StatisticsAllTimeEmpty,
   StatisticsError,
+  StatisticsPeriodEmpty,
+  StatisticsRefetchError,
+  StatisticsRefreshingNote,
+  StatisticsSectionState,
   StatisticsSkeleton,
   StatisticsTruncationNotice,
 } from "./statistics/statistics-states";
@@ -34,7 +50,7 @@ import { StatisticsTopOrders } from "./statistics/statistics-top-orders";
 
 const StatisticsDynamics = dynamic(
   () => import("./statistics/statistics-dynamics").then((m) => m.StatisticsDynamics),
-  { loading: () => <Skeleton className="h-[26rem] w-full rounded-xl" />, ssr: false },
+  { loading: () => <Skeleton className="h-[34rem] w-full rounded-xl" />, ssr: false },
 );
 
 const StatisticsStoreMap = dynamic(
@@ -48,60 +64,57 @@ const StatisticsCalendar = dynamic(
 );
 
 type StatisticsBodyProps = {
-  activeAge: ReturnType<typeof useActiveMoneyAge>;
-  budgetCurrency: Nullable<
-    NonNullable<ReturnType<typeof useBookBudgets>["data"]>["budgets"][number]
-  >;
-  budgets: ReturnType<typeof useBookBudgets>;
+  activeAgeCard: ReactNode;
+  budgetCard: ReactNode;
   comparisonLabel: Nullable<string>;
-  comparisonView: Nullable<BookOrderStatisticsView>;
-  currencies: ReturnType<typeof statisticsCurrencies>;
-  currency: ReturnType<typeof resolveMoneyCurrency>;
   currentLabel: Nullable<string>;
-  drilldown: {
-    currency: Nullable<ReturnType<typeof resolveMoneyCurrency>>;
-    store: Nullable<string>;
-  };
-  isCurrentMonthPeriod: boolean;
-  onCurrencyChange: (currency: ReturnType<typeof resolveMoneyCurrency>) => void;
-  params: ReturnType<typeof useStatisticsParams>;
-  statistics: ReturnType<typeof useStatistics>;
-  view: BookOrderStatisticsView | undefined;
+  displayCurrency: Nullable<Currency>;
+  drilldown: StatisticsDrilldownContext;
+  metric: DynamicsMetric;
+  onMetricChange: (metric: DynamicsMetric) => void;
+  params: UseStatisticsParamsResult;
+  period: StatisticsScopeState<BookOrderStatisticsView>;
 };
 
 export function DeliveryStatistics() {
   const t = useTranslations("delivery.statistics");
   const locale = useLocale();
   const params = useStatisticsParams();
+  const [metric, setMetric] = useState<DynamicsMetric>("spend");
 
   const statistics = useStatistics(params.queryParams);
   const view = statistics.data;
   const comparisonPeriod = view?.meta.comparisonPeriod ?? null;
 
-  const comparison = useStatistics(
-    {
-      ...params.queryParams,
-      compare: undefined,
-      from: comparisonPeriod?.from,
-      to: comparisonPeriod?.to,
-    },
-    { enabled: comparisonPeriod !== null },
-  );
-
-  const activeAge = useActiveMoneyAge({
+  const activeAgeQuery = useActiveMoneyAge({
     ...(params.state.currency === null ? {} : { currency: params.state.currency }),
+    ...(params.state.orderState === null ? {} : { orderState: params.state.orderState }),
     ...(params.state.store.trim() === "" ? {} : { store: params.state.store.trim() }),
   });
   const budgets = useBookBudgets();
 
+  const period = toStatisticsScopeState(statistics);
+  const activeAge = toStatisticsScopeState(activeAgeQuery);
+  const budgetScope = toStatisticsScopeState(budgets);
+
   const currencies = view === undefined ? [] : statisticsCurrencies(view);
-  const currency = resolveMoneyCurrency({
+  const storeNames = (view?.byStore ?? []).map((entry) => entry.store);
+  const displayCurrency = resolveStatisticsDisplayCurrency({
     available: currencies,
-    preferred: params.state.money ?? params.state.currency,
+    currencyFilter: params.state.currency,
+    requested: params.requestedDisplayCurrency,
   });
-  const drilldown = {
-    currency: params.state.currency,
+
+  const filters = {
+    currencyFilter: params.state.currency,
+    displayCurrency,
+    orderState: params.state.orderState,
     store: params.state.store.trim() === "" ? null : params.state.store.trim(),
+  };
+  const drilldown: StatisticsDrilldownContext = { ...filters, isStale: period.isRefreshing };
+  const currentDrilldown: StatisticsDrilldownContext = {
+    ...filters,
+    isStale: activeAge.isRefreshing,
   };
 
   const currentLabel = formatPeriodRange({
@@ -113,9 +126,7 @@ export function DeliveryStatistics() {
     comparisonPeriod === null
       ? null
       : formatPeriodRange({ from: comparisonPeriod.from, locale, to: comparisonPeriod.to });
-
-  const budgetCurrency = budgets.data?.budgets.find((entry) => entry.currency === currency) ?? null;
-  const isCurrentMonthPeriod = params.state.period === "this_month";
+  const currentSource = view?.meta.currentSource ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -129,159 +140,207 @@ export function DeliveryStatistics() {
         <p className="max-w-2xl text-sm text-muted-foreground">{t("subtitle")}</p>
       </header>
 
-      <StatisticsToolbar meta={view?.meta ?? null} params={params} />
+      <StatisticsToolbar meta={view?.meta ?? null} params={params} stores={storeNames} />
 
-      {view !== undefined && view.meta.isTruncated && view.meta.maxOrders !== null ? (
+      <StatisticsDisplayCurrency
+        available={currencies}
+        currencyFilter={params.state.currency}
+        onChange={params.setDisplayCurrency}
+        value={displayCurrency}
+      />
+
+      {period.isRefreshing ? <StatisticsRefreshingNote /> : null}
+
+      {period.isRefetchError ? <StatisticsRefetchError onRetry={period.retry} /> : null}
+
+      {currentSource !== null && currentSource.isTruncated && currentSource.maxOrders !== null ? (
         <StatisticsTruncationNotice
-          loadedOrdersCount={view.meta.loadedOrdersCount}
-          maxOrders={view.meta.maxOrders}
+          loadedOrdersCount={currentSource.loadedOrdersCount}
+          maxOrders={currentSource.maxOrders}
         />
       ) : null}
 
       <StatisticsBody
-        activeAge={activeAge}
-        budgetCurrency={budgetCurrency}
-        budgets={budgets}
+        activeAgeCard={<StatisticsActiveAge drilldown={currentDrilldown} scope={activeAge} />}
+        budgetCard={
+          <StatisticsBudget
+            currency={params.budgetCurrency}
+            onCurrencyChange={params.setBudgetCurrency}
+            scope={budgetScope}
+          />
+        }
         comparisonLabel={comparisonLabel}
-        comparisonView={comparisonPeriod === null ? null : (comparison.data ?? null)}
-        currencies={currencies}
-        currency={currency}
         currentLabel={currentLabel}
+        displayCurrency={displayCurrency}
         drilldown={drilldown}
-        isCurrentMonthPeriod={isCurrentMonthPeriod}
-        onCurrencyChange={params.setMoneyCurrency}
+        metric={metric}
+        onMetricChange={setMetric}
         params={params}
-        statistics={statistics}
-        view={view}
+        period={period}
       />
     </div>
   );
 }
 
 function StatisticsBody({
-  activeAge,
-  budgetCurrency,
-  budgets,
+  activeAgeCard,
+  budgetCard,
   comparisonLabel,
-  comparisonView,
-  currencies,
-  currency,
   currentLabel,
+  displayCurrency,
   drilldown,
-  isCurrentMonthPeriod,
-  onCurrencyChange,
+  metric,
+  onMetricChange: setMetric,
   params,
-  statistics,
-  view,
+  period,
 }: StatisticsBodyProps) {
-  if (statistics.isError) {
-    return <StatisticsError onRetry={() => void statistics.refetch()} />;
+  const t = useTranslations("delivery.statistics");
+  const [highlightedBucketKey, setHighlightedBucketKey] = useState<Nullable<string>>(null);
+  const [highlightedStoreKey, setHighlightedStoreKey] = useState<Nullable<string>>(null);
+  const view = period.data;
+
+  if (period.isInitialError) {
+    return (
+      <div className="flex flex-col gap-6">
+        <StatisticsError onRetry={period.retry} />
+        {budgetCard}
+        {activeAgeCard}
+      </div>
+    );
   }
 
   if (view === undefined) {
-    return <StatisticsSkeleton />;
+    return <StatisticsSkeleton activeAge={activeAgeCard} budget={budgetCard} />;
   }
 
+  const emptyKind = statisticsEmptyKind({
+    hasActiveFilters: params.hasActiveFilters,
+    preset: params.state.period,
+  });
+
   if (!hasAnyOrders(view)) {
+    if (emptyKind === "all_time") {
+      return (
+        <div className="flex flex-col gap-6">
+          <StatisticsAllTimeEmpty />
+          {budgetCard}
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col gap-6">
-        <StatisticsEmpty
-          hasActiveFilters={params.hasActiveFilters}
+        {displayCurrency === null ? null : (
+          <StatisticsKpi currency={displayCurrency} snapshot={view.snapshot} view={view} />
+        )}
+        {budgetCard}
+        <StatisticsPeriodEmpty
+          kind={emptyKind}
+          onChangePeriod={() => params.setPeriod("all_time")}
           onResetFilters={params.clearFilters}
         />
-        <StatisticsActiveAge
-          data={activeAge.data}
-          drilldown={drilldown}
-          isLoading={activeAge.isPending}
+        {activeAgeCard}
+      </div>
+    );
+  }
+
+  if (displayCurrency === null) {
+    return (
+      <div className="flex flex-col gap-6">
+        <StatisticsSectionState
+          description={t("displayCurrency.noneDescription")}
+          kind="insufficient"
+          title={t("displayCurrency.none")}
         />
+        {budgetCard}
+        {activeAgeCard}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <StatisticsKpi currency={currency} snapshot={view.snapshot} view={view} />
+    <div
+      aria-busy={period.isRefreshing}
+      className={cn("flex flex-col gap-6 transition-opacity", period.isRefreshing && "opacity-70")}
+    >
+      <StatisticsKpi currency={displayCurrency} snapshot={view.snapshot} view={view} />
 
-      <StatisticsBudget
-        currency={currency}
-        isLoading={budgets.isPending}
-        onCurrencyChange={onCurrencyChange}
-        overview={budgets.data}
-      />
+      {budgetCard}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <StatisticsDynamics
+      <StatisticsDynamics
+        comparisonLabel={comparisonLabel}
+        currency={displayCurrency}
+        currentLabel={currentLabel}
+        drilldown={drilldown}
+        dynamics={view.dynamics}
+        highlightedBucketKey={highlightedBucketKey}
+        insights={
+          <StatisticsPulse
             comparisonLabel={comparisonLabel}
-            comparisonMonths={comparisonView?.monthly ?? null}
-            currencies={currencies}
-            currency={currency}
-            currentLabel={currentLabel}
-            drilldown={drilldown}
-            months={view.monthly}
-            onCurrencyChange={onCurrencyChange}
-            range={view.meta.currentPeriod}
+            currency={displayCurrency}
+            highlightedBucketKey={highlightedBucketKey}
+            insights={view.insights}
+            metric={metric}
+            onHighlightBucket={setHighlightedBucketKey}
           />
-        </div>
-        <StatisticsPulse comparisonLabel={comparisonLabel} pulse={view.pulse} />
-      </div>
-
-      <StatisticsCosts
-        currencies={currencies}
-        currency={currency}
-        deliveryShareOfBudgetPercent={
-          isCurrentMonthPeriod
-            ? (budgetCurrency?.currentMonth?.deliveryShareOfBudgetPercent ?? null)
-            : null
         }
-        onCurrencyChange={onCurrencyChange}
-        view={view}
+        metric={metric}
+        onHighlightBucket={setHighlightedBucketKey}
+        onMetricChange={setMetric}
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <StatisticsLifecycle lifecycle={view.lifecycle} />
-        <StatisticsActiveAge
-          data={activeAge.data}
-          drilldown={drilldown}
-          isLoading={activeAge.isPending}
-        />
-      </div>
+      <StatisticsCosts currency={displayCurrency} view={view} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <StatisticsStores
-          comparisonStores={comparisonView?.byStore ?? null}
-          currencies={currencies}
-          currency={currency}
+          currency={displayCurrency}
           drilldown={drilldown}
-          onCurrencyChange={onCurrencyChange}
+          highlightedStoreKey={highlightedStoreKey}
+          onHighlight={setHighlightedStoreKey}
           stores={view.byStore}
         />
         <StatisticsStoreMap
-          currencies={currencies}
-          currency={currency}
+          currency={displayCurrency}
           drilldown={drilldown}
-          onCurrencyChange={onCurrencyChange}
+          highlightedStoreKey={highlightedStoreKey}
+          onHighlight={setHighlightedStoreKey}
           stores={view.byStore}
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <StatisticsCalendar daily={view.daily} drilldown={drilldown} today={params.today} />
-        <StatisticsRecords
-          currencies={currencies}
-          currency={currency}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <StatisticsLifecycle
+          currentLabel={currentLabel}
           drilldown={drilldown}
-          onCurrencyChange={onCurrencyChange}
-          records={view.records}
+          includeCancelled={params.state.includeCancelled}
+          lifecycle={view.lifecycle}
+          period={view.meta.currentPeriod}
         />
+        {activeAgeCard}
       </div>
 
-      <StatisticsTopOrders
-        currencies={currencies}
-        currency={currency}
-        onCurrencyChange={onCurrencyChange}
-        topOrdersByCurrency={view.topOrdersByCurrency}
+      <StatisticsCalendar
+        daily={view.daily}
+        drilldown={drilldown}
+        isTruncated={view.meta.currentSource.isTruncated}
+        period={view.meta.currentPeriod}
+        today={params.today}
       />
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <StatisticsRecords
+          currency={displayCurrency}
+          drilldown={drilldown}
+          records={view.records}
+        />
+        <div className="lg:col-span-2">
+          <StatisticsTopOrders
+            currency={displayCurrency}
+            drilldown={drilldown}
+            topOrdersByCurrency={view.topOrdersByCurrency}
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -15,7 +15,6 @@ const goalWithListArgs = {
 
 export type ReadingGoalListCandidate = {
   bookId: string;
-  finishedAt: Nullable<Date>;
   position: number;
 };
 
@@ -117,18 +116,10 @@ export class ReadingGoalsRepository {
   ): Promise<ReadingGoalListCandidate[]> {
     const rows = await client.bookListItem.findMany({
       orderBy: [{ position: "asc" }, { bookId: "asc" }],
-      select: {
-        book: { select: { readingProgress: { select: { finishedAt: true } } } },
-        bookId: true,
-        position: true,
-      },
+      select: { bookId: true, position: true },
       where: { book: { ...SOFT_DELETE_SCOPE.active, userId }, listId },
     });
-    return rows.map((row) => ({
-      bookId: row.bookId,
-      finishedAt: row.book.readingProgress?.finishedAt ?? null,
-      position: row.position,
-    }));
+    return rows.map((row) => ({ bookId: row.bookId, position: row.position }));
   }
 
   findCatalogPage({ limit, listId, sort, userId }: CatalogQuery): Promise<ReadingGoalWithList[]> {
@@ -154,6 +145,14 @@ export class ReadingGoalsRepository {
         deadline: { lt: deadlineBefore },
         ...(afterId === null ? {} : { id: { gt: afterId } }),
       },
+      ...goalWithListArgs,
+    });
+  }
+
+  findOpenGoals({ userId }: { userId: string }): Promise<ReadingGoalWithList[]> {
+    return this.prisma.readingGoal.findMany({
+      orderBy: [{ deadline: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      where: { archivedAt: null, userId },
       ...goalWithListArgs,
     });
   }

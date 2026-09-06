@@ -1,4 +1,4 @@
-import type { Nullable, OwnershipStatus, QueuePriority, ReadingStatus } from "@app/shared";
+import type { Nullable, OwnershipStatus, QueuePriority } from "@app/shared";
 
 import { Injectable } from "@nestjs/common";
 
@@ -12,7 +12,7 @@ import { SOFT_DELETE_SCOPE } from "../../../core/database/soft-delete.js";
 import { BookOrderItemsRepository } from "../../delivery/index.js";
 import { WISHLIST_OWNERSHIP_STATUS } from "../domain/wishlist-added-at.js";
 import { ListMembershipRepository } from "./list-membership.repository.js";
-import { enforceQueueInvariant, resequenceQueue } from "./queue-invariant.js";
+import { resequenceQueue } from "./queue-invariant.js";
 
 export type PagesCountSnapshot = {
   currentPage: Nullable<number>;
@@ -144,6 +144,17 @@ export class BulkBooksRepository {
       }
 
       return ordered.length;
+    });
+  }
+
+  clearReadingProgress(
+    { bookIds, userId }: { bookIds: string[]; userId: string },
+    client?: Prisma.TransactionClient,
+  ): Promise<void> {
+    return runInClient({ client, prisma: this.prisma }, async (tx) => {
+      await tx.bookReadingProgress.deleteMany({
+        where: { book: { ...SOFT_DELETE_SCOPE.active, id: { in: bookIds }, userId } },
+      });
     });
   }
 
@@ -304,37 +315,6 @@ export class BulkBooksRepository {
       where: { ...SOFT_DELETE_SCOPE.active, id: bookId, updatedAt: expectedUpdatedAt, userId },
     });
     return updated.count;
-  }
-
-  setReadingStatus(
-    {
-      bookIds,
-      clearProgress,
-      readingStatus,
-      userId,
-    }: {
-      bookIds: string[];
-      clearProgress: boolean;
-      readingStatus: ReadingStatus;
-      userId: string;
-    },
-    client?: Prisma.TransactionClient,
-  ): Promise<number> {
-    return runInClient({ client, prisma: this.prisma }, async (tx) => {
-      const updated = await tx.book.updateMany({
-        data: { readingStatus },
-        where: { ...SOFT_DELETE_SCOPE.active, id: { in: bookIds }, userId },
-      });
-      if (clearProgress && updated.count > 0) {
-        await tx.bookReadingProgress.deleteMany({
-          where: { book: { ...SOFT_DELETE_SCOPE.active, id: { in: bookIds }, userId } },
-        });
-      }
-
-      await enforceQueueInvariant(tx, { readingStatus, userId });
-
-      return updated.count;
-    });
   }
 
   softDelete(

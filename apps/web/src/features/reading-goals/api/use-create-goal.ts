@@ -3,6 +3,7 @@ import type { CreateReadingGoalInput, ReadingGoalView } from "@app/shared";
 import { ReadingGoalViewSchema } from "@app/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 import { ApiError } from "@/lib/http-client";
 import { readingGoalsControllerCreate } from "@/shared/api/generated/endpoints/reading-goals/reading-goals";
 
@@ -29,6 +30,7 @@ export function useCreateGoal() {
     },
     onSuccess: (_goal, { listId }) => {
       void queryClient.invalidateQueries({ queryKey: goalKeys.forList(listId) });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }

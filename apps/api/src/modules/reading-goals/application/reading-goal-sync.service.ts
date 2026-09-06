@@ -14,10 +14,7 @@ import type { ReadingGoalSnapshotEntryWithProgressRow } from "../infrastructure/
 
 import { startOfUtcDay, toIsoDate, toNullableIsoDate } from "../../../core/iso-date.js";
 import { calculateReadingGoalMetrics } from "../domain/reading-goal-metrics.js";
-import {
-  qualifiesForReadingGoal,
-  selectQualifyingReadingGoalBooks,
-} from "../domain/reading-goal-progress.js";
+import { selectQualifyingReadingGoalBooks } from "../domain/reading-goal-progress.js";
 import { resolveReadingGoalCountingEnd } from "../domain/reading-goal-window.js";
 import { ReadingGoalActivityRepository } from "../infrastructure/reading-goal-activity.repository.js";
 import { ReadingGoalBooksRepository } from "../infrastructure/reading-goal-books.repository.js";
@@ -50,9 +47,10 @@ type GoalSyncInput = {
 
 type QualificationTransition = {
   bookId: string;
-  finishedAt: Nullable<Date>;
+  latestFinishedAt: Nullable<Date>;
   previousQualifiedFinishedAt: Nullable<Date>;
   qualifiedFinishedAt: Nullable<Date>;
+  qualifiedReadingCycleId: Nullable<string>;
 };
 
 type QualificationWindow = {
@@ -139,17 +137,15 @@ export class ReadingGoalSyncService {
   }
 
   private async syncGoal({ client, entries, goal, now, userId }: GoalSyncInput): Promise<void> {
-    const window = qualificationWindow(goal);
     const transitions: QualificationTransition[] = [];
 
     for (const entry of entries) {
-      const qualifiedFinishedAt = qualifiesForReadingGoal({
-        ...window,
-        finishedAt: entry.finishedAt,
-      })
-        ? entry.finishedAt
-        : null;
-      if (toNullableIsoDate(entry.qualifiedFinishedAt) === toNullableIsoDate(qualifiedFinishedAt)) {
+      const qualifiedFinishedAt = entry.finishedAt;
+      const qualifiedReadingCycleId = entry.readingCycleId;
+      if (
+        toNullableIsoDate(entry.qualifiedFinishedAt) === toNullableIsoDate(qualifiedFinishedAt) &&
+        entry.qualifiedReadingCycleId === qualifiedReadingCycleId
+      ) {
         continue;
       }
       const written = await this.readingGoalBooksRepository.updateQualifiedFinishedAt(
@@ -158,15 +154,17 @@ export class ReadingGoalSyncService {
           goalId: goal.id,
           previousQualifiedFinishedAt: entry.qualifiedFinishedAt,
           qualifiedFinishedAt,
+          qualifiedReadingCycleId,
         },
         client,
       );
       if (written === 1) {
         transitions.push({
           bookId: entry.bookId,
-          finishedAt: entry.finishedAt,
+          latestFinishedAt: entry.latestFinishedAt,
           previousQualifiedFinishedAt: entry.qualifiedFinishedAt,
           qualifiedFinishedAt,
+          qualifiedReadingCycleId,
         });
       }
     }
@@ -287,8 +285,8 @@ function qualificationWindow({ archivedAt, createdAt, deadline }: SyncGoal): Qua
   };
 }
 
-function resolveUncountedReason(finishedAt: Nullable<Date>): ReadingGoalUncountedReason {
-  return finishedAt === null ? "finished_date_removed" : "finished_date_changed";
+function resolveUncountedReason(latestFinishedAt: Nullable<Date>): ReadingGoalUncountedReason {
+  return latestFinishedAt === null ? "finished_date_removed" : "finished_date_changed";
 }
 
 function toSyncGoal({
@@ -321,7 +319,7 @@ function uncountedRows({
         goal,
         metadata: {
           previousFinishedAt: toIsoDate(previousQualifiedFinishedAt),
-          reason: resolveUncountedReason(transition.finishedAt),
+          reason: resolveUncountedReason(transition.latestFinishedAt),
         },
         type: "book_uncounted",
         userId,

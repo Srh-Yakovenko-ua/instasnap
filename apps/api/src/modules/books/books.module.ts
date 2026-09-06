@@ -8,12 +8,14 @@ import { GenresModule } from "../genres/index.js";
 import { ListsModule } from "../lists/index.js";
 import { LoansModule } from "../loans/index.js";
 import { MediaModule } from "../media/index.js";
+import { ProfileModule } from "../profile/index.js";
 import { PublishersModule } from "../publishers/index.js";
 import { ReadingGoalsModule } from "../reading-goals/index.js";
 import { SeriesModule } from "../series/index.js";
 import { TagsModule } from "../tags/index.js";
 import { BookDeliveryController } from "./api/book-delivery.controller.js";
 import { BookListsController } from "./api/book-lists.controller.js";
+import { BookLoanBatchController } from "./api/book-loan-batch.controller.js";
 import { BookLoanController } from "./api/book-loan.controller.js";
 import { BookOwnershipController } from "./api/book-ownership.controller.js";
 import { BookReadingController } from "./api/book-reading.controller.js";
@@ -29,6 +31,7 @@ import { BookFacetsService } from "./application/book-facets.service.js";
 import { BookLibraryReadService } from "./application/book-library-read.service.js";
 import { BookLifecycleService } from "./application/book-lifecycle.service.js";
 import { BookListsService } from "./application/book-lists.service.js";
+import { BookLoanBatchService } from "./application/book-loan-batch.service.js";
 import { BookLoanService } from "./application/book-loan.service.js";
 import { BookOwnershipService } from "./application/book-ownership.service.js";
 import { BookPurgeProcessor } from "./application/book-purge.processor.js";
@@ -45,6 +48,9 @@ import { ListDetailsService } from "./application/list-details.service.js";
 import { ListFacetsService } from "./application/list-facets.service.js";
 import { ListMembershipService } from "./application/list-membership.service.js";
 import { ListOverviewService } from "./application/list-overview.service.js";
+import { ReadingHistoryCorrectionService } from "./application/reading-history-correction.service.js";
+import { ReadingHistoryProvenanceService } from "./application/reading-history-provenance.service.js";
+import { ReadingLifecycleCoordinator } from "./application/reading-lifecycle.coordinator.js";
 import { WishlistService } from "./application/wishlist.service.js";
 import { BOOK_PURGE_QUEUE_NAME } from "./domain/book-purge.js";
 import { BookFacetsRepository } from "./infrastructure/book-facets.repository.js";
@@ -57,12 +63,15 @@ import { ListBooksRepository } from "./infrastructure/list-books.repository.js";
 import { ListFacetsRepository } from "./infrastructure/list-facets.repository.js";
 import { ListMembershipRepository } from "./infrastructure/list-membership.repository.js";
 import { ListOverviewRepository } from "./infrastructure/list-overview.repository.js";
+import { ReadingCycleRepository } from "./infrastructure/reading-cycle.repository.js";
+import { ReadingHistoryStateRepository } from "./infrastructure/reading-history-state.repository.js";
 
 @Module({
   controllers: [
     BooksController,
     BookReadingController,
     BookOwnershipController,
+    BookLoanBatchController,
     BookLoanController,
     BookDeliveryController,
     BookStoreLinkController,
@@ -71,10 +80,16 @@ import { ListOverviewRepository } from "./infrastructure/list-overview.repositor
     ListMembershipController,
     BookListsController,
   ],
-  exports: [BookAccessService, BookReadingService, BookViewAssembler],
+  exports: [
+    BookAccessService,
+    BookReadingService,
+    BookViewAssembler,
+    ReadingHistoryProvenanceService,
+  ],
   imports: [
     AuthModule,
     AuthorsModule,
+    ProfileModule,
     PublishersModule,
     TagsModule,
     SeriesModule,
@@ -98,7 +113,13 @@ import { ListOverviewRepository } from "./infrastructure/list-overview.repositor
     BookViewAssembler,
     BookCoverCleanup,
     BookReadingService,
+    ReadingLifecycleCoordinator,
+    ReadingHistoryProvenanceService,
+    ReadingHistoryCorrectionService,
+    ReadingCycleRepository,
+    ReadingHistoryStateRepository,
     BookOwnershipService,
+    BookLoanBatchService,
     BookLoanService,
     BookDeliveryService,
     BookStoreLinkService,

@@ -8,10 +8,13 @@
 import type { BookOrderStatisticsViewDtoByStoreItemAverageBookPriceByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemAverageBookPriceByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemAverageLandedBookCostByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemAverageLandedBookCostByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemAverageOrderAmountByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemAverageOrderAmountByCurrencyItem";
+import type { BookOrderStatisticsViewDtoByStoreItemBooksCountByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemBooksCountByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemDeliveryTotalByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemDeliveryTotalByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemDiscountTotalByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemDiscountTotalByCurrencyItem";
+import type { BookOrderStatisticsViewDtoByStoreItemDrilldown } from "./bookOrderStatisticsViewDtoByStoreItemDrilldown";
 import type { BookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemLandedEligibleBooksCountByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemLandedEligibleBooksCountByCurrencyItem";
+import type { BookOrderStatisticsViewDtoByStoreItemOrdersCountByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemOrdersCountByCurrencyItem";
 import type { BookOrderStatisticsViewDtoByStoreItemTotalsByCurrencyItem } from "./bookOrderStatisticsViewDtoByStoreItemTotalsByCurrencyItem";
 
 export type BookOrderStatisticsViewDtoByStoreItem = {
@@ -25,8 +28,11 @@ export type BookOrderStatisticsViewDtoByStoreItem = {
    * @maximum 9007199254740991
    */
   booksCount: number;
+  booksCountByCurrency: BookOrderStatisticsViewDtoByStoreItemBooksCountByCurrencyItem[];
   deliveryTotalByCurrency: BookOrderStatisticsViewDtoByStoreItemDeliveryTotalByCurrencyItem[];
   discountTotalByCurrency: BookOrderStatisticsViewDtoByStoreItemDiscountTotalByCurrencyItem[];
+  /** Where the very orders behind one aggregate now live, counted on that same subset. Only non-zero destinations are listed, so an empty array means the aggregate has nowhere exact to open. Both units travel because one block can switch between orders and books. */
+  drilldown: BookOrderStatisticsViewDtoByStoreItemDrilldown;
   landedCoverageByCurrency: BookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItem[];
   landedEligibleBooksCountByCurrency: BookOrderStatisticsViewDtoByStoreItemLandedEligibleBooksCountByCurrencyItem[];
   /**
@@ -34,6 +40,9 @@ export type BookOrderStatisticsViewDtoByStoreItem = {
    * @maximum 9007199254740991
    */
   ordersCount: number;
+  ordersCountByCurrency: BookOrderStatisticsViewDtoByStoreItemOrdersCountByCurrencyItem[];
   store: string;
+  /** A stable key for the same store across blocks. There is no store entity, so this is the canonical name normalized, and it is what shared highlighting and drill-downs match on rather than the display name. */
+  storeKey: string;
   totalsByCurrency: BookOrderStatisticsViewDtoByStoreItemTotalsByCurrencyItem[];
 };

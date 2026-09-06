@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 import type { ActiveMoneyAgeViewDtoBucketsItem } from "./activeMoneyAgeViewDtoBucketsItem";
+import type { ActiveMoneyAgeViewDtoSource } from "./activeMoneyAgeViewDtoSource";
 
 /**
  * Age of money committed to still-active orders, measured from orderDate against asOf. It ignores the historical from/to filter. The 31_plus bucket is an age fact and carries no delivery-date judgement.
@@ -14,4 +15,6 @@ export interface ActiveMoneyAgeViewDto {
   /** @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$ */
   asOf: string;
   buckets: ActiveMoneyAgeViewDtoBucketsItem[];
+  /** How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter. */
+  source: ActiveMoneyAgeViewDtoSource;
 }

@@ -1,11 +1,4 @@
-import type {
-  CreateLoanInput,
-  LoanDirection,
-  LoanType,
-  Nullable,
-  OwnershipStatus,
-  UpdateLoanInput,
-} from "@app/shared";
+import type { CreateLoanInput, Nullable, OwnershipStatus, UpdateLoanInput } from "@app/shared";
 
 import { LOAN_REMINDER_LEAD_DAYS } from "@app/shared";
 
@@ -18,7 +11,15 @@ import type {
 
 import { parseIsoDate } from "../../../core/iso-date.js";
 import { buildBookOwnershipFields } from "./book-ownership-fields.js";
+import { LOAN_CREATE_RULES } from "./loan-create-rules.js";
 import { resolveReminderFields } from "./loan-quick-actions.js";
+
+export type LoanCreateFields = {
+  expectedReturnDate?: Nullable<string>;
+  loanDate: string;
+  note?: Nullable<string>;
+  remindToReturn?: boolean;
+};
 
 export type LoanTransitionInput = (
   { fields: CreateLoanInput; kind: "create"; loanContact: ResolvedLoanContact } | { kind: "return" }
@@ -26,6 +27,29 @@ export type LoanTransitionInput = (
   now: Date;
   ownershipStatus: OwnershipStatus;
 };
+
+export function buildLoanCreateFields({
+  fields,
+  loanContact,
+}: {
+  fields: LoanCreateFields;
+  loanContact: ResolvedLoanContact;
+}): CreateLoanInfoData {
+  const expectedReturnDate = toReturnDate(fields.expectedReturnDate);
+
+  return {
+    contact: loanContact.contact,
+    expectedReturnDate,
+    loanContactId: loanContact.loanContactId,
+    loanDate: parseIsoDate(fields.loanDate),
+    note: fields.note ?? null,
+    personName: loanContact.personName,
+    ...resolveReminderFields({
+      expectedReturnDate,
+      remindBeforeDays: fields.remindToReturn === true ? LOAN_REMINDER_LEAD_DAYS.default : null,
+    }),
+  };
+}
 
 export function buildLoanEditData({
   existingLoanDate,
@@ -65,15 +89,10 @@ export function buildLoanEditData({
   };
 }
 
-const DIRECTION_LOAN_TYPE: Record<LoanDirection, LoanType> = {
-  borrowed: "borrowed_from_someone",
-  lent: "lent_to_someone",
-};
-
 export function computeLoanChange(input: LoanTransitionInput): LoanChangePatch {
   switch (input.kind) {
     case "create": {
-      const type = DIRECTION_LOAN_TYPE[input.fields.direction];
+      const type = LOAN_CREATE_RULES[input.fields.direction].loanType;
       return {
         book: buildBookOwnershipFields({
           current: input.ownershipStatus,
@@ -82,7 +101,7 @@ export function computeLoanChange(input: LoanTransitionInput): LoanChangePatch {
         }),
         kind: "create",
         loan: {
-          ...buildLoanInfo({ fields: input.fields, loanContact: input.loanContact }),
+          ...buildLoanCreateFields({ fields: input.fields, loanContact: input.loanContact }),
           type,
         },
       };
@@ -100,29 +119,6 @@ export function computeLoanChange(input: LoanTransitionInput): LoanChangePatch {
       return _exhaustiveCheck;
     }
   }
-}
-
-function buildLoanInfo({
-  fields,
-  loanContact,
-}: {
-  fields: CreateLoanInput;
-  loanContact: ResolvedLoanContact;
-}): CreateLoanInfoData {
-  const expectedReturnDate = toReturnDate(fields.expectedReturnDate);
-
-  return {
-    contact: loanContact.contact,
-    expectedReturnDate,
-    loanContactId: loanContact.loanContactId,
-    loanDate: parseIsoDate(fields.loanDate),
-    note: fields.note ?? null,
-    personName: loanContact.personName,
-    ...resolveReminderFields({
-      expectedReturnDate,
-      remindBeforeDays: fields.remindToReturn === true ? LOAN_REMINDER_LEAD_DAYS.default : null,
-    }),
-  };
 }
 
 function toReturnDate(value: Nullable<string> | undefined): Nullable<Date> {

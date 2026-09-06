@@ -66,6 +66,7 @@ const valueVariants = cva("font-heading leading-[1.12] font-bold text-ink tabula
 type StatCardProps = Omit<React.ComponentProps<typeof Card>, "children" | "size"> &
   Pick<VariantProps<typeof statCardVariants>, "size"> & {
     caption?: React.ReactNode;
+    footer?: React.ReactNode;
     icon: UiIconName;
     iconSlot?: React.ReactNode;
     iconTone?: StatCardIconTone;
@@ -92,6 +93,7 @@ function StatCard({
   iconTone = "primary",
   caption,
   microfact,
+  footer,
   trend,
   unit,
   valueClassName,
@@ -99,6 +101,45 @@ function StatCard({
   ...props
 }: StatCardProps) {
   const interactive = onClick !== undefined;
+
+  const header = (
+    <div
+      className={cn("flex w-full items-center", size === "compact" ? "gap-2.5 sm:gap-3" : "gap-4")}
+    >
+      <span className={statCardIconBadge({ size, tone: iconTone })}>
+        {iconSlot ?? <UiIcon name={icon} />}
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-sm font-medium text-muted-foreground">{label}</span>
+        {unit === undefined ? (
+          <span className={cn(valueVariants({ size }), valueClassName)}>{value}</span>
+        ) : (
+          <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span className={cn(valueVariants({ size }), valueClassName)}>{value}</span>
+            <span className="text-sm font-medium text-muted-foreground">{unit}</span>
+          </span>
+        )}
+        {trend ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-[0.8125rem] font-medium [&_svg]:size-3.5",
+              trend.direction === "up" ? "text-success" : "text-error",
+            )}
+          >
+            <UiIcon name={trend.direction === "up" ? "trend-up" : "trend-down"} />
+            {trend.label}
+          </span>
+        ) : caption === undefined ? null : (
+          <span className="text-[0.8125rem] text-muted-foreground">{caption}</span>
+        )}
+      </div>
+    </div>
+  );
+
+  const microfactBlock =
+    microfact === undefined ? null : (
+      <div className="mt-2.5 text-xs text-muted-foreground">{microfact}</div>
+    );
 
   return (
     <Card
@@ -118,42 +159,19 @@ function StatCard({
       tabIndex={interactive ? 0 : undefined}
       {...props}
     >
-      <div
-        className={cn(
-          "flex w-full items-center",
-          size === "compact" ? "gap-2.5 sm:gap-3" : "gap-4",
-        )}
-      >
-        <span className={statCardIconBadge({ size, tone: iconTone })}>
-          {iconSlot ?? <UiIcon name={icon} />}
-        </span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium text-muted-foreground">{label}</span>
-          {unit === undefined ? (
-            <span className={cn(valueVariants({ size }), valueClassName)}>{value}</span>
-          ) : (
-            <span className="flex items-baseline gap-1.5 whitespace-nowrap">
-              <span className={cn(valueVariants({ size }), valueClassName)}>{value}</span>
-              <span className="text-sm font-medium text-muted-foreground">{unit}</span>
-            </span>
-          )}
-          {trend ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 text-[0.8125rem] font-medium [&_svg]:size-3.5",
-                trend.direction === "up" ? "text-success" : "text-error",
-              )}
-            >
-              <UiIcon name={trend.direction === "up" ? "trend-up" : "trend-down"} />
-              {trend.label}
-            </span>
-          ) : caption === undefined ? null : (
-            <span className="text-[0.8125rem] text-muted-foreground">{caption}</span>
-          )}
-        </div>
-      </div>
-      {microfact === undefined ? null : (
-        <div className="mt-2.5 text-xs text-muted-foreground">{microfact}</div>
+      {footer === undefined ? (
+        <>
+          {header}
+          {microfactBlock}
+        </>
+      ) : (
+        <>
+          <div className="mb-3 flex flex-col">
+            {header}
+            {microfactBlock}
+          </div>
+          <div className="mt-auto border-t border-border pt-2.5">{footer}</div>
+        </>
       )}
     </Card>
   );

@@ -20,10 +20,12 @@ import type {
 import { BadRequestError, NotFoundError } from "../../../core/exceptions/errors.js";
 import { fakeOf } from "../../../test/fake.js";
 import { SingleBookOrderService } from "../../delivery/index.js";
+import { UserSettingsContextService } from "../../profile/index.js";
 import { ReadingGoalSyncService } from "../../reading-goals/index.js";
 import { BookCoverCleanup } from "./book-cover-cleanup.js";
 import { BookViewAssembler } from "./book-view-assembler.js";
 import { BooksService } from "./books.service.js";
+import { ReadingLifecycleCoordinator } from "./reading-lifecycle.coordinator.js";
 
 const TX = fakeOf<Prisma.TransactionClient>();
 
@@ -41,6 +43,7 @@ const LOAN_CONTACT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const OTHER_LOAN_CONTACT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab";
 
 type Repository = {
+  acquireBookLock: ReturnType<typeof vi.fn>;
   countForLibrary: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   favoritesSummary: ReturnType<typeof vi.fn>;
@@ -134,6 +137,7 @@ function buildService(
   singleBookOrder: { applyBlock: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
 } {
   const repository = {
+    acquireBookLock: vi.fn().mockResolvedValue(undefined),
     countForLibrary: vi.fn().mockResolvedValue(overrides.countForLibrary ?? 0),
     create: vi.fn().mockResolvedValue(overrides.create ?? bookRow()),
     favoritesSummary: vi.fn().mockResolvedValue(
@@ -203,6 +207,8 @@ function buildService(
     fakeOf<TransactionRunner>(transactionRunner),
     fakeOf<ReadingGoalSyncService>({ syncBooks: vi.fn().mockResolvedValue(undefined) }),
     fakeOf<LoanContactResolver>(loanContactResolver),
+    fakeOf<ReadingLifecycleCoordinator>({ apply: vi.fn().mockResolvedValue(undefined) }),
+    fakeOf<UserSettingsContextService>({ today: vi.fn().mockResolvedValue("2026-07-07") }),
   );
 
   return { coverCleanup, relationsResolver, repository, service, singleBookOrder };

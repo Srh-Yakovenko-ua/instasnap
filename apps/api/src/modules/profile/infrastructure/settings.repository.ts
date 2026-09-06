@@ -11,8 +11,11 @@ import { PrismaService } from "../../../core/database/prisma.service.js";
 export class SettingsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findByUserId(userId: string): Promise<Nullable<UserProfileSettingsModel>> {
-    return this.prisma.userProfileSettings.findUnique({ where: { userId } });
+  findByUserId(
+    userId: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<Nullable<UserProfileSettingsModel>> {
+    return client.userProfileSettings.findUnique({ where: { userId } });
   }
 
   upsert(

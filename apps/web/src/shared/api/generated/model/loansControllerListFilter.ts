@@ -14,6 +14,4 @@ export const LoansControllerListFilter = {
   return_soon: "return_soon",
   overdue: "overdue",
   no_return_date: "no_return_date",
-  has_reminder: "has_reminder",
-  without_reminder: "without_reminder",
 } as const;

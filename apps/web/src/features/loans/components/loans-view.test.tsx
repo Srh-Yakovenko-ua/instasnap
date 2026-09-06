@@ -51,6 +51,9 @@ const attention = messages.loans.sidebar.attention;
 const longHeld = messages.loans.sidebar.longHeld;
 const people = messages.loans.sidebar.people;
 const quickFilters = messages.loans.quickFilters;
+const advanced = messages.loans.advancedFilters;
+const activeFilters = messages.loans.activeFilters;
+const library = messages.books.library.activeFilters;
 const row = messages.loans.row;
 const sort = messages.loans.sort;
 const upcoming = messages.loans.sidebar.upcoming;
@@ -159,29 +162,16 @@ describe("LoansView", () => {
     expect(within(chip(quickFilters.no_return_date)).getByText("2")).toBeInTheDocument();
   });
 
-  it("offers the reminder chip on the lent page", async () => {
+  it("keeps the quick filters to loan status on both pages", async () => {
     mockLoans([loanItem("lent_to_someone", "Дюна")], {
       lent: { ...EMPTY_DIRECTION_SUMMARY, noReminderWithDateCount: 5, totalCount: 6 },
     });
 
     renderLoans("lent_to_someone");
 
-    await waitFor(() => {
-      expect(within(chip(quickFilters.without_reminder)).getByText("5")).toBeInTheDocument();
-    });
-  });
-
-  it("keeps the reminder chip away from the borrowed page", async () => {
-    mockLoans([loanItem("borrowed_from_someone", "Гобіт")], {
-      borrowed: { ...EMPTY_DIRECTION_SUMMARY, totalCount: 3 },
-    });
-
-    renderLoans("borrowed_from_someone");
-
     await findChip(quickFilters.all);
-    expect(
-      screen.queryByRole("radio", { name: chipName(quickFilters.without_reminder) }),
-    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+    expect(screen.queryByRole("radio", { name: /нагадування/i })).not.toBeInTheDocument();
   });
 
   it("filters the list from a chip and starts it over at the first page", async () => {
@@ -242,6 +232,67 @@ describe("LoansView", () => {
     expect(within(card).getByText("Повернути через 5 днів")).toBeInTheDocument();
     expect(within(card).getByText("Ігор")).toBeInTheDocument();
     expect(within(card).getByText(row.personBorrowed)).toBeInTheDocument();
+  });
+
+  it("spells the return term once, with the exact date underneath", async () => {
+    const due = dueIn(-3);
+    mockLoans([
+      loanItem("lent_to_someone", "Дюна", {
+        expectedReturnDate: due.iso,
+        loanUiStatus: "overdue",
+      }),
+    ]);
+
+    renderLoans("lent_to_someone");
+
+    const card = await findLoanCard("Дюна");
+    expect(within(card).getByText("Прострочено на 3 дні")).toBeInTheDocument();
+    expect(
+      within(card).getByText(row.term.wasDue.replace("{date}", due.display)),
+    ).toBeInTheDocument();
+    expect(within(card).queryByText(messages.loans.status.overdue)).not.toBeInTheDocument();
+    expect(within(card).queryByText(due.display)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { expected: row.term.today, offset: 0, status: "return_soon" as const },
+    { expected: row.term.tomorrow, offset: 1, status: "return_soon" as const },
+    { expected: "Повернути через 2 дні", offset: 2, status: "return_soon" as const },
+    { expected: "Повернути через 9 днів", offset: 9, status: "on_time" as const },
+  ])("reads a $offset-day term as its own sentence", async ({ expected, offset, status }) => {
+    const due = dueIn(offset);
+    mockLoans([
+      loanItem("borrowed_from_someone", "Гобіт", {
+        expectedReturnDate: due.iso,
+        loanUiStatus: status,
+      }),
+    ]);
+
+    renderLoans("borrowed_from_someone");
+
+    const card = await findLoanCard("Гобіт");
+    expect(within(card).getByText(expected)).toBeInTheDocument();
+    expect(
+      within(card).getByText(row.term.dueBy.replace("{date}", due.display)),
+    ).toBeInTheDocument();
+    expect(within(card).queryByText(messages.loans.status[status])).not.toBeInTheDocument();
+  });
+
+  it("leaves a loan without a due date with a single line", async () => {
+    mockLoans([
+      loanItem("lent_to_someone", "Дюна", {
+        expectedReturnDate: null,
+        loanUiStatus: "no_return_date",
+      }),
+    ]);
+
+    renderLoans("lent_to_someone");
+
+    const card = await findLoanCard("Дюна");
+    expect(within(card).getByText(row.term.none)).toBeInTheDocument();
+    expect(within(card).queryByText(messages.loans.status.no_return_date)).not.toBeInTheDocument();
+    expect(within(card).queryByText(/^До /)).not.toBeInTheDocument();
+    expect(within(card).queryByText(/^Термін був /)).not.toBeInTheDocument();
   });
 
   it("counts how long a lent book is overdue and closes the loan from the menu", async () => {
@@ -306,7 +357,7 @@ describe("LoansView", () => {
     });
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith(
-        expect.stringContaining("Строк повернення продовжено до"),
+        expect.stringContaining("Новий термін повернення —"),
       );
     });
   });
@@ -329,7 +380,7 @@ describe("LoansView", () => {
     expect(screen.queryByRole("menuitem", { name: actions.reminderSetup })).not.toBeInTheDocument();
   });
 
-  it("keeps the reminder away from an overdue loan", async () => {
+  it("counts an overdue loan from today instead of offering to extend it", async () => {
     mockLoans([
       loanItem("lent_to_someone", "Дюна", {
         expectedReturnDate: isoDaysFromToday(-4),
@@ -341,7 +392,11 @@ describe("LoansView", () => {
 
     await openLoanMenu("Дюна");
 
-    expect(await screen.findByRole("menuitem", { name: /Продовжити на 7 днів/ })).toBeVisible();
+    expect(
+      await screen.findByRole("menuitem", { name: "Новий термін через 7 днів" }),
+    ).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Новий термін через 14 днів" })).toBeVisible();
+    expect(screen.queryByRole("menuitem", { name: /Продовжити/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: actions.reminderSetup })).not.toBeInTheDocument();
   });
 
@@ -693,7 +748,7 @@ describe("LoansView", () => {
     expect(rows[2]).toHaveTextContent("Для 5 вказано дату повернення");
   });
 
-  it("applies the without reminder filter when its attention row is clicked", async () => {
+  it("turns the attention row into the reminder filter", async () => {
     mockLoans([loanItem("lent_to_someone", "Дюна")], {
       lent: { ...EMPTY_DIRECTION_SUMMARY, noReminderWithDateCount: 2, totalCount: 6 },
     });
@@ -703,8 +758,9 @@ describe("LoansView", () => {
     await userEvent.click(await screen.findByRole("button", { name: /2 книги без нагадування/ }));
 
     await waitFor(() => {
-      expect(requestedUrls.some((url) => url.includes("filter=without_reminder"))).toBe(true);
+      expect(requestedUrls.some((url) => url.includes("reminder=off"))).toBe(true);
     });
+    expect(requestedUrls.some((url) => url.includes("filter=without_reminder"))).toBe(false);
   });
 
   it("keeps loans that are merely due soon out of the lent attention block", async () => {
@@ -979,12 +1035,160 @@ describe("LoansView", () => {
   });
 });
 
+describe("LoansView advanced filters", () => {
+  it("keeps the draft out of the list until it is applied", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone");
+    await openAdvancedFilters();
+
+    await userEvent.click(await screen.findByRole("radio", { name: advanced.noteOptions.with }));
+
+    expect(requestedUrls.every((url) => !url.includes("hasNote"))).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: advanced.apply }));
+
+    await waitFor(() => {
+      expect(listUrls().some((url) => url.includes("hasNote=true"))).toBe(true);
+    });
+    expect(await screen.findByText(activeFilters.noteWith)).toBeInTheDocument();
+  });
+
+  it("asks the API for loans with the reminder turned off", async () => {
+    const { events, onUrlUpdate } = trackUrl();
+    mockLoans([loanItem("lent_to_someone", "Дюна")], undefined);
+
+    renderLoans("lent_to_someone", "", onUrlUpdate);
+    await openAdvancedFilters();
+
+    await userEvent.click(await screen.findByRole("radio", { name: advanced.reminderOptions.off }));
+    await userEvent.click(screen.getByRole("button", { name: advanced.apply }));
+
+    await waitFor(() => {
+      expect(events.at(-1)?.searchParams.get("reminder")).toBe("off");
+    });
+    await waitFor(() => {
+      expect(listUrls().some((url) => url.includes("reminder=off"))).toBe(true);
+    });
+    expect(listUrls().every((url) => url.includes("pageNumber=1"))).toBe(true);
+  });
+
+  it("combines an advanced filter with a quick one", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone", "filter=overdue");
+    await openAdvancedFilters();
+
+    await userEvent.click(await screen.findByRole("radio", { name: advanced.reminderOptions.off }));
+    await userEvent.click(screen.getByRole("button", { name: advanced.apply }));
+
+    await waitFor(() => {
+      expect(
+        listUrls().some((url) => url.includes("reminder=off") && url.includes("filter=overdue")),
+      ).toBe(true);
+    });
+    expect(chip(quickFilters.overdue)).toHaveAttribute("data-state", "on");
+  });
+
+  it("drops one condition from its chip and keeps the rest", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone", "reminder=off&hasNote=true");
+
+    const reminderChip = await screen.findByText(activeFilters.reminder.off);
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: library.remove.replace("{label}", activeFilters.reminder.off),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(reminderChip).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(activeFilters.noteWith)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        listUrls().some((url) => url.includes("hasNote=true") && !url.includes("reminder=off")),
+      ).toBe(true);
+    });
+  });
+
+  it("clears the search from its own chip without touching the filters", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone", "q=дюна&reminder=off");
+
+    const searchLabel = activeFilters.search.replace("{query}", "дюна");
+    await screen.findByText(searchLabel);
+    await userEvent.click(
+      screen.getByRole("button", { name: library.remove.replace("{label}", searchLabel) }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(searchLabel)).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(activeFilters.reminder.off)).toBeInTheDocument();
+  });
+
+  it("clears search and every filter at once", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone", "q=дюна&reminder=off&filter=overdue");
+
+    await userEvent.click(await screen.findByRole("button", { name: library.clearAll }));
+
+    await waitFor(() => {
+      expect(
+        listUrls().some(
+          (url) =>
+            !url.includes("reminder=") &&
+            !url.includes("search=") &&
+            !url.includes("filter=overdue"),
+        ),
+      ).toBe(true);
+    });
+    expect(screen.queryByText(activeFilters.reminder.off)).not.toBeInTheDocument();
+  });
+
+  it("counts the applied conditions on the trigger", async () => {
+    mockLoans([loanItem("lent_to_someone", "Дюна")]);
+
+    renderLoans("lent_to_someone", "reminder=off&hasNote=true&dueFrom=2026-08-01");
+
+    const trigger = await screen.findByRole("button", { name: new RegExp(advanced.trigger) });
+    expect(within(trigger).getByText("3")).toBeInTheDocument();
+  });
+});
+
 function chip(label: string): HTMLElement {
   return screen.getByRole("radio", { name: chipName(label) });
 }
 
 function chipName(label: string): (name: string) => boolean {
   return (name) => name.startsWith(label);
+}
+
+function contactsPage() {
+  return {
+    counts: { active: 1, all: 1, archived: 0 },
+    items: [
+      {
+        activeBorrowedCount: 1,
+        activeLentCount: 1,
+        archivedAt: null,
+        contact: null,
+        createdAt: "2026-01-01T10:00:00.000Z",
+        id: CONTACT_IDS.olya,
+        loanCount: 1,
+        name: "Оля",
+        updatedAt: "2026-01-01T10:00:00.000Z",
+      },
+    ],
+    page: 1,
+    pagesCount: 1,
+    pageSize: 20,
+    totalCount: 1,
+  };
 }
 
 function contactView(): LoanContactView {
@@ -1004,6 +1208,11 @@ function countedStats(items: LoanListItemView[], type: LoanType): LoanDirectionS
     ...EMPTY_DIRECTION_SUMMARY,
     totalCount: items.filter((item) => item.type === type).length,
   };
+}
+
+function dueIn(offset: number): { display: string; iso: string } {
+  const date = addDays(new Date(), offset);
+  return { display: format(date, "dd.MM.yyyy"), iso: format(date, "yyyy-MM-dd") };
 }
 
 function extendedBookView() {
@@ -1059,17 +1268,17 @@ function findStatCard(label: string): Promise<HTMLElement> {
 function historyOverview(): LoanHistoryOverviewView {
   return {
     duration: { averageDays: null, longestDays: null, shortestDays: null },
-    reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: 0 },
+    reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: null },
     summary: {
       averageDelayDays: null,
       averageDurationDays: null,
       borrowedCount: 0,
+      durationCount: 0,
       lateCount: 0,
-      latePercent: 0,
       lentCount: 0,
       noDueDateCount: 0,
       onTimeCount: 0,
-      onTimePercent: 0,
+      onTimePercent: null,
       totalCompleted: 0,
     },
     topPeople: [],
@@ -1158,6 +1367,9 @@ function mockLoans(items: LoanListItemView[], summaryOverrides?: Partial<LoansSu
       const url = String(input);
       requestedUrls.push(url);
       if (url.includes("/api/loans/summary")) return Promise.resolve(jsonResponse(summary));
+      if (url.includes("/api/loans/contacts?")) {
+        return Promise.resolve(jsonResponse(contactsPage()));
+      }
       if (url.includes("/api/loans/contacts/")) {
         return Promise.resolve(jsonResponse(contactView()));
       }
@@ -1171,6 +1383,11 @@ function mockLoans(items: LoanListItemView[], summaryOverrides?: Partial<LoansSu
       return Promise.reject(new Error(`unexpected fetch: ${url}`));
     }),
   );
+}
+
+async function openAdvancedFilters(): Promise<void> {
+  await userEvent.click(await screen.findByRole("button", { name: new RegExp(advanced.trigger) }));
+  await screen.findByRole("dialog", { name: advanced.title });
 }
 
 function openContactLabel(name: string): string {

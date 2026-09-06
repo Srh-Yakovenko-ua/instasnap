@@ -7,13 +7,14 @@ import type { AuthTestContext } from "../../../test/auth-test-context.js";
 
 import { createAuthTestContext } from "../../../test/auth-test-context.js";
 import { truncateAllTables } from "../../../test/truncate.js";
+import { defaultUserToday } from "../../../test/user-today.js";
 import { AuthModule } from "../../auth/auth.module.js";
 import { ListsModule } from "../../lists/lists.module.js";
 import { BooksModule } from "../books.module.js";
 
 const MISSING_UUID = "00000000-0000-4000-8000-000000000000";
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
-const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = defaultUserToday();
 const FUTURE_DATE = new Date(Date.now() + DAY_IN_MS * 365).toISOString().slice(0, 10);
 
 function daysAgoIso(days: number): string {
@@ -880,7 +881,7 @@ describe("POST /api/books/:id/reading-status history logging", () => {
 });
 
 describe("POST /api/books/:id/reading-status reset progress", () => {
-  it("clears all progress events when the progress is reset", async () => {
+  it("keeps the recorded progress events when the progress is reset", async () => {
     const { accessToken } = await context.registerVerifyAndLogin();
     const created = await createBook(accessToken, {
       authors: [{ name: "Frank Herbert" }],
@@ -897,12 +898,12 @@ describe("POST /api/books/:id/reading-status reset progress", () => {
     });
     const res = await getReadingHistory(accessToken, created.body.id);
 
-    expect(res.body.summary.updatesCount).toBe(0);
-    expect(res.body.summary.trackedPagesRead).toBe(0);
-    expect(res.body.history.days).toHaveLength(0);
+    expect(res.body.summary.updatesCount).toBe(2);
+    expect(res.body.summary.trackedPagesRead).toBe(120);
+    expect(res.body.history.days).toHaveLength(1);
   });
 
-  it("does not mix a reset cycle with the events of a new cycle", async () => {
+  it("measures the new cycle from page zero and keeps the events of the reset one", async () => {
     const { accessToken } = await context.registerVerifyAndLogin();
     const created = await createBook(accessToken, {
       authors: [{ name: "Frank Herbert" }],
@@ -920,12 +921,12 @@ describe("POST /api/books/:id/reading-status reset progress", () => {
     await updateReadingProgress(accessToken, created.body.id, { currentPage: 30 });
     const res = await getReadingHistory(accessToken, created.body.id);
 
-    expect(res.body.summary.updatesCount).toBe(1);
-    expect(res.body.summary.trackedPagesRead).toBe(30);
+    expect(res.body.summary.updatesCount).toBe(3);
+    expect(res.body.summary.trackedPagesRead).toBe(150);
     expect(res.body.history.days[0].events[0].pagesRead).toBe(30);
   });
 
-  it("reports a cleared cycle for the summary and the all-range activity after a reset", async () => {
+  it("keeps the day of reading in the all-range activity after a reset", async () => {
     const { accessToken } = await context.registerVerifyAndLogin();
     const created = await createBook(accessToken, {
       authors: [{ name: "Frank Herbert" }],
@@ -941,9 +942,14 @@ describe("POST /api/books/:id/reading-status reset progress", () => {
 
     const res = await getReadingHistory(accessToken, created.body.id, { activityRange: "all" });
 
-    expect(res.body.activity.from).toBeNull();
-    expect(res.body.activity.to).toBeNull();
-    expect(res.body.activity.points).toEqual([]);
+    expect(res.body.activity.points).toEqual([
+      expect.objectContaining({ hasActivity: true, pagesRead: 50, updatesCount: 1 }),
+    ]);
+    expect(res.body.activity.summary).toMatchObject({
+      activeDaysCount: 1,
+      pagesRead: 50,
+      updatesCount: 1,
+    });
     expect(res.body.summary.historyCompleteness).toEqual({ isComplete: true, untrackedPages: 0 });
   });
 });

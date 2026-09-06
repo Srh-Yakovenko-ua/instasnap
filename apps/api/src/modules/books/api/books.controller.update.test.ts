@@ -262,6 +262,7 @@ describe("PATCH /api/books/:id status to block transitions", () => {
     const { accessToken } = await context.registerVerifyAndLogin();
     const created = await createBook(accessToken, {
       authors: [{ name: "Frank Herbert" }],
+      readingProgress: { startedAt: "2026-02-01" },
       readingStatus: "reading",
       title: "Dune",
     });

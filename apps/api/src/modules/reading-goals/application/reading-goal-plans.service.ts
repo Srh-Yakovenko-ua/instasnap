@@ -1,4 +1,9 @@
-import type { Nullable, ReadingGoalRiskLevel } from "@app/shared";
+import type {
+  Nullable,
+  ReadingGoalMetrics,
+  ReadingGoalRiskLevel,
+  ReadingGoalStatus,
+} from "@app/shared";
 
 import { Injectable } from "@nestjs/common";
 
@@ -13,6 +18,17 @@ export type ActiveReadingGoalMembership = {
   riskLevel: ReadingGoalRiskLevel;
 };
 
+export type ActiveReadingGoalSnapshot = {
+  createdAt: Date;
+  deadline: Date;
+  goalId: string;
+  listName: Nullable<string>;
+  metrics: ReadingGoalMetrics;
+  name: Nullable<string>;
+  status: ReadingGoalStatus;
+  targetCount: number;
+};
+
 @Injectable()
 export class ReadingGoalPlansService {
   constructor(
@@ -20,6 +36,32 @@ export class ReadingGoalPlansService {
     private readonly readingGoalsRepository: ReadingGoalsRepository,
     private readonly viewBuilder: ReadingGoalViewBuilder,
   ) {}
+
+  async listActiveGoals(userId: string): Promise<ActiveReadingGoalSnapshot[]> {
+    const goals = await this.readingGoalsRepository.findOpenGoals({ userId });
+    if (goals.length === 0) {
+      return [];
+    }
+
+    const calculated = await this.viewBuilder.calculateAll({ goals, now: new Date() });
+
+    return calculated.flatMap((entry) =>
+      entry.calculation.progress.status === "active"
+        ? [
+            {
+              createdAt: entry.goal.createdAt,
+              deadline: entry.goal.deadline,
+              goalId: entry.goal.id,
+              listName: entry.goal.list?.name ?? null,
+              metrics: entry.calculation.metrics,
+              name: entry.goal.name,
+              status: entry.calculation.progress.status,
+              targetCount: entry.goal.targetCount,
+            },
+          ]
+        : [],
+    );
+  }
 
   async listActiveMemberships({
     bookIds,

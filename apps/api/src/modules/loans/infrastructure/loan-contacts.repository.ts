@@ -1,5 +1,6 @@
 import type { LoanContactCounts, LoanContactStatus, Nullable } from "@app/shared";
 
+import { LoanStatusSchema, LoanTypeSchema } from "@app/shared";
 import { Injectable } from "@nestjs/common";
 
 import type { LoanContactModel } from "../../../generated/prisma/models.js";
@@ -9,12 +10,21 @@ import { PrismaService } from "../../../core/database/prisma.service.js";
 import { SOFT_DELETE_SCOPE } from "../../../core/database/soft-delete.js";
 import { Prisma } from "../../../generated/prisma/client.js";
 
+const LOAN_STATUS_ACTIVE = LoanStatusSchema.enum.active;
+
+const EMPTY_ACTIVE_LOAN_COUNTS = { borrowed: 0, lent: 0 } as const;
+
 const ownedLoanContactCardArgs = (userId: string) =>
   ({
     include: {
       _count: { select: { loans: { where: { book: SOFT_DELETE_SCOPE.active, userId } } } },
     },
   }) satisfies Prisma.LoanContactDefaultArgs;
+
+export type ActiveLoanCounts = {
+  borrowed: number;
+  lent: number;
+};
 
 export type CountLoanContactsInput = {
   search: string | undefined;
@@ -59,6 +69,42 @@ export type UpdateLoanContactData = {
 @Injectable()
 export class LoanContactsRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async countActiveLoansByContact({
+    contactIds,
+    userId,
+  }: {
+    contactIds: string[];
+    userId: string;
+  }): Promise<Map<string, ActiveLoanCounts>> {
+    if (contactIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.prisma.bookLoan.groupBy({
+      _count: { _all: true },
+      by: ["loanContactId", "type"],
+      where: {
+        book: SOFT_DELETE_SCOPE.active,
+        loanContactId: { in: contactIds },
+        status: LOAN_STATUS_ACTIVE,
+        userId,
+      },
+    });
+
+    const counts = new Map<string, ActiveLoanCounts>();
+    for (const row of rows) {
+      const current = counts.get(row.loanContactId) ?? EMPTY_ACTIVE_LOAN_COUNTS;
+      counts.set(
+        row.loanContactId,
+        row.type === LoanTypeSchema.enum.lent_to_someone
+          ? { ...current, lent: row._count._all }
+          : { ...current, borrowed: row._count._all },
+      );
+    }
+
+    return counts;
+  }
 
   async countOwned({ search, userId }: CountLoanContactsInput): Promise<LoanContactCounts> {
     const [all, archived] = await Promise.all([

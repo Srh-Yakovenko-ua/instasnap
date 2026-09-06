@@ -44,6 +44,7 @@ const RAW_SQL_INDEXES = [
   { name: "book_timelines_book_id_name_lower_idx", requires: "deleted_at IS NULL" },
   { name: "reading_goals_active_list_idx", requires: "archived_at IS NULL" },
   { name: "book_budgets_active_currency_idx", requires: "valid_to_month IS NULL" },
+  { name: "book_reading_cycles_active_book_idx", requires: "state = 'active'" },
 ] as const;
 
 let app: INestApplication;

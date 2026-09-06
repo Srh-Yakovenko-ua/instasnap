@@ -108,6 +108,14 @@ export function isActiveShipmentStatus(status: ShipmentStatus): status is Active
   return SHIPMENT_ACTIVE_STATUS_SET.has(status);
 }
 
+export const BookOrderDerivedStatusSchema = z
+  .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+  .describe(
+    "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+  );
+
+export type BookOrderDerivedStatus = z.infer<typeof BookOrderDerivedStatusSchema>;
+
 export const DeliveryUiStatusSchema = z.enum(["delayed", "arriving_soon", "no_delivery_date"]);
 
 export type DeliveryUiStatus = z.infer<typeof DeliveryUiStatusSchema>;

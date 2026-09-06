@@ -5,10 +5,21 @@ import {
   ReadingHistoryQuerySchema,
   UpdateReadingProgressInputSchema,
 } from "@app/shared";
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import {
   ApiBadRequestResponse,
   ApiBody,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -26,6 +37,7 @@ import { ZodQueryPipe } from "../../../core/pipes/zod-query.pipe.js";
 import { MUTATION_THROTTLE, READ_THROTTLE } from "../../../core/throttle.js";
 import { CurrentUser, JwtProtected } from "../../auth/index.js";
 import { BookReadingService } from "../application/book-reading.service.js";
+import { ReadingHistoryCorrectionService } from "../application/reading-history-correction.service.js";
 import { ChangeReadingStatusInputDto } from "./input-dto/change-reading-status.input-dto.js";
 import { ReadingHistoryQueryDto } from "./input-dto/reading-history-query.input-dto.js";
 import { UpdateReadingProgressInputDto } from "./input-dto/update-reading-progress.input-dto.js";
@@ -35,7 +47,31 @@ import { ReadingHistoryViewDto } from "./view-dto/reading-history.view-dto.js";
 @ApiTags("books")
 @Controller("api/books")
 export class BookReadingController {
-  constructor(private readonly bookReadingService: BookReadingService) {}
+  constructor(
+    private readonly bookReadingService: BookReadingService,
+    private readonly readingHistoryCorrectionService: ReadingHistoryCorrectionService,
+  ) {}
+
+  @ApiNoContentResponse({ description: "The reading event was removed from history" })
+  @ApiNotFoundResponse({ description: "Book or reading event not found" })
+  @ApiOperation({
+    summary: "Delete one mistaken reading activity event from the reading history",
+  })
+  @Delete(":id/reading-events/:eventId")
+  @HttpCode(HTTP_STATUS.NO_CONTENT)
+  @JwtProtected()
+  @Throttle(MUTATION_THROTTLE)
+  deleteReadingEvent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("eventId", ParseUUIDPipe) eventId: string,
+  ): Promise<void> {
+    return this.readingHistoryCorrectionService.deleteReadingEvent({
+      bookId: id,
+      eventId,
+      userId: user.id,
+    });
+  }
 
   @ApiBadRequestResponse({ description: "Invalid query params" })
   @ApiNotFoundResponse({ description: "Book not found" })

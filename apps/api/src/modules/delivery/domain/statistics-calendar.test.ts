@@ -1,4 +1,8 @@
-import type { BookOrderStatisticsDaily } from "@app/shared";
+import type {
+  BookOrderStatisticsDaily,
+  StatisticsDrilldownBreakdown,
+  StatisticsDrilldownDestination,
+} from "@app/shared";
 
 import { describe, expect, it } from "vitest";
 
@@ -68,6 +72,18 @@ function makeOrder(overrides: Partial<OrderStatisticsRecord> = {}): OrderStatist
   };
 }
 
+function targets(
+  rows: { books: number; destination: StatisticsDrilldownDestination; orders: number }[],
+): StatisticsDrilldownBreakdown {
+  return {
+    targets: rows.map(({ books, destination, orders }) => ({
+      booksCount: books,
+      destination,
+      ordersCount: orders,
+    })),
+  };
+}
+
 const CANCELLED_MARCH_FIFTH_ORDER = makeOrder({
   id: "order-cancelled",
   isFree: false,
@@ -128,7 +144,13 @@ describe("buildOrderDaily keys days by the UTC calendar", () => {
     });
 
     expect(daily).toEqual([
-      { booksCount: 1, date: "2026-03-04", ordersCount: 1, totalsByCurrency: [] },
+      {
+        booksCount: 1,
+        date: "2026-03-04",
+        drilldown: targets([{ books: 1, destination: "in_transit", orders: 1 }]),
+        ordersCount: 1,
+        totalsByCurrency: [],
+      },
     ]);
   });
 });
@@ -156,6 +178,7 @@ describe("buildOrderDaily merges the orders of a single day", () => {
       {
         booksCount: 3,
         date: "2026-03-04",
+        drilldown: targets([{ books: 3, destination: "in_transit", orders: 2 }]),
         ordersCount: 2,
         totalsByCurrency: [{ currency: "UAH", total: 500 }],
       },
@@ -175,6 +198,7 @@ describe("buildOrderDaily merges the orders of a single day", () => {
       {
         booksCount: 3,
         date: "2026-03-04",
+        drilldown: targets([{ books: 3, destination: "in_transit", orders: 3 }]),
         ordersCount: 3,
         totalsByCurrency: [
           { currency: "UAH", total: 500 },
@@ -191,7 +215,13 @@ describe("buildOrderDaily merges the orders of a single day", () => {
     });
 
     expect(daily).toEqual([
-      { booksCount: 1, date: "2026-03-04", ordersCount: 1, totalsByCurrency: [] },
+      {
+        booksCount: 1,
+        date: "2026-03-04",
+        drilldown: targets([{ books: 1, destination: "in_transit", orders: 1 }]),
+        ordersCount: 1,
+        totalsByCurrency: [],
+      },
     ]);
   });
 });
@@ -237,6 +267,7 @@ describe("buildOrderDaily follows the cancellation scope it was handed", () => {
       {
         booksCount: 1,
         date: "2026-03-04",
+        drilldown: targets([{ books: 1, destination: "in_transit", orders: 1 }]),
         ordersCount: 1,
         totalsByCurrency: [{ currency: "UAH", total: 120 }],
       },
@@ -253,12 +284,14 @@ describe("buildOrderDaily follows the cancellation scope it was handed", () => {
       {
         booksCount: 1,
         date: "2026-03-04",
+        drilldown: targets([{ books: 1, destination: "in_transit", orders: 1 }]),
         ordersCount: 1,
         totalsByCurrency: [{ currency: "UAH", total: 120 }],
       },
       {
         booksCount: 1,
         date: "2026-03-05",
+        drilldown: targets([{ books: 1, destination: "history_cancelled", orders: 1 }]),
         ordersCount: 1,
         totalsByCurrency: [{ currency: "UAH", total: 500 }],
       },
@@ -283,9 +316,64 @@ describe("buildOrderDaily follows the cancellation scope it was handed", () => {
       {
         booksCount: 1,
         date: "2026-03-04",
+        drilldown: targets([{ books: 1, destination: "in_transit", orders: 1 }]),
         ordersCount: 1,
         totalsByCurrency: [{ currency: "UAH", total: 300 }],
       },
+    ]);
+  });
+});
+
+describe("buildOrderDaily splits a day by where its orders now live", () => {
+  const RECEIVED_AT = new Date("2026-03-06T09:00:00.000Z");
+
+  const receivedOrder = makeOrder({
+    id: "order-received",
+    items: [
+      makeItem({ bookId: "book-received", price: 300, receivedAt: RECEIVED_AT, shipmentId: "s-1" }),
+    ],
+    shipments: [{ cancelledAt: null, id: "s-1", receivedAt: RECEIVED_AT, status: "received" }],
+    totalAmount: 300,
+  });
+
+  const cancelledOrder = makeOrder({
+    id: "order-cancelled-same-day",
+    items: [makeItem({ bookId: "book-void", cancelledAt: CANCELLED_AT, price: 200 })],
+    totalAmount: 200,
+  });
+
+  it("names every destination one day reached, and only those", () => {
+    const [day] = dailyOf({
+      includeCancelled: true,
+      records: [LIVE_MARCH_FOURTH_ORDER, receivedOrder, cancelledOrder],
+    });
+
+    expect(day?.drilldown).toEqual(
+      targets([
+        { books: 1, destination: "in_transit", orders: 1 },
+        { books: 1, destination: "history_received", orders: 1 },
+        { books: 1, destination: "history_cancelled", orders: 1 },
+      ]),
+    );
+  });
+
+  it("adds its destinations back up to the very counts the day shows", () => {
+    const [day] = dailyOf({
+      includeCancelled: true,
+      records: [LIVE_MARCH_FOURTH_ORDER, receivedOrder, cancelledOrder],
+    });
+    const reached = day?.drilldown.targets ?? [];
+
+    expect(reached.reduce((sum, target) => sum + target.ordersCount, 0)).toBe(day?.ordersCount);
+    expect(reached.reduce((sum, target) => sum + target.booksCount, 0)).toBe(day?.booksCount);
+  });
+
+  it("keeps a cancelled order out of the destinations the caller excluded", () => {
+    const [day] = dailyOf({ records: [LIVE_MARCH_FOURTH_ORDER, receivedOrder, cancelledOrder] });
+
+    expect(day?.drilldown.targets.map((target) => target.destination)).toEqual([
+      "in_transit",
+      "history_received",
     ]);
   });
 });

@@ -7,13 +7,14 @@ import { statisticsFilterCount, toDeliveryStatisticsParams } from "./statistics-
 const TODAY = "2026-08-21";
 
 const BASE: DeliveryStatisticsQueryState = {
+  budgetCurrency: null,
   compare: null,
   currency: null,
   from: "",
   includeCancelled: false,
   money: null,
+  orderState: null,
   period: "this_year",
-  status: null,
   store: "",
   to: "",
 };
@@ -50,15 +51,21 @@ describe("toDeliveryStatisticsParams", () => {
   });
 
   it("passes the filters through and trims the store name", () => {
-    expect(params({ currency: "EUR", status: "received", store: "  Yakaboo  " })).toMatchObject({
-      currency: "EUR",
-      status: "received",
-      store: "Yakaboo",
-    });
+    expect(params({ currency: "EUR", orderState: "received", store: "  Yakaboo  " })).toMatchObject(
+      {
+        currency: "EUR",
+        orderState: "received",
+        store: "Yakaboo",
+      },
+    );
   });
 
   it("keeps the display currency out of the request", () => {
     expect(params({ money: "USD" })).not.toHaveProperty("currency");
+  });
+
+  it("keeps the budget currency out of the request", () => {
+    expect(params({ budgetCurrency: "USD" })).not.toHaveProperty("currency");
   });
 
   it("drops an empty store instead of filtering on blank text", () => {

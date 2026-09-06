@@ -6,9 +6,14 @@
  * OpenAPI spec version: 1.0
  */
 import type { BookOrdersControllerActiveMoneyAgeCurrency } from "./bookOrdersControllerActiveMoneyAgeCurrency";
+import type { BookOrdersControllerActiveMoneyAgeOrderState } from "./bookOrdersControllerActiveMoneyAgeOrderState";
 
 export type BookOrdersControllerActiveMoneyAgeParams = {
   currency?: BookOrdersControllerActiveMoneyAgeCurrency;
+  /**
+   * The same derived lifecycle state the rest of the page filters by. A state no active order can hold returns empty buckets rather than being ignored.
+   */
+  orderState?: BookOrdersControllerActiveMoneyAgeOrderState;
   /**
    * @maxLength 200
    */

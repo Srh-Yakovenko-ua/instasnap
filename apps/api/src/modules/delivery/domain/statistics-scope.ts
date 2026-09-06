@@ -42,6 +42,8 @@ export type ClassifiedOrder = {
   totalSource: OrderTotalSource;
 };
 
+export type CoverageAccumulator = Map<Currency, { covered: number; total: number }>;
+
 export type OrderStatisticsItemRecord = {
   bookId: string;
   bookTitle: string;
@@ -91,6 +93,22 @@ export function addAmount({
 }): void {
   const current = accumulator.get(currency) ?? { count: 0, sum: 0 };
   accumulator.set(currency, { count: current.count + 1, sum: current.sum + amount });
+}
+
+export function addCoverage({
+  accumulator,
+  currency,
+  isCovered,
+}: {
+  accumulator: CoverageAccumulator;
+  currency: Currency;
+  isCovered: boolean;
+}): void {
+  const current = accumulator.get(currency) ?? { covered: 0, total: 0 };
+  accumulator.set(currency, {
+    covered: current.covered + (isCovered ? 1 : 0),
+    total: current.total + 1,
+  });
 }
 
 export function addItemPrices({
@@ -195,6 +213,17 @@ export function countItems({
   predicate: (item: OrderStatisticsItemRecord) => boolean;
 }): number {
   return orders.reduce((count, order) => count + order.countedItems.filter(predicate).length, 0);
+}
+
+export function coverageRows(accumulator: CoverageAccumulator): {
+  covered: number;
+  currency: Currency;
+  total: number;
+}[] {
+  return CURRENCY_ORDER.flatMap((currency) => {
+    const counts = accumulator.get(currency);
+    return counts === undefined ? [] : [{ covered: counts.covered, currency, total: counts.total }];
+  });
 }
 
 export function isActiveItem(item: OrderStatisticsItemRecord): boolean {

@@ -18,7 +18,12 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { BookBudgetOverviewViewDto, UpsertBookBudgetInputDto } from "../../model";
+import type {
+  BookBudgetOverviewViewDto,
+  SaveBookBudgetsInputDto,
+  StopBookBudgetInputDto,
+  UpsertBookBudgetInputDto,
+} from "../../model";
 
 import { customInstance } from "../../../mutator";
 
@@ -225,6 +230,202 @@ export function useBookBudgetsControllerCancelScheduled<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getBookBudgetsControllerCancelScheduledQueryOptions(currency, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type bookBudgetsControllerCancelScheduledStopResponse200 = {
+  data: BookBudgetOverviewViewDto;
+  status: 200;
+};
+
+export type bookBudgetsControllerCancelScheduledStopResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type bookBudgetsControllerCancelScheduledStopResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type bookBudgetsControllerCancelScheduledStopResponseSuccess =
+  bookBudgetsControllerCancelScheduledStopResponse200 & {
+    headers: Headers;
+  };
+export type bookBudgetsControllerCancelScheduledStopResponseError = (
+  | bookBudgetsControllerCancelScheduledStopResponse401
+  | bookBudgetsControllerCancelScheduledStopResponse404
+) & {
+  headers: Headers;
+};
+
+export type bookBudgetsControllerCancelScheduledStopResponse =
+  | bookBudgetsControllerCancelScheduledStopResponseSuccess
+  | bookBudgetsControllerCancelScheduledStopResponseError;
+
+export const getBookBudgetsControllerCancelScheduledStopUrl = (currency: "UAH" | "EUR" | "USD") => {
+  return `/api/delivery/budgets/${currency}/scheduled-stop`;
+};
+
+/**
+ * @summary Cancel a scheduled stop and let the budget keep running
+ */
+export const bookBudgetsControllerCancelScheduledStop = async (
+  currency: "UAH" | "EUR" | "USD",
+  options?: Parameters<typeof customInstance>[1],
+): Promise<bookBudgetsControllerCancelScheduledStopResponse> => {
+  return customInstance<bookBudgetsControllerCancelScheduledStopResponse>(
+    getBookBudgetsControllerCancelScheduledStopUrl(currency),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getBookBudgetsControllerCancelScheduledStopQueryKey = (
+  currency: "UAH" | "EUR" | "USD",
+) => {
+  return ["DELETE", `/api/delivery/budgets/${currency}/scheduled-stop`] as const;
+};
+
+export const getBookBudgetsControllerCancelScheduledStopQueryOptions = <
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getBookBudgetsControllerCancelScheduledStopQueryKey(currency);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>
+  > = ({ signal }) =>
+    bookBudgetsControllerCancelScheduledStop(currency, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: currency !== null && currency !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type BookBudgetsControllerCancelScheduledStopQueryResult = NonNullable<
+  Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>
+>;
+export type BookBudgetsControllerCancelScheduledStopQueryError = void;
+
+export function useBookBudgetsControllerCancelScheduledStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerCancelScheduledStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerCancelScheduledStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Cancel a scheduled stop and let the budget keep running
+ */
+
+export function useBookBudgetsControllerCancelScheduledStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof bookBudgetsControllerCancelScheduledStop>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getBookBudgetsControllerCancelScheduledStopQueryOptions(currency, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;
@@ -550,6 +751,376 @@ export function useBookBudgetsControllerUpsert<
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getBookBudgetsControllerUpsertQueryOptions(
     upsertBookBudgetInputDto,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type bookBudgetsControllerSaveResponse200 = {
+  data: BookBudgetOverviewViewDto;
+  status: 200;
+};
+
+export type bookBudgetsControllerSaveResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type bookBudgetsControllerSaveResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type bookBudgetsControllerSaveResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type bookBudgetsControllerSaveResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type bookBudgetsControllerSaveResponseSuccess = bookBudgetsControllerSaveResponse200 & {
+  headers: Headers;
+};
+export type bookBudgetsControllerSaveResponseError = (
+  | bookBudgetsControllerSaveResponse400
+  | bookBudgetsControllerSaveResponse401
+  | bookBudgetsControllerSaveResponse404
+  | bookBudgetsControllerSaveResponse409
+) & {
+  headers: Headers;
+};
+
+export type bookBudgetsControllerSaveResponse =
+  bookBudgetsControllerSaveResponseSuccess | bookBudgetsControllerSaveResponseError;
+
+export const getBookBudgetsControllerSaveUrl = () => {
+  return `/api/delivery/budgets/save`;
+};
+
+/**
+ * @summary Save every currency the budget dialog changed as one atomic write
+ */
+export const bookBudgetsControllerSave = async (
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options?: Parameters<typeof customInstance>[1],
+): Promise<bookBudgetsControllerSaveResponse> => {
+  return customInstance<bookBudgetsControllerSaveResponse>(getBookBudgetsControllerSaveUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(saveBookBudgetsInputDto),
+  });
+};
+
+export const getBookBudgetsControllerSaveQueryKey = (
+  saveBookBudgetsInputDto?: SaveBookBudgetsInputDto,
+) => {
+  return ["POST", `/api/delivery/budgets/save`, saveBookBudgetsInputDto] as const;
+};
+
+export const getBookBudgetsControllerSaveQueryOptions = <
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+  TError = void,
+>(
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerSave>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getBookBudgetsControllerSaveQueryKey(saveBookBudgetsInputDto);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof bookBudgetsControllerSave>>> = ({
+    signal,
+  }) => bookBudgetsControllerSave(saveBookBudgetsInputDto, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type BookBudgetsControllerSaveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof bookBudgetsControllerSave>>
+>;
+export type BookBudgetsControllerSaveQueryError = void;
+
+export function useBookBudgetsControllerSave<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+  TError = void,
+>(
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerSave>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerSave>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerSave<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+  TError = void,
+>(
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerSave>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerSave>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerSave<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+  TError = void,
+>(
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerSave>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Save every currency the budget dialog changed as one atomic write
+ */
+
+export function useBookBudgetsControllerSave<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerSave>>,
+  TError = void,
+>(
+  saveBookBudgetsInputDto: SaveBookBudgetsInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerSave>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getBookBudgetsControllerSaveQueryOptions(saveBookBudgetsInputDto, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type bookBudgetsControllerStopResponse200 = {
+  data: BookBudgetOverviewViewDto;
+  status: 200;
+};
+
+export type bookBudgetsControllerStopResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type bookBudgetsControllerStopResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type bookBudgetsControllerStopResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type bookBudgetsControllerStopResponseSuccess = bookBudgetsControllerStopResponse200 & {
+  headers: Headers;
+};
+export type bookBudgetsControllerStopResponseError = (
+  | bookBudgetsControllerStopResponse400
+  | bookBudgetsControllerStopResponse401
+  | bookBudgetsControllerStopResponse404
+) & {
+  headers: Headers;
+};
+
+export type bookBudgetsControllerStopResponse =
+  bookBudgetsControllerStopResponseSuccess | bookBudgetsControllerStopResponseError;
+
+export const getBookBudgetsControllerStopUrl = (currency: "UAH" | "EUR" | "USD") => {
+  return `/api/delivery/budgets/${currency}/stop`;
+};
+
+/**
+ * @summary Stop the budget of one currency from a given month
+ */
+export const bookBudgetsControllerStop = async (
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options?: Parameters<typeof customInstance>[1],
+): Promise<bookBudgetsControllerStopResponse> => {
+  return customInstance<bookBudgetsControllerStopResponse>(
+    getBookBudgetsControllerStopUrl(currency),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(stopBookBudgetInputDto),
+    },
+  );
+};
+
+export const getBookBudgetsControllerStopQueryKey = (
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto?: StopBookBudgetInputDto,
+) => {
+  return ["POST", `/api/delivery/budgets/${currency}/stop`, stopBookBudgetInputDto] as const;
+};
+
+export const getBookBudgetsControllerStopQueryOptions = <
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getBookBudgetsControllerStopQueryKey(currency, stopBookBudgetInputDto);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof bookBudgetsControllerStop>>> = ({
+    signal,
+  }) => bookBudgetsControllerStop(currency, stopBookBudgetInputDto, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: currency !== null && currency !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type BookBudgetsControllerStopQueryResult = NonNullable<
+  Awaited<ReturnType<typeof bookBudgetsControllerStop>>
+>;
+export type BookBudgetsControllerStopQueryError = void;
+
+export function useBookBudgetsControllerStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerStop>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+          TError,
+          Awaited<ReturnType<typeof bookBudgetsControllerStop>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useBookBudgetsControllerStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Stop the budget of one currency from a given month
+ */
+
+export function useBookBudgetsControllerStop<
+  TData = Awaited<ReturnType<typeof bookBudgetsControllerStop>>,
+  TError = void,
+>(
+  currency: "UAH" | "EUR" | "USD",
+  stopBookBudgetInputDto: StopBookBudgetInputDto,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof bookBudgetsControllerStop>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getBookBudgetsControllerStopQueryOptions(
+    currency,
+    stopBookBudgetInputDto,
     options,
   );
 

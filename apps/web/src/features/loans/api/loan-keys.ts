@@ -1,6 +1,9 @@
 import type { QueryKey } from "@tanstack/react-query";
 
-import type { LoanHistoryControllerOverviewParams } from "@/shared/api/generated/model";
+import type {
+  LoanHistoryControllerOverviewParams,
+  LoanHistoryControllerPeopleParams,
+} from "@/shared/api/generated/model";
 
 import type { LoanContactsListParams } from "../model/loan-contacts-query";
 import type { LoanHistoryListParams } from "../model/loan-history-query";
@@ -26,7 +29,9 @@ export const loanKeys = {
     overview: (params: LoanHistoryControllerOverviewParams) =>
       [LOAN_ROOTS.history, "overview", params] as const,
     overviews: [LOAN_ROOTS.history, "overview"] as const,
-    people: [LOAN_ROOTS.history, "people"] as const,
+    people: (params: LoanHistoryControllerPeopleParams) =>
+      [LOAN_ROOTS.history, "people", params] as const,
+    peoples: [LOAN_ROOTS.history, "people"] as const,
   },
   list: (params: LoansListParams) => [LOAN_ROOTS.active, "list", params] as const,
 };

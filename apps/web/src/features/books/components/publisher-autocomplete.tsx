@@ -4,7 +4,7 @@ import type { PublisherView } from "@app/shared";
 
 import { Command as CommandPrimitive } from "cmdk";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { UiIcon } from "@/components/icons";
 import { CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -47,6 +47,7 @@ export function PublisherAutocomplete({
   const t = useTranslations("books");
   const [query, setQuery] = useState(value?.name ?? "");
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
   const {
     fetchNextPage,
@@ -106,7 +107,7 @@ export function PublisherAutocomplete({
     <CommandPrimitive label={label} shouldFilter={false}>
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverAnchor asChild>
-          <div className="relative flex items-center">
+          <div className="relative flex items-center" ref={anchorRef}>
             <UiIcon
               aria-hidden
               className={cn(
@@ -152,6 +153,12 @@ export function PublisherAutocomplete({
         <PopoverContent
           align="start"
           className="w-(--radix-popover-trigger-width) max-w-(--radix-popover-trigger-width) p-1"
+          onInteractOutside={(event) => {
+            const target = event.detail.originalEvent.target;
+            if (target instanceof Node && anchorRef.current?.contains(target)) {
+              event.preventDefault();
+            }
+          }}
           onOpenAutoFocus={(event) => event.preventDefault()}
           sideOffset={6}
         >

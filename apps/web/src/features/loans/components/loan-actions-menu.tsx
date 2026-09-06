@@ -38,7 +38,8 @@ export function LoanActionsMenu({ loan, onEdit, onReturn }: LoanActionsMenuProps
   const opensDialogRef = useRef(false);
 
   const hasReturnDate = loan.expectedReturnDate !== null;
-  const canRemind = hasReturnDate && loan.loanUiStatus !== "overdue";
+  const isOverdue = loan.loanUiStatus === "overdue";
+  const canRemind = hasReturnDate && !isOverdue;
   const isBusy = extendLoan.isPending || setReminder.isPending;
 
   function extend(days: ExtendLoanInput["days"]) {
@@ -97,8 +98,8 @@ export function LoanActionsMenu({ loan, onEdit, onReturn }: LoanActionsMenuProps
         {hasReturnDate
           ? LOAN_QUICK_ACTIONS.extendDays.map((days) => (
               <DropdownMenuItem disabled={isBusy} key={days} onClick={() => extend(days)}>
-                <UiIcon name="plus" size={16} />
-                {t("extend", { days })}
+                <UiIcon name={isOverdue ? "clock" : "plus"} size={16} />
+                {isOverdue ? t("extendOverdue", { days }) : t("extend", { days })}
               </DropdownMenuItem>
             ))
           : null}

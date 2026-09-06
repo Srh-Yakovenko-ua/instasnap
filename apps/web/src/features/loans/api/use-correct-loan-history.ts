@@ -21,6 +21,7 @@ export function useCorrectLoanHistory() {
     onSuccess: (_detail, input) => {
       void queryClient.invalidateQueries({ queryKey: loanKeys.history.lists });
       void queryClient.invalidateQueries({ queryKey: loanKeys.history.overviews });
+      void queryClient.invalidateQueries({ queryKey: loanKeys.history.peoples });
       void queryClient.invalidateQueries({ queryKey: loanKeys.history.detail(input.loanId) });
     },
   });

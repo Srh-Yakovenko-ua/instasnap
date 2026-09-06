@@ -15,7 +15,7 @@ import type { LoanContactRename } from "../infrastructure/loan-contacts.reposito
 import { ConflictError, NotFoundError } from "../../../core/exceptions/errors.js";
 import { buildPaginator, pageSlice } from "../../../core/paginator.js";
 import { isRecordNotFoundError, isUniqueConstraintError } from "../../../core/prisma-errors.js";
-import { toLoanContactView } from "../domain/loan-contact.mapper.js";
+import { toLoanContactListItemView, toLoanContactView } from "../domain/loan-contact.mapper.js";
 import { LoanContactsRepository } from "../infrastructure/loan-contacts.repository.js";
 
 const LOAN_CONTACT_NOT_FOUND_MESSAGE = "Loan contact not found";
@@ -117,9 +117,16 @@ export class LoanContactsService {
       this.loanContactsRepository.countOwned(filter),
     ]);
 
+    const activeLoans = await this.loanContactsRepository.countActiveLoansByContact({
+      contactIds: contacts.map((contact) => contact.id),
+      userId,
+    });
+
     return {
       ...buildPaginator({
-        items: contacts.map(toLoanContactView),
+        items: contacts.map((contact) =>
+          toLoanContactListItemView(contact, activeLoans.get(contact.id)),
+        ),
         pageNumber: query.pageNumber,
         pageSize: query.pageSize,
         totalCount: counts[query.status],

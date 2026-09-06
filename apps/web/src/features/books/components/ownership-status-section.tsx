@@ -2,12 +2,14 @@
 
 import type { OwnershipStatus } from "@app/shared";
 
+import { LOAN_PERSON_REQUIRED_MESSAGE } from "@app/shared";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
   type Control,
   Controller,
   type FieldErrors,
+  type FieldError as RhfFieldError,
   type UseFormRegister,
   type UseFormSetValue,
   useWatch,
@@ -30,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CreateLoanContactDialog } from "@/features/loans/components/contact/create-loan-contact-dialog";
 import { LoanContactPicker } from "@/features/loans/components/loan-contact-picker";
 import {
   blockNegativeNumberKeys,
@@ -43,6 +46,7 @@ import type { CreateBookFormValues } from "../model/create-book-form";
 import {
   EDIT_DELIVERY_STATUS_OPTIONS,
   OWNERSHIP_STATUS_OPTIONS,
+  ownershipLoanDirection,
   ownershipUsesDelivery,
   ownershipUsesLoan,
 } from "../model/book-status-fields";
@@ -90,11 +94,16 @@ export function OwnershipStatusSection({
   setValue,
 }: OwnershipStatusSectionProps) {
   const t = useTranslations("books");
+  const tContactPicker = useTranslations("loans.contactPicker");
   const status = useWatch({ control, name: "ownershipStatus" }) ?? "none";
   const isShipped = useWatch({ control, name: "deliveryInfo.isShipped" }) === true;
   const [additionalDeliveryOpen, setAdditionalDeliveryOpen] = useState(false);
+  const [creatingContactName, setCreatingContactName] = useState<null | string>(null);
   const complete = useSectionCompletion(control, OWNERSHIP_FIELDS);
-  const loanContactError = errors.loanInfo?.loanContactId ?? errors.loanInfo?.personName;
+  const loanContactError = toPersonPickerError(
+    errors.loanInfo?.loanContactId ?? errors.loanInfo?.personName,
+    tContactPicker("required"),
+  );
 
   return (
     <FormSection
@@ -636,14 +645,28 @@ export function OwnershipStatusSection({
             <Label htmlFor="loan-contact-picker">{t("loanInfo.fields.personName")}</Label>
             <LoanContactPicker
               describedBy={loanContactError ? "loan-contact-picker-error" : undefined}
+              direction={ownershipLoanDirection(status)}
               id="loan-contact-picker"
               invalid={loanContactError !== undefined}
               label={t("loanInfo.fields.personName")}
               onChange={onLoanContactChange}
+              onRequestCreate={setCreatingContactName}
               placeholder={t("loanInfo.fields.personNamePlaceholder")}
               value={loanContact}
             />
             <FieldError error={loanContactError} id="loan-contact-picker-error" />
+            <CreateLoanContactDialog
+              conflictAction="select"
+              initialName={creatingContactName ?? ""}
+              onOpenChange={(next) => {
+                if (!next) setCreatingContactName(null);
+              }}
+              onResolved={({ contact }) => {
+                setCreatingContactName(null);
+                onLoanContactChange({ contactId: contact.id, kind: "picked", name: contact.name });
+              }}
+              open={creatingContactName !== null}
+            />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -736,4 +759,12 @@ function OwnershipNoteField({
       ) : null}
     </div>
   );
+}
+
+function toPersonPickerError(
+  error: RhfFieldError | undefined,
+  requiredMessage: string,
+): RhfFieldError | undefined {
+  if (error === undefined || error.message !== LOAN_PERSON_REQUIRED_MESSAGE) return error;
+  return { ...error, message: requiredMessage };
 }

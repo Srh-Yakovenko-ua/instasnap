@@ -475,3 +475,74 @@ describe("in-transit facets", () => {
     ]);
   });
 });
+
+describe("in-transit exact order navigation", () => {
+  it("opens exactly one order by its identity", async () => {
+    const wanted = await orderWithBook({ storeName: "Yakaboo", title: "Dune" });
+    await orderWithBook({ storeName: "Book24", title: "Solaris" });
+
+    await expect(inTransitTitles(`orderId=${wanted.id}`)).resolves.toEqual(["Dune"]);
+  });
+
+  it("finds an order by identity even when it carries no order number", async () => {
+    const wanted = await orderWithBook({ storeName: "Yakaboo", title: "Dune" });
+
+    expect(wanted.orderNumber).toBeNull();
+    await expect(inTransitTitles(`orderId=${wanted.id}`)).resolves.toEqual(["Dune"]);
+  });
+
+  it("returns nothing for an order that belongs to somebody else", async () => {
+    const stranger = await context.registerVerifyAndLogin();
+    const bookId = await createBook({ accessToken: stranger.accessToken, app, title: "Theirs" });
+    const foreign = await createOrder({
+      accessToken: stranger.accessToken,
+      app,
+      input: { items: [{ bookId, price: 100 }], storeName: "Yakaboo" },
+    });
+
+    await expect(inTransitTitles(`orderId=${foreign.id}`)).resolves.toEqual([]);
+  });
+});
+
+describe("in-transit derived order state", () => {
+  async function seedOneDispatchedOrder(): Promise<void> {
+    await orderWithBook({ storeName: "Yakaboo", title: "Waiting" });
+    const shipmentId = await shipOneOfTwoBooks({
+      looseTitle: "Loose",
+      shippedTitle: "Shipped",
+    });
+    await postJson({
+      accessToken: reader.accessToken,
+      app,
+      path: ORDER_ROUTES.markInTransit(shipmentId),
+    });
+  }
+
+  it("keeps only the orders waiting to be dispatched", async () => {
+    await seedOneDispatchedOrder();
+
+    await expect(inTransitTitles("orderState=active")).resolves.toEqual(["Waiting"]);
+  });
+
+  it("keeps only the orders that were partly dispatched", async () => {
+    await seedOneDispatchedOrder();
+
+    await expect(inTransitTitles("orderState=partially_shipped")).resolves.toEqual(
+      expect.arrayContaining(["Shipped", "Loose"]),
+    );
+  });
+
+  it("counts a parcel that was only created but never sent as still waiting", async () => {
+    await shipOneOfTwoBooks({ looseTitle: "Loose", shippedTitle: "Packed" });
+
+    await expect(inTransitTitles("orderState=active")).resolves.toEqual(
+      expect.arrayContaining(["Packed", "Loose"]),
+    );
+  });
+
+  it("returns an empty list rather than ignoring a state no in-transit order can hold", async () => {
+    await orderWithBook({ storeName: "Yakaboo", title: "Waiting" });
+
+    await expect(inTransitTitles("orderState=received")).resolves.toEqual([]);
+  });
+});

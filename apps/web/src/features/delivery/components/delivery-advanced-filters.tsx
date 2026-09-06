@@ -1,6 +1,6 @@
 "use client";
 
-import type { DeliveryFacetEntry, Nullable } from "@app/shared";
+import type { ActiveMoneyAgeBucket, DeliveryFacetEntry, Nullable } from "@app/shared";
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -30,6 +30,7 @@ import type { DeliveryAdvancedState } from "../model/in-transit-params";
 import { useInTransitFacets } from "../api/use-in-transit-facets";
 import {
   DELIVERY_ADVANCED_EMPTY,
+  DELIVERY_AGE_BUCKETS,
   DELIVERY_CURRENCY_VALUES,
   DELIVERY_STRUCTURE_VALUES,
   deliveryRangeFlags,
@@ -48,6 +49,7 @@ export function DeliveryAdvancedFilters({
   state,
 }: DeliveryAdvancedFiltersProps) {
   const t = useTranslations("delivery.advancedFilters");
+  const tAge = useTranslations("delivery.statistics.activeAge.buckets");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DeliveryAdvancedState>(state);
   const facets = useInTransitFacets(open);
@@ -122,6 +124,21 @@ export function DeliveryAdvancedFilters({
             {rangeFlags.ordered ? (
               <p className="text-xs text-destructive">{t("range.invalid")}</p>
             ) : null}
+          </FilterSection>
+
+          <FilterSection title={t("sections.orderAge")}>
+            <ChipGroup
+              mode="single"
+              onValueChange={(value) =>
+                patch({ ageBucket: value === "" ? null : (value as ActiveMoneyAgeBucket) })
+              }
+              options={DELIVERY_AGE_BUCKETS.map((bucket) => ({
+                label: tAge(bucket),
+                value: bucket,
+              }))}
+              value={draft.ageBucket ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">{t("orderAgeHint")}</p>
           </FilterSection>
 
           <FilterSection title={t("sections.booksCount")}>

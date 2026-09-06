@@ -451,3 +451,50 @@ describe("GET /api/delivery/books/history", () => {
     expect(page.totalCount).toBe(1);
   });
 });
+
+describe("history exact order navigation", () => {
+  it("opens exactly one order by its identity", async () => {
+    const wanted = await seedStaggeredParcel();
+    await seedSplitOrder();
+
+    const page = await history(`tab=all&orderId=${wanted.id}`);
+
+    expect(page.items.map((group) => group.order.id)).toEqual([wanted.id]);
+  });
+
+  it("returns an empty page for an order that belongs to somebody else", async () => {
+    const stranger = await context.registerVerifyAndLogin();
+    const bookId = await createBook({ accessToken: stranger.accessToken, app, title: "Theirs" });
+    const foreign = await createOrder({
+      accessToken: stranger.accessToken,
+      app,
+      input: { items: [{ bookId, price: 100 }], storeName: "Yakaboo" },
+    });
+
+    const page = await history(`tab=all&orderId=${foreign.id}`);
+
+    expect(page.items).toEqual([]);
+  });
+
+  it("keeps only the orders sitting in the asked-for derived state", async () => {
+    await seedStaggeredParcel();
+    await seedSplitOrder();
+    const all = await history("tab=all");
+    const received = all.items.filter((group) => group.order.derivedStatus === "received");
+
+    const page = await history("tab=all&orderState=received");
+
+    expect(page.items.map((group) => group.order.id)).toEqual(
+      received.map((group) => group.order.id),
+    );
+    expect(page.items.length).toBeGreaterThan(0);
+  });
+
+  it("returns an empty page rather than everything for a state no order holds", async () => {
+    await seedStaggeredParcel();
+
+    const page = await history("tab=all&orderState=cancelled");
+
+    expect(page.items).toEqual([]);
+  });
+});

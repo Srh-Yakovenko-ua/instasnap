@@ -157,7 +157,10 @@ export function LoanContactDrawer({
                 onNavigate={() => onOpenChange(false)}
                 type="borrowed_from_someone"
               />
-              <LoanContactHistoryBlock contactId={contact.id} />
+              <LoanContactHistoryBlock
+                contactId={contact.id}
+                onNavigate={() => onOpenChange(false)}
+              />
             </div>
           )}
         </SheetContent>

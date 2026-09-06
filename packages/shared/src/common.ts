@@ -4,6 +4,7 @@ import { CurrencySchema } from "./book-enums.js";
 
 export type ApiError = {
   code?: string;
+  details?: Record<string, unknown>;
   message: string;
   requestId?: string;
 };

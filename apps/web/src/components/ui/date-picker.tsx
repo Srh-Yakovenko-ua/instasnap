@@ -1,10 +1,9 @@
 "use client";
 
 import { format } from "date-fns";
-import { enUS, uk } from "date-fns/locale";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { type DropdownProps, type Locale, type Matcher } from "react-day-picker";
+import { type DropdownProps, type Matcher } from "react-day-picker";
 
 import { UiIcon } from "@/components/icons";
 import { Calendar } from "@/components/ui/calendar";
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { dateFnsLocale } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type DatePickerProps = {
@@ -38,7 +38,7 @@ type DatePickerProps = {
 
 type WeekStartsOn = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, uk };
+const DATE_PICKER = { dayFormat: "d MMMM yyyy" } as const;
 
 export function DatePicker({
   allowFuture = false,
@@ -59,7 +59,7 @@ export function DatePicker({
 }: DatePickerProps) {
   const t = useTranslations("auth.datePicker");
   const locale = useLocale();
-  const dfLocale = DATE_FNS_LOCALES[locale] ?? uk;
+  const dfLocale = dateFnsLocale(locale);
   const [open, setOpen] = useState(false);
 
   const today = new Date();
@@ -98,7 +98,7 @@ export function DatePicker({
           size={18}
         />
         {value
-          ? format(value, "d MMMM yyyy", { locale: dfLocale })
+          ? format(value, DATE_PICKER.dayFormat, { locale: dfLocale })
           : (placeholder ?? t("placeholder"))}
       </PopoverTrigger>
       <PopoverContent

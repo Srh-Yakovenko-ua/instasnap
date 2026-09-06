@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import {
   ArrowUpRight,
   BookCopy,
+  ChartColumnBig,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -79,7 +80,8 @@ type NavKey =
   | "quotes"
   | "readingQueue"
   | "series"
-  | "settings";
+  | "settings"
+  | "statistics";
 
 type NavLink = {
   icon: React.ElementType;
@@ -152,6 +154,7 @@ const NAV_ITEMS = [
     listLabelKey: "delivery.subnav.label",
     pathPrefix: "/delivery",
   },
+  { icon: ChartColumnBig, key: "statistics", kind: "link", to: "/statistics" },
   { icon: Feather, key: "dedications", kind: "link", to: "/dedications" },
   { icon: BookCopy, key: "series", kind: "link", to: "/series" },
   { icon: Landmark, key: "publishers", kind: "link", to: "/publishers" },

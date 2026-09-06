@@ -1,6 +1,6 @@
 "use client";
 
-import type { LoanListItemView } from "@app/shared";
+import type { LoanListItemView, LoanUiStatus } from "@app/shared";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "next-intl";
@@ -19,7 +19,7 @@ import { toLoanRowBook } from "../model/loan-library-book";
 import { formatLoanDate, loanTerm } from "../model/loans-derive";
 import { LoanContactNameButton } from "./contact/loan-contact-name-button";
 import { LoanActionsMenu } from "./loan-actions-menu";
-import { LoanStatusBadge } from "./loan-status-badge";
+import { LoanNoteButton } from "./loan-note-button";
 
 const LOAN_TERM_LOOK = {
   inDays: { icon: "calendar", toneClass: "text-foreground" },
@@ -68,10 +68,7 @@ export function LoanRow({ loan, onEdit, onOpenContact, onReturn, today }: LoanRo
       mobileCompact
       note={
         loan.note === null ? undefined : (
-          <p className="mt-1 line-clamp-2 rounded-md bg-secondary/60 px-2.5 py-1.5 text-xs text-foreground/85">
-            <span className="font-medium text-muted-foreground">{tRow("note")}: </span>
-            {loan.note}
-          </p>
+          <LoanNoteButton bookTitle={loan.book.title} note={loan.note} onEdit={onEdit} />
         )
       }
       rowLink={false}
@@ -102,11 +99,17 @@ function LoanPeopleZone({
   const loanDate = formatLoanDate(loan.loanDate);
 
   return (
-    <div className="flex shrink-0 flex-col gap-1 @xl/book-row:w-40">
-      <InfoLine label={isBorrowed ? tRow("personBorrowed") : tRow("personLent")}>
-        <LoanContactNameButton name={loan.personName} onOpen={onOpenContact} />
-      </InfoLine>
-      {loan.contact === null ? null : <InfoLine label={tRow("contact")}>{loan.contact}</InfoLine>}
+    <div className="flex shrink-0 flex-col gap-2 @xl/book-row:w-40">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-xs text-muted-foreground">
+          {isBorrowed ? tRow("personBorrowed") : tRow("personLent")}
+        </span>
+        <LoanContactNameButton
+          contact={loan.contact}
+          name={loan.personName}
+          onOpen={onOpenContact}
+        />
+      </div>
       {loanDate === null ? null : (
         <InfoLine label={isBorrowed ? tRow("loanDateBorrowed") : tRow("loanDateLent")}>
           {loanDate}
@@ -124,20 +127,29 @@ function LoanTermZone({ loan, today }: { loan: LoanListItemView; today: string }
   const returnDate = formatLoanDate(loan.expectedReturnDate);
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 @xl/book-row:w-48">
-      <p className={cn("flex items-center gap-1.5 text-sm font-semibold", look.toneClass)}>
-        <UiIcon name={look.icon} size={16} />
+    <div className="flex shrink-0 flex-col gap-0.5 @xl/book-row:w-48">
+      <p
+        className={cn(
+          "flex items-center gap-1.5 text-sm font-semibold",
+          termToneClass({ status: loan.loanUiStatus, term }),
+        )}
+      >
+        <UiIcon aria-hidden name={look.icon} size={16} />
         {term.kind === "inDays" || term.kind === "overdue"
           ? tTerm(term.kind, { days: term.days })
           : tTerm(term.kind)}
       </p>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <LoanStatusBadge status={loan.loanUiStatus} />
-        {returnDate === null ? null : (
-          <span className="text-xs text-muted-foreground tabular-nums">{returnDate}</span>
-        )}
-      </div>
+      {returnDate === null ? null : (
+        <p className="pl-[1.375rem] text-xs text-muted-foreground tabular-nums">
+          {tTerm(term.kind === "overdue" ? "wasDue" : "dueBy", { date: returnDate })}
+        </p>
+      )}
     </div>
   );
+}
+
+function termToneClass({ status, term }: { status: LoanUiStatus; term: LoanTerm }): string {
+  if (term.kind === "inDays" && status === "return_soon") return "text-warning";
+  return LOAN_TERM_LOOK[term.kind].toneClass;
 }

@@ -6,21 +6,28 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import type { EmptyStateEntry } from "@/lib/empty-states";
+import type {
+  LoansControllerListFilter,
+  LoansControllerListReminder,
+} from "@/shared/api/generated/model";
 
 import { EmptyState } from "@/components/empty-state";
 import { TitleLeaf } from "@/components/title-leaf";
 import { Button } from "@/components/ui/button";
+import { LibraryActiveFilters } from "@/features/books/components/library-active-filters";
 import { todayIso } from "@/features/books/model/reading-progress";
 import { useRouter } from "@/i18n/navigation";
 
 import type { LoanDirection } from "../model/loan-pages";
-import type { LoansAttention, LoansPeople } from "./loans-sidebar";
+import type { LoanAttentionKey, LoansAttention, LoansPeople } from "./loans-sidebar";
 
+import { useLoanContact } from "../api/use-loan-contact";
 import { useLoansList } from "../api/use-loans-list";
 import { useLoansSummary } from "../api/use-loans-summary";
 import { LOAN_PAGES } from "../model/loan-pages";
 import { loansQuickFilterCounts } from "../model/loans-quick-filters";
 import { useLoanContactDrawer } from "../model/use-loan-contact-drawer";
+import { useLoansFilterChips } from "../model/use-loans-filter-chips";
 import { useLoansQuery } from "../model/use-loans-query";
 import { LoanContactDrawer } from "./contact/loan-contact-drawer";
 import { EditLoanDialog } from "./edit-loan-dialog";
@@ -59,6 +66,16 @@ export function LoansView({ type }: { type: LoanType }) {
   const query = useLoansQuery(type);
   const summary = useLoansSummary();
   const list = useLoansList(query.listParams);
+  const selectedContact = useLoanContact(query.contactId === "" ? null : query.contactId);
+  const contactName = selectedContact.data?.name ?? null;
+  const filterChips = useLoansFilterChips({
+    contactName,
+    direction: page.direction,
+    onApplyAdvanced: query.applyAdvanced,
+    onClearSearch: query.clearSearch,
+    search: query.state.q,
+    state: query.advanced,
+  });
 
   const [editTarget, setEditTarget] = useState<LoanListItemView | null>(null);
   const [returnTarget, setReturnTarget] = useState<LoanListItemView | null>(null);
@@ -81,8 +98,14 @@ export function LoansView({ type }: { type: LoanType }) {
   const attention: Nullable<LoansAttention> = summary.isError
     ? null
     : {
-        activeFilter: query.filter,
-        onFilterSelect: query.setFilter,
+        activeKey: activeAttentionKey(query.filter, query.reminder),
+        onSelect: (key) => {
+          if (key === "without_reminder") {
+            query.setReminder("off");
+            return;
+          }
+          query.setFilter(key);
+        },
         stats: directionSummary ?? null,
       };
 
@@ -154,9 +177,13 @@ export function LoansView({ type }: { type: LoanType }) {
       {showChrome ? (
         <div className="flex flex-col gap-4">
           <LoansToolbar
+            advanced={query.advanced}
+            advancedCount={query.advancedCount}
+            contactName={contactName}
             direction={page.direction}
+            onApplyAdvanced={query.applyAdvanced}
             onSearchChange={query.setSearch}
-            onSearchClear={() => query.setSearch("")}
+            onSearchClear={query.clearSearch}
             onSortChange={query.setSort}
             search={query.state.q}
             sort={query.sort}
@@ -166,10 +193,11 @@ export function LoansView({ type }: { type: LoanType }) {
             counts={
               directionSummary === undefined ? undefined : loansQuickFilterCounts(directionSummary)
             }
-            direction={page.direction}
             onSelect={query.setFilter}
             value={query.filter}
           />
+
+          <LibraryActiveFilters chips={filterChips} onClearAll={query.clearFilters} />
 
           <p className="text-sm text-muted-foreground" role="status">
             {list.isPending || directionSummary === undefined
@@ -229,6 +257,15 @@ export function LoansView({ type }: { type: LoanType }) {
       ) : null}
     </div>
   );
+}
+
+function activeAttentionKey(
+  filter: LoansControllerListFilter,
+  reminder: Nullable<LoansControllerListReminder>,
+): Nullable<LoanAttentionKey> {
+  if (reminder === "off") return "without_reminder";
+  if (filter === "overdue" || filter === "no_return_date") return filter;
+  return null;
 }
 
 function LoansContent({

@@ -2,6 +2,8 @@ import type {
   LoanDirection,
   LoanHistoryListItemView,
   LoanHistoryPersonOption,
+  LoanHistoryPersonStats,
+  LoanHistoryResultCounts,
   LoanHistorySort,
   Nullable,
 } from "@app/shared";
@@ -39,17 +41,17 @@ const HISTORY_FIXTURE = {
 
 const EMPTY_OVERVIEW = {
   duration: { averageDays: null, longestDays: null, shortestDays: null },
-  reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: 0 },
+  reliability: { lateCount: 0, noDueDateCount: 0, onTimeCount: 0, onTimePercent: null },
   summary: {
     averageDelayDays: null,
     averageDurationDays: null,
     borrowedCount: 0,
+    durationCount: 0,
     lateCount: 0,
-    latePercent: 0,
     lentCount: 0,
     noDueDateCount: 0,
     onTimeCount: 0,
-    onTimePercent: 0,
+    onTimePercent: null,
     totalCompleted: 0,
   },
   topPeople: [],
@@ -104,6 +106,13 @@ afterEach(async () => {
 afterAll(async () => {
   await context.close();
 });
+
+async function archiveContact(accessToken: string, contactId: string): Promise<void> {
+  const res = await request(app.getHttpServer())
+    .post(`/api/loans/contacts/${contactId}/archive`)
+    .set("Authorization", `Bearer ${accessToken}`);
+  expect(res.status).toBe(200);
+}
 
 async function completeLoan(
   accessToken: string,
@@ -169,6 +178,10 @@ function historyPeople(accessToken: string, queryString = ""): request.Test {
   return request(app.getHttpServer())
     .get(`/api/loans/history/people${queryString}`)
     .set("Authorization", `Bearer ${accessToken}`);
+}
+
+function historyResultCounts(res: Response): LoanHistoryResultCounts {
+  return PaginatedLoanHistorySchema.parse(res.body).resultCounts;
 }
 
 function historyTitles(res: Response): string[] {
@@ -742,6 +755,154 @@ describe("GET /api/loans/history result filter", () => {
   });
 });
 
+describe("GET /api/loans/history result counts", () => {
+  const EVERY_RESULT_COUNT = { all: 4, late: 1, no_due_date: 1, on_time: 2 };
+
+  async function seedCountableHistory(accessToken: string): Promise<void> {
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      expectedReturnDate: "2026-02-10",
+      loanDate: "2026-02-01",
+      personName: "Olha",
+      returnedAt: "2026-02-08T10:00:00.000Z",
+      title: "Borrowed on time",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      expectedReturnDate: "2026-03-10",
+      loanDate: "2026-03-01",
+      personName: "Olha",
+      returnedAt: "2026-03-14T10:00:00.000Z",
+      title: "Borrowed late",
+    });
+    await completeLoan(accessToken, {
+      direction: "lent",
+      loanDate: "2026-04-01",
+      personName: "Ivan",
+      returnedAt: "2026-04-05T10:00:00.000Z",
+      title: "Lent without a due date",
+    });
+    await completeLoan(accessToken, {
+      direction: "lent",
+      expectedReturnDate: "2026-05-10",
+      loanDate: "2026-05-01",
+      personName: "Ivan",
+      returnedAt: "2026-05-09T10:00:00.000Z",
+      title: "Lent on time",
+    });
+  }
+
+  it("reports the result counts of the whole history on the page", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken);
+
+    expect(res.status).toBe(200);
+    expect(historyResultCounts(res)).toEqual(EVERY_RESULT_COUNT);
+  });
+
+  it("adds the three result counts up to the count before the result filter", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const counts = historyResultCounts(await listHistory(accessToken, "?result=late"));
+
+    expect(counts.on_time + counts.late + counts.no_due_date).toBe(counts.all);
+  });
+
+  it("keeps the result counts steady while the result filter moves the total", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    for (const [result, totalCount] of [
+      ["all", 4],
+      ["on_time", 2],
+      ["late", 1],
+      ["no_due_date", 1],
+    ] as const) {
+      const res = await listHistory(accessToken, `?result=${result}`);
+
+      expect(historyResultCounts(res)).toEqual(EVERY_RESULT_COUNT);
+      expect(res.body.totalCount).toBe(totalCount);
+    }
+  });
+
+  it("reports zero result counts for an empty history", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+
+    const res = await listHistory(accessToken);
+
+    expect(historyResultCounts(res)).toEqual({ all: 0, late: 0, no_due_date: 0, on_time: 0 });
+  });
+
+  it("reports the result counts on a page past the end of the history", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?pageNumber=4&pageSize=2");
+
+    expect(historyItems(res)).toEqual([]);
+    expect(historyResultCounts(res)).toEqual(EVERY_RESULT_COUNT);
+  });
+
+  it("narrows the result counts by the search term", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?search=Borrowed");
+
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 1, no_due_date: 0, on_time: 1 });
+  });
+
+  it("narrows the result counts by direction", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?type=lent_to_someone");
+
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 0, no_due_date: 1, on_time: 1 });
+  });
+
+  it("narrows the result counts by contact", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, `?contactId=${await contactIdFor("Olha")}`);
+
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 1, no_due_date: 0, on_time: 1 });
+  });
+
+  it("narrows the result counts by the returned period", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?returnedFrom=2026-03-01&returnedTo=2026-04-30");
+
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 1, no_due_date: 1, on_time: 0 });
+  });
+
+  it("narrows the result counts by the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?loanDateFrom=2026-03-01&loanDateTo=2026-04-30");
+
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 1, no_due_date: 1, on_time: 0 });
+  });
+
+  it("keeps the surrounding filters in the counts while the result filter empties the page", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedCountableHistory(accessToken);
+
+    const res = await listHistory(accessToken, "?type=lent_to_someone&result=late");
+
+    expect(historyItems(res)).toEqual([]);
+    expect(res.body.totalCount).toBe(0);
+    expect(historyResultCounts(res)).toEqual({ all: 2, late: 0, no_due_date: 1, on_time: 1 });
+  });
+});
+
 describe("GET /api/loans/history period filter", () => {
   async function seedReturnedDays(accessToken: string): Promise<void> {
     await completeLoan(accessToken, {
@@ -812,6 +973,100 @@ describe("GET /api/loans/history period filter", () => {
     expect(res.status).toBe(400);
     expect(res.body.errorsMessages).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: "returnedTo" })]),
+    );
+  });
+});
+
+describe("GET /api/loans/history loan date filter", () => {
+  async function seedLoanDays(accessToken: string): Promise<void> {
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-02-01",
+      personName: "Olha",
+      returnedAt: "2026-03-01T09:00:00.000Z",
+      title: "Taken February 1",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-03-05",
+      personName: "Olha",
+      returnedAt: "2026-04-01T09:00:00.000Z",
+      title: "Taken March 5",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-04-10",
+      personName: "Olha",
+      returnedAt: "2026-05-01T09:00:00.000Z",
+      title: "Taken April 10",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: null,
+      personName: "Olha",
+      returnedAt: "2026-06-01T09:00:00.000Z",
+      title: "Taken on an unknown day",
+    });
+  }
+
+  it("includes the loans taken on the first day of the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedLoanDays(accessToken);
+
+    const res = await listHistory(accessToken, "?loanDateFrom=2026-03-05");
+
+    expect(historyTitles(res)).toEqual(["Taken April 10", "Taken March 5"]);
+    expect(res.body.totalCount).toBe(2);
+  });
+
+  it("includes the loans taken on the last day of the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedLoanDays(accessToken);
+
+    const res = await listHistory(accessToken, "?loanDateTo=2026-03-05");
+
+    expect(historyTitles(res)).toEqual(["Taken March 5", "Taken February 1"]);
+    expect(res.body.totalCount).toBe(2);
+  });
+
+  it("keeps both ends of the loan date range inclusive", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedLoanDays(accessToken);
+
+    const res = await listHistory(accessToken, "?loanDateFrom=2026-02-01&loanDateTo=2026-03-05");
+
+    expect(historyTitles(res)).toEqual(["Taken March 5", "Taken February 1"]);
+    expect(res.body.totalCount).toBe(2);
+  });
+
+  it("drops a loan without a loan date out of a bounded loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedLoanDays(accessToken);
+
+    const res = await listHistory(accessToken, "?loanDateFrom=2026-01-01&loanDateTo=2026-12-31");
+
+    expect(historyTitles(res)).toEqual(["Taken April 10", "Taken March 5", "Taken February 1"]);
+    expect(res.body.totalCount).toBe(3);
+  });
+
+  it("keeps a loan without a loan date when no loan date range is asked for", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedLoanDays(accessToken);
+
+    const res = await listHistory(accessToken);
+
+    expect(historyTitles(res)).toContain("Taken on an unknown day");
+    expect(res.body.totalCount).toBe(4);
+  });
+
+  it("returns 400 when the loan date range starts after it ends", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+
+    const res = await listHistory(accessToken, "?loanDateFrom=2026-03-09&loanDateTo=2026-03-05");
+
+    expect(res.status).toBe(400);
+    expect(res.body.errorsMessages).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "loanDateTo" })]),
     );
   });
 });
@@ -1154,12 +1409,12 @@ describe("GET /api/loans/history/overview summary", () => {
       averageDelayDays: 7,
       averageDurationDays: 8,
       borrowedCount: 2,
+      durationCount: 3,
       lateCount: 2,
-      latePercent: 50,
       lentCount: 2,
       noDueDateCount: 1,
       onTimeCount: 1,
-      onTimePercent: 25,
+      onTimePercent: 33,
       totalCompleted: 4,
     });
   });
@@ -1187,11 +1442,11 @@ describe("GET /api/loans/history/overview summary", () => {
       lateCount: 2,
       noDueDateCount: 1,
       onTimeCount: 1,
-      onTimePercent: 25,
+      onTimePercent: 33,
     });
   });
 
-  it("returns zero percents and null averages for an empty history", async () => {
+  it("returns null percents and null averages for an empty history", async () => {
     const { accessToken } = await context.registerVerifyAndLogin();
 
     const res = await historyOverview(accessToken);
@@ -1225,6 +1480,87 @@ describe("GET /api/loans/history/overview summary", () => {
     const res = await historyOverview(stranger.accessToken);
 
     expect(res.body).toEqual(EMPTY_OVERVIEW);
+  });
+
+  it("counts the on-time share against the loans that carried a due date", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedOverviewHistory(accessToken);
+
+    const res = await historyOverview(accessToken);
+    const { summary } = LoanHistoryOverviewViewSchema.parse(res.body);
+
+    expect(summary.onTimePercent).toBe(
+      Math.round((summary.onTimeCount / (summary.onTimeCount + summary.lateCount)) * 100),
+    );
+    expect(summary.noDueDateCount).toBeGreaterThan(0);
+  });
+
+  it("leaves the on-time percent null when no completed loan carried a due date", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-01-01",
+      personName: "Olha",
+      returnedAt: "2026-01-20T10:00:00.000Z",
+      title: "Open ended borrowed",
+    });
+
+    const res = await historyOverview(accessToken);
+    const { reliability, summary } = LoanHistoryOverviewViewSchema.parse(res.body);
+
+    expect(summary).toMatchObject({
+      lateCount: 0,
+      noDueDateCount: 1,
+      onTimeCount: 0,
+      onTimePercent: null,
+      totalCompleted: 1,
+    });
+    expect(reliability.onTimePercent).toBeNull();
+  });
+
+  it("keeps a real zero on-time percent apart from a missing one", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      expectedReturnDate: "2026-01-10",
+      loanDate: "2026-01-01",
+      personName: "Olha",
+      returnedAt: "2026-01-14T10:00:00.000Z",
+      title: "Late borrowed",
+    });
+
+    const res = await historyOverview(accessToken);
+
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).summary.onTimePercent).toBe(0);
+  });
+
+  it("counts the average duration only over the loans that have a loan date", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedOverviewHistory(accessToken);
+
+    const res = await historyOverview(accessToken);
+    const { summary } = LoanHistoryOverviewViewSchema.parse(res.body);
+
+    expect(summary.durationCount).toBe(3);
+    expect(summary.totalCompleted).toBe(4);
+  });
+
+  it("reports a real zero average when every loan came back the same day", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-01-01",
+      personName: "Olha",
+      returnedAt: "2026-01-01T18:00:00.000Z",
+      title: "Same day borrowed",
+    });
+
+    const res = await historyOverview(accessToken);
+
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).summary).toMatchObject({
+      averageDurationDays: 0,
+      durationCount: 1,
+    });
   });
 
   it("returns null duration analytics when no completed loan has a loan date", async () => {
@@ -1292,8 +1628,8 @@ describe("GET /api/loans/history/overview scope", () => {
       averageDelayDays: 10,
       averageDurationDays: 4,
       borrowedCount: 0,
+      durationCount: 1,
       lateCount: 1,
-      latePercent: 50,
       lentCount: 2,
       noDueDateCount: 1,
       onTimeCount: 0,
@@ -1336,12 +1672,39 @@ describe("GET /api/loans/history/overview scope", () => {
     });
   });
 
+  it("narrows the overview by the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedOverviewHistory(accessToken);
+
+    const res = await historyOverview(accessToken, "?loanDateFrom=2026-02-01");
+
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).summary).toMatchObject({
+      borrowedCount: 1,
+      lateCount: 1,
+      lentCount: 1,
+      noDueDateCount: 1,
+      onTimeCount: 0,
+      totalCompleted: 2,
+    });
+  });
+
   it("returns 400 when the overview period starts after it ends", async () => {
     const { accessToken } = await context.registerVerifyAndLogin();
 
     const res = await historyOverview(
       accessToken,
       "?returnedFrom=2026-03-09&returnedTo=2026-03-05",
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when the overview loan date range starts after it ends", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+
+    const res = await historyOverview(
+      accessToken,
+      "?loanDateFrom=2026-03-09&loanDateTo=2026-03-05",
     );
 
     expect(res.status).toBe(400);
@@ -1434,6 +1797,260 @@ describe("GET /api/loans/history/overview top people", () => {
     expect(
       LoanHistoryOverviewViewSchema.parse(res.body).topPeople.map((person) => person.personName),
     ).toEqual(["Zoryana", "Andrii"]);
+  });
+});
+
+describe("GET /api/loans/history/overview top people facet", () => {
+  function overviewTopPeople(res: Response): LoanHistoryPersonStats[] {
+    return LoanHistoryOverviewViewSchema.parse(res.body).topPeople;
+  }
+
+  async function seedThreePeopleHistory(accessToken: string): Promise<void> {
+    await completeLoan(accessToken, {
+      direction: "lent",
+      loanDate: "2026-01-05",
+      personName: "Ivan",
+      returnedAt: "2026-01-20T10:00:00.000Z",
+      title: "Ivan lent one",
+    });
+    await completeLoan(accessToken, {
+      direction: "lent",
+      loanDate: "2026-02-05",
+      personName: "Ivan",
+      returnedAt: "2026-02-20T10:00:00.000Z",
+      title: "Ivan lent two",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-03-05",
+      personName: "Ivan",
+      returnedAt: "2026-03-20T10:00:00.000Z",
+      title: "Ivan borrowed one",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      expectedReturnDate: "2026-01-20",
+      loanDate: "2026-01-10",
+      personName: "Olha",
+      returnedAt: "2026-01-25T10:00:00.000Z",
+      title: "Olha borrowed late",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      expectedReturnDate: "2026-02-20",
+      loanDate: "2026-02-10",
+      personName: "Olha",
+      returnedAt: "2026-02-15T10:00:00.000Z",
+      title: "Olha borrowed on time",
+    });
+    await completeLoan(accessToken, {
+      direction: "lent",
+      loanDate: "2026-03-10",
+      personName: "Petro",
+      returnedAt: "2026-03-15T10:00:00.000Z",
+      title: "Petro lent one",
+    });
+  }
+
+  it("ranks every person of the unfiltered history by their completed loan count", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken);
+
+    expect(overviewTopPeople(res)).toEqual([
+      {
+        borrowedCount: 1,
+        contactId: await contactIdFor("Ivan"),
+        lentCount: 2,
+        personName: "Ivan",
+        totalCount: 3,
+      },
+      {
+        borrowedCount: 2,
+        contactId: await contactIdFor("Olha"),
+        lentCount: 0,
+        personName: "Olha",
+        totalCount: 2,
+      },
+      {
+        borrowedCount: 0,
+        contactId: await contactIdFor("Petro"),
+        lentCount: 1,
+        personName: "Petro",
+        totalCount: 1,
+      },
+    ]);
+  });
+
+  it("adds every top person's lent and borrowed counts up to their total", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const topPeople = overviewTopPeople(await historyOverview(accessToken));
+
+    expect(topPeople.map((person) => person.lentCount + person.borrowedCount)).toEqual([3, 2, 1]);
+    expect(topPeople.map((person) => person.totalCount)).toEqual([3, 2, 1]);
+  });
+
+  it("keeps the other people in the top people block when a contact filters the history", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, `?contactId=${await contactIdFor("Olha")}`);
+
+    expect(res.status).toBe(200);
+    expect(overviewTopPeople(res).map((person) => person.personName)).toEqual([
+      "Ivan",
+      "Olha",
+      "Petro",
+    ]);
+  });
+
+  it("narrows the summary to the filtered contact while the top people stay comparative", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, `?contactId=${await contactIdFor("Olha")}`);
+
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).summary).toEqual({
+      averageDelayDays: 5,
+      averageDurationDays: 10,
+      borrowedCount: 2,
+      durationCount: 2,
+      lateCount: 1,
+      lentCount: 0,
+      noDueDateCount: 0,
+      onTimeCount: 1,
+      onTimePercent: 50,
+      totalCompleted: 2,
+    });
+    expect(overviewTopPeople(res)).toHaveLength(3);
+  });
+
+  it("narrows the duration figures to the filtered contact", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, `?contactId=${await contactIdFor("Olha")}`);
+
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).duration).toEqual({
+      averageDays: 10,
+      longestDays: 15,
+      shortestDays: 5,
+    });
+  });
+
+  it("counts only the lent loans in the top people block for the lent direction", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, "?type=lent_to_someone");
+
+    expect(overviewTopPeople(res)).toEqual([
+      {
+        borrowedCount: 0,
+        contactId: await contactIdFor("Ivan"),
+        lentCount: 2,
+        personName: "Ivan",
+        totalCount: 2,
+      },
+      {
+        borrowedCount: 0,
+        contactId: await contactIdFor("Petro"),
+        lentCount: 1,
+        personName: "Petro",
+        totalCount: 1,
+      },
+    ]);
+  });
+
+  it("counts only the borrowed loans in the top people block for the borrowed direction", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, "?type=borrowed_from_someone");
+
+    expect(overviewTopPeople(res)).toEqual([
+      {
+        borrowedCount: 2,
+        contactId: await contactIdFor("Olha"),
+        lentCount: 0,
+        personName: "Olha",
+        totalCount: 2,
+      },
+      {
+        borrowedCount: 1,
+        contactId: await contactIdFor("Ivan"),
+        lentCount: 0,
+        personName: "Ivan",
+        totalCount: 1,
+      },
+    ]);
+  });
+
+  it("keeps the direction filter on the top people while the contact filter stays off them", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(
+      accessToken,
+      `?type=lent_to_someone&contactId=${await contactIdFor("Olha")}`,
+    );
+
+    expect(overviewTopPeople(res).map((person) => person.personName)).toEqual(["Ivan", "Petro"]);
+    expect(LoanHistoryOverviewViewSchema.parse(res.body).summary.totalCompleted).toBe(0);
+  });
+
+  it("narrows the top people by the returned period", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(
+      accessToken,
+      "?returnedFrom=2026-02-01&returnedTo=2026-02-28",
+    );
+
+    expect(overviewTopPeople(res)).toEqual([
+      {
+        borrowedCount: 0,
+        contactId: await contactIdFor("Ivan"),
+        lentCount: 1,
+        personName: "Ivan",
+        totalCount: 1,
+      },
+      {
+        borrowedCount: 1,
+        contactId: await contactIdFor("Olha"),
+        lentCount: 0,
+        personName: "Olha",
+        totalCount: 1,
+      },
+    ]);
+  });
+
+  it("narrows the top people by the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedThreePeopleHistory(accessToken);
+
+    const res = await historyOverview(accessToken, "?loanDateFrom=2026-03-01");
+
+    expect(overviewTopPeople(res)).toEqual([
+      {
+        borrowedCount: 1,
+        contactId: await contactIdFor("Ivan"),
+        lentCount: 0,
+        personName: "Ivan",
+        totalCount: 1,
+      },
+      {
+        borrowedCount: 0,
+        contactId: await contactIdFor("Petro"),
+        lentCount: 1,
+        personName: "Petro",
+        totalCount: 1,
+      },
+    ]);
   });
 });
 
@@ -1697,6 +2314,132 @@ describe("GET /api/loans/history/people", () => {
     expect(peopleOptions(res)).toEqual([
       { contactId: await contactIdFor("Olha Melnyk"), personName: "Olha Melnyk", totalCount: 1 },
     ]);
+  });
+
+  it("keeps an archived contact with completed loans in the people list", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-01-01",
+      personName: "Olha",
+      returnedAt: "2026-01-20T10:00:00.000Z",
+      title: "Archived person book",
+    });
+    await archiveContact(accessToken, await contactIdFor("Olha"));
+
+    const res = await historyPeople(accessToken);
+
+    expect(peopleOptions(res)).toEqual([
+      { contactId: await contactIdFor("Olha"), personName: "Olha", totalCount: 1 },
+    ]);
+  });
+});
+
+describe("GET /api/loans/history/people scope", () => {
+  async function seedScopedPeople(accessToken: string): Promise<void> {
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-01-05",
+      personName: "Olha",
+      returnedAt: "2026-02-10T10:00:00.000Z",
+      title: "Olha borrowed in January",
+    });
+    await completeLoan(accessToken, {
+      direction: "borrowed",
+      loanDate: "2026-04-05",
+      personName: "Olha",
+      returnedAt: "2026-05-10T10:00:00.000Z",
+      title: "Olha borrowed in April",
+    });
+    await completeLoan(accessToken, {
+      direction: "lent",
+      loanDate: "2026-04-20",
+      personName: "Ivan",
+      returnedAt: "2026-05-25T10:00:00.000Z",
+      title: "Ivan lent in April",
+    });
+  }
+
+  it("narrows the people by direction", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const res = await historyPeople(accessToken, "?type=lent_to_someone");
+
+    expect(peopleOptions(res)).toEqual([
+      { contactId: await contactIdFor("Ivan"), personName: "Ivan", totalCount: 1 },
+    ]);
+  });
+
+  it("narrows the people by the returned period", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const res = await historyPeople(accessToken, "?returnedFrom=2026-05-20");
+
+    expect(peopleOptions(res)).toEqual([
+      { contactId: await contactIdFor("Ivan"), personName: "Ivan", totalCount: 1 },
+    ]);
+  });
+
+  it("counts each person inside the loan date range instead of their whole history", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const lifetime = await historyPeople(accessToken);
+    const scoped = await historyPeople(accessToken, "?loanDateFrom=2026-04-01");
+
+    expect(peopleOptions(lifetime)).toEqual([
+      { contactId: await contactIdFor("Ivan"), personName: "Ivan", totalCount: 1 },
+      { contactId: await contactIdFor("Olha"), personName: "Olha", totalCount: 2 },
+    ]);
+    expect(peopleOptions(scoped)).toEqual([
+      { contactId: await contactIdFor("Ivan"), personName: "Ivan", totalCount: 1 },
+      { contactId: await contactIdFor("Olha"), personName: "Olha", totalCount: 1 },
+    ]);
+  });
+
+  it("drops a person whose only loans fall outside the loan date range", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const res = await historyPeople(accessToken, "?loanDateTo=2026-01-31");
+
+    expect(peopleOptions(res)).toEqual([
+      { contactId: await contactIdFor("Olha"), personName: "Olha", totalCount: 1 },
+    ]);
+  });
+
+  it("ignores the contact id so the person axis stays whole", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const res = await historyPeople(accessToken, `?contactId=${await contactIdFor("Olha")}`);
+
+    expect(res.status).toBe(200);
+    expect(peopleOptions(res)).toEqual([
+      { contactId: await contactIdFor("Ivan"), personName: "Ivan", totalCount: 1 },
+      { contactId: await contactIdFor("Olha"), personName: "Olha", totalCount: 2 },
+    ]);
+  });
+
+  it("ignores the result filter", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+    await seedScopedPeople(accessToken);
+
+    const base = await historyPeople(accessToken);
+    const filtered = await historyPeople(accessToken, "?result=late");
+
+    expect(filtered.status).toBe(200);
+    expect(peopleOptions(filtered)).toEqual(peopleOptions(base));
+  });
+
+  it("returns 400 when the people loan date range starts after it ends", async () => {
+    const { accessToken } = await context.registerVerifyAndLogin();
+
+    const res = await historyPeople(accessToken, "?loanDateFrom=2026-03-09&loanDateTo=2026-03-05");
+
+    expect(res.status).toBe(400);
   });
 });
 

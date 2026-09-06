@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 import type { PaginatedLoanHistoryDtoItemsItem } from "./paginatedLoanHistoryDtoItemsItem";
+import type { PaginatedLoanHistoryDtoResultCounts } from "./paginatedLoanHistoryDtoResultCounts";
 
 export interface PaginatedLoanHistoryDto {
   items: PaginatedLoanHistoryDtoItemsItem[];
@@ -29,4 +30,6 @@ export interface PaginatedLoanHistoryDto {
    * @maximum 9007199254740991
    */
   totalCount: number;
+  /** Answers to every list filter except result itself, so all === on_time + late + no_due_date and all is the size of the dataset before the result filter is applied. */
+  resultCounts: PaginatedLoanHistoryDtoResultCounts;
 }

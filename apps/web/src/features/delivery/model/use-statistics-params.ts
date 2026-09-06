@@ -29,10 +29,11 @@ import {
 } from "./statistics-period";
 
 export type StatisticsFilterPatch = Partial<
-  Pick<DeliveryStatisticsQueryState, "currency" | "status" | "store">
+  Pick<DeliveryStatisticsQueryState, "currency" | "orderState" | "store">
 >;
 
 export type UseStatisticsParamsResult = {
+  budgetCurrency: Nullable<Currency>;
   canCompare: boolean;
   clearFilters: () => void;
   compareMode: Nullable<BookOrderStatisticsCompareMode>;
@@ -40,36 +41,49 @@ export type UseStatisticsParamsResult = {
   hasActiveFilters: boolean;
   periodRange: StatisticsPeriodRange;
   queryParams: BookOrdersControllerStatisticsParams;
+  requestedDisplayCurrency: Nullable<Currency>;
+  setBudgetCurrency: (currency: Currency) => void;
   setCompareMode: (mode: Nullable<BookOrderStatisticsCompareMode>) => void;
   setCustomRange: (range: StatisticsCustomRange) => void;
+  setDisplayCurrency: (currency: Currency) => void;
   setFilters: (patch: StatisticsFilterPatch) => void;
   setIncludeCancelled: (value: boolean) => void;
-  setMoneyCurrency: (currency: Currency) => void;
   setPeriod: (preset: StatisticsPeriodPreset) => void;
   state: DeliveryStatisticsQueryState;
   today: string;
 };
+
+type StatisticsStatePatch = Partial<{
+  [Key in keyof DeliveryStatisticsQueryState]: Nullable<DeliveryStatisticsQueryState[Key]>;
+}>;
 
 export function useStatisticsParams(): UseStatisticsParamsResult {
   const [state, setState] = useQueryStates(deliveryStatisticsParsers);
   const today = todayIsoDay();
   const periodRange = statisticsPeriodRange(state, today);
 
+  const commit = (patch: StatisticsStatePatch) => {
+    void setState(patch);
+  };
+
   return {
+    budgetCurrency: state.budgetCurrency,
     canCompare: canCompareStatisticsPeriod(periodRange),
-    clearFilters: () => void setState({ currency: null, status: null, store: null }),
+    clearFilters: () => commit({ currency: null, orderState: null, store: null }),
     compareMode: resolveStatisticsCompareMode(state, periodRange),
     filterCount: statisticsFilterCount(state),
     hasActiveFilters: hasActiveStatisticsFilters(state),
     periodRange,
     queryParams: toDeliveryStatisticsParams(state, today),
-    setCompareMode: (mode) => void setState({ compare: mode }),
-    setCustomRange: (range) => void setState({ from: range.from, period: "custom", to: range.to }),
-    setFilters: (patch) => void setState(patch),
-    setIncludeCancelled: (value) => void setState({ includeCancelled: value }),
-    setMoneyCurrency: (money) => void setState({ money }),
+    requestedDisplayCurrency: state.money,
+    setBudgetCurrency: (currency) => commit({ budgetCurrency: currency }),
+    setCompareMode: (mode) => commit({ compare: mode }),
+    setCustomRange: (range) => commit({ from: range.from, period: "custom", to: range.to }),
+    setDisplayCurrency: (currency) => commit({ money: currency }),
+    setFilters: (patch) => commit(patch),
+    setIncludeCancelled: (value) => commit({ includeCancelled: value }),
     setPeriod: (preset) =>
-      void setState({
+      commit({
         compare: nextCompareMode({ compare: state.compare, preset, state, today }),
         from: preset === "custom" ? state.from : null,
         period: preset,

@@ -8,6 +8,8 @@ type LoanPageDefinition = {
   otherType: LoanType;
 };
 
+export const LOAN_HISTORY_PAGE_HREF = "/loans/history";
+
 export const LOAN_PAGES = {
   borrowed_from_someone: {
     direction: "borrowed",

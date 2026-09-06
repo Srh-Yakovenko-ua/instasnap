@@ -14,6 +14,7 @@ import type {
   CurrencyDelta,
   CurrencyTotal,
   Nullable,
+  StatisticsPeriod,
 } from "@app/shared";
 
 import { CurrencySchema } from "@app/shared";
@@ -21,6 +22,7 @@ import { CurrencySchema } from "@app/shared";
 import type {
   AmountAccumulator,
   ClassifiedOrder,
+  CoverageAccumulator,
   OrderStatisticsRecord,
 } from "./statistics-scope.js";
 
@@ -30,22 +32,25 @@ import { buildLandedCostSummary } from "./landed-cost.js";
 import { buildOrderDaily } from "./statistics-calendar.js";
 import { computeStatisticsCosts } from "./statistics-costs.js";
 import { toCurrencyDeltas, toNumericDelta } from "./statistics-delta.js";
+import { buildStatisticsDynamics } from "./statistics-dynamics.js";
 import { computeBookOrderLifecycle } from "./statistics-lifecycle.js";
-import { buildSpendingPulse } from "./statistics-pulse.js";
+import { buildStatisticsInsights } from "./statistics-pulse.js";
 import { buildPurchaseRecords } from "./statistics-records.js";
 import {
+  addCoverage,
   addItemPrices,
   addOrderAmount,
   averagesFromAmounts,
   classifyOrder,
   countActiveShipments,
   countItems,
+  coverageRows,
   isActiveItem,
   isReceivedItem,
   ORDER_ENUMS,
   totalsFromAmounts,
 } from "./statistics-scope.js";
-import { buildStoreScorecards, buildStoreSpendGrowth } from "./statistics-stores.js";
+import { buildStoreScorecards, buildStoreSpendMovement } from "./statistics-stores.js";
 
 export const ORDER_STATISTICS_TOP_LIMIT = 10;
 
@@ -66,6 +71,7 @@ type PricedOrder = {
 
 export function computeBookOrderStatistics({
   activeRecords,
+  comparisonPeriod,
   includeCancelled,
   previousRecords,
   records,
@@ -73,6 +79,7 @@ export function computeBookOrderStatistics({
   topLimit,
 }: {
   activeRecords: OrderStatisticsRecord[];
+  comparisonPeriod: Nullable<StatisticsPeriod>;
   includeCancelled: boolean;
   previousRecords: Nullable<OrderStatisticsRecord[]>;
   records: OrderStatisticsRecord[];
@@ -97,10 +104,15 @@ export function computeBookOrderStatistics({
   const landedCost = buildLandedCostSummary(includedOrders);
   const topOrdersByCurrency = buildTopBookOrdersByCurrency({ includedOrders, topLimit });
   const comparison = buildComparison({ previousIncludedOrders, previousOrders, summary });
+  const dynamics = buildStatisticsDynamics({
+    comparisonOrders: previousOrders === null ? null : previousIncludedOrders,
+    comparisonPeriod,
+    currentPeriod: scope.period,
+    orders: includedOrders,
+  });
   const purchaseRecords = buildPurchaseRecords({
     byStore,
     includedOrders,
-    monthly,
     scope,
     topOrdersByCurrency,
   });
@@ -111,12 +123,11 @@ export function computeBookOrderStatistics({
     comparison,
     costs,
     daily: buildOrderDaily(includedOrders),
-    landedCost,
-    lifecycle: computeBookOrderLifecycle({ includeCancelled, orders, previousOrders }),
-    monthly,
-    pulse: buildSpendingPulse({
+    dynamics,
+    insights: buildStatisticsInsights({
       comparison,
       costs,
+      dynamics,
       landedCostDeltas: comparisonLandedDeltas({
         landedCost,
         previousIncludedOrders,
@@ -125,11 +136,15 @@ export function computeBookOrderStatistics({
       landedCoverage: landedCost,
       recordMonthByCurrency: purchaseRecords.recordMonthByCurrency,
       scope,
-      storeGrowth:
+      storeMovement:
         previousOrders === null
           ? []
-          : buildStoreSpendGrowth({ current: includedOrders, previous: previousIncludedOrders }),
+          : buildStoreSpendMovement({ current: includedOrders, previous: previousIncludedOrders }),
+      totalsByCurrency: summary.totalsByCurrency,
     }),
+    landedCost,
+    lifecycle: computeBookOrderLifecycle({ includeCancelled, orders, previousOrders }),
+    monthly,
     records: purchaseRecords,
     snapshot: buildSnapshot(activeOrders),
     summary,
@@ -261,9 +276,23 @@ function buildOrderSummary({
   const active: AmountAccumulator = new Map();
   const cancelled: AmountAccumulator = new Map();
   const received: AmountAccumulator = new Map();
+  const financialCoverage: CoverageAccumulator = new Map();
+  const priceCoverage: CoverageAccumulator = new Map();
   for (const order of includedOrders) {
     addOrderAmount({ accumulator: orderAmounts, order });
     addItemPrices({ accumulator: bookPrices, order });
+    addCoverage({
+      accumulator: financialCoverage,
+      currency: order.currency,
+      isCovered: order.amount !== null,
+    });
+    for (const item of order.countedItems) {
+      addCoverage({
+        accumulator: priceCoverage,
+        currency: order.currency,
+        isCovered: item.price !== null,
+      });
+    }
     addOrderAmount({
       accumulator: amountsForDerivedStatus({
         active,
@@ -287,7 +316,17 @@ function buildOrderSummary({
       (order) => order.derivedStatus === ORDER_ENUMS.derivedStatus.cancelled,
     ).length,
     cancelledTotalsByCurrency: totalsFromAmounts(cancelled),
+    financialCoverageByCurrency: coverageRows(financialCoverage).map((row) => ({
+      currency: row.currency,
+      ordersInScope: row.total,
+      ordersWithResolvedAmount: row.covered,
+    })),
     ordersCount: includedOrders.length,
+    priceCoverageByCurrency: coverageRows(priceCoverage).map((row) => ({
+      booksInScope: row.total,
+      booksWithPrice: row.covered,
+      currency: row.currency,
+    })),
     receivedBooksCount: countItems({ orders: includedOrders, predicate: isReceivedItem }),
     receivedTotalsByCurrency: totalsFromAmounts(received),
     shipmentsCount: includedOrders.reduce(
@@ -300,15 +339,26 @@ function buildOrderSummary({
 
 function buildSnapshot(activeOrders: ClassifiedOrder[]): BookOrderStatisticsSnapshot {
   const activeAmounts: AmountAccumulator = new Map();
+  const activeCoverage: CoverageAccumulator = new Map();
   const ordersCarryingActiveItems = activeOrders.filter((order) =>
     order.countedItems.some((item) => isActiveItem(item)),
   );
   for (const order of ordersCarryingActiveItems) {
     addOrderAmount({ accumulator: activeAmounts, order });
+    addCoverage({
+      accumulator: activeCoverage,
+      currency: order.currency,
+      isCovered: order.amount !== null,
+    });
   }
 
   return {
     activeBooksCount: countItems({ orders: activeOrders, predicate: isActiveItem }),
+    activeMoneyCoverageByCurrency: coverageRows(activeCoverage).map((row) => ({
+      currency: row.currency,
+      ordersInScope: row.total,
+      ordersWithResolvedAmount: row.covered,
+    })),
     activeOrdersCount: ordersCarryingActiveItems.length,
     activeShipmentsCount: countActiveShipments(activeOrders),
     activeTotalsByCurrency: totalsFromAmounts(activeAmounts),

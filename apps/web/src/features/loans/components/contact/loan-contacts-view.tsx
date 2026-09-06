@@ -14,7 +14,7 @@ import { TitleLeaf } from "@/components/title-leaf";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import type { LoanContactResolution } from "./create-loan-contact-dialog";
+import type { LoanContactResolution } from "./create-loan-contact-form";
 
 import { useLoanContactsList } from "../../api/use-loan-contacts-list";
 import { useLoanContactDrawer } from "../../model/use-loan-contact-drawer";
@@ -63,14 +63,7 @@ export function LoanContactsView() {
         </Button>
       </header>
 
-      <LoanContactsToolbar
-        counts={counts ?? undefined}
-        onSearchChange={query.setSearch}
-        onSearchClear={() => query.setSearch("")}
-        onStatusSelect={query.setStatus}
-        search={query.state.q}
-        status={query.status}
-      />
+      <LoanContactsToolbar counts={counts ?? undefined} query={query} />
 
       <LoanContactsContent
         hasActiveQuery={query.hasActiveQuery}

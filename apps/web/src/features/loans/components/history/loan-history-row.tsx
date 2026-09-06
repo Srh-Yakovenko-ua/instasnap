@@ -1,25 +1,25 @@
 "use client";
 
-import type { LoanHistoryListItemView, LoanHistoryResult } from "@app/shared";
+import type { LoanHistoryListItemView } from "@app/shared";
 
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-
-import type { UiIconName } from "@/components/icons";
+import { useId } from "react";
 
 import { UiIcon } from "@/components/icons";
+import { TooltipHint } from "@/components/tooltip-hint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
+import { LOAN_HISTORY_RESULT_LOOK } from "../../model/loan-history-result";
 import { formatLoanDate } from "../../model/loans-derive";
 import { LoanContactNameButton } from "../contact/loan-contact-name-button";
 
@@ -31,25 +31,6 @@ type LoanHistoryRowProps = {
   onOpenDetails: () => void;
 };
 
-type TimelineNode = {
-  icon: UiIconName;
-  label: string;
-  value: string;
-};
-
-const RESULT_LOOK = {
-  late: { icon: "clock", surfaceClass: "bg-warning-soft", toneClass: "text-warning" },
-  no_due_date: {
-    icon: "circle-slash",
-    surfaceClass: "bg-secondary",
-    toneClass: "text-muted-foreground",
-  },
-  on_time: { icon: "check-circle", surfaceClass: "bg-success-soft", toneClass: "text-success" },
-} as const satisfies Record<
-  LoanHistoryResult,
-  { icon: UiIconName; surfaceClass: string; toneClass: string }
->;
-
 export function LoanHistoryRow({
   loan,
   onCorrectDate,
@@ -57,7 +38,6 @@ export function LoanHistoryRow({
   onOpenContact,
   onOpenDetails,
 }: LoanHistoryRowProps) {
-  const t = useTranslations("loans.history");
   const tDirection = useTranslations("loans.history.direction");
 
   const isBorrowed = loan.type === "borrowed_from_someone";
@@ -65,9 +45,9 @@ export function LoanHistoryRow({
   const titleId = `loan-history-title-${loan.id}`;
 
   return (
-    <article className="group/history-row @container/history-row relative flex items-stretch gap-3 rounded-xl border border-border bg-card p-3 shadow-card transition-[box-shadow,border-color] duration-200 ease-out hover:border-accent-border hover:shadow-hover motion-reduce:transition-none sm:gap-3.5">
+    <article className="@container/history-row flex items-stretch gap-3 rounded-xl border border-border bg-card p-3 shadow-card transition-[box-shadow,border-color] duration-200 ease-out hover:border-accent-border hover:shadow-hover motion-reduce:transition-none sm:gap-3.5">
       <Link
-        className="relative z-10 aspect-[2/3] w-16 shrink-0 self-start overflow-hidden rounded-lg bg-accent outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-20"
+        className="relative aspect-[2/3] w-16 shrink-0 self-start overflow-hidden rounded-lg bg-accent outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-20"
         href={bookHref}
         tabIndex={-1}
       >
@@ -94,7 +74,7 @@ export function LoanHistoryRow({
             id={titleId}
           >
             <Link
-              className="relative z-10 rounded-sm text-ink no-underline transition-colors outline-none hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="rounded-sm text-ink no-underline transition-colors outline-none hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50"
               href={bookHref}
             >
               {loan.book.title}
@@ -107,82 +87,53 @@ export function LoanHistoryRow({
 
           <Badge variant={isBorrowed ? "info" : "primary"}>{tDirection(loan.type)}</Badge>
 
-          <p className="flex min-w-0 items-baseline gap-1.5 text-xs">
-            <span className="shrink-0 text-muted-foreground">
-              {t(isBorrowed ? "row.personBorrowed" : "row.personLent")}
-            </span>
-            <LoanContactNameButton
-              className="relative z-10 font-medium text-foreground/90"
-              name={loan.personName}
-              onOpen={onOpenContact}
-            />
-          </p>
+          <LoanContactNameButton
+            className="max-w-full self-start"
+            contact={null}
+            name={loan.personName}
+            onOpen={onOpenContact}
+          />
         </div>
 
         <div className="hidden w-px self-stretch bg-border @3xl/history-row:block" />
 
-        <LoanHistoryTimeline loan={loan} />
+        <LoanHistoryPeriod loan={loan} />
 
         <div className="hidden w-px self-stretch bg-border @3xl/history-row:block" />
 
-        <LoanHistoryOutcome loan={loan} />
+        <LoanHistoryOutcome loan={loan} onOpenDetails={onOpenDetails} titleId={titleId} />
       </div>
 
-      <div className="relative z-10 shrink-0 self-start">
+      <div className="shrink-0 self-start">
         <LoanHistoryActionsMenu
-          bookHref={bookHref}
+          loanId={loan.id}
           onCorrectDate={onCorrectDate}
           onEditNote={onEditNote}
-          onOpenDetails={onOpenDetails}
         />
       </div>
-
-      <button
-        aria-describedby={titleId}
-        aria-label={t("row.openDetails")}
-        className="absolute inset-0 cursor-pointer rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        data-loan-trigger={loan.id}
-        onClick={onOpenDetails}
-        type="button"
-      />
     </article>
   );
 }
 
 function LoanHistoryActionsMenu({
-  bookHref,
+  loanId,
   onCorrectDate,
   onEditNote,
-  onOpenDetails,
 }: {
-  bookHref: string;
+  loanId: string;
   onCorrectDate: () => void;
   onEditNote: () => void;
-  onOpenDetails: () => void;
 }) {
   const t = useTranslations("loans.history.actions");
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button aria-label={t("menu")} size="icon" variant="ghost">
+        <Button aria-label={t("menu")} data-loan-trigger={loanId} size="icon" variant="ghost">
           <UiIcon name="more" size={18} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuItem onSelect={onOpenDetails}>
-          <UiIcon name="info" size={16} />
-          {t("details")}
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={bookHref}>
-            <UiIcon name="book" size={16} />
-            {t("openBook")}
-          </Link>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
         <DropdownMenuItem onSelect={onCorrectDate}>
           <UiIcon name="calendar" size={16} />
           {t("correctDate")}
@@ -196,88 +147,112 @@ function LoanHistoryActionsMenu({
   );
 }
 
-function LoanHistoryOutcome({ loan }: { loan: LoanHistoryListItemView }) {
-  const t = useTranslations("loans.history");
-  const look = RESULT_LOOK[loan.historyResult];
-
-  const result =
-    loan.historyResult === "late"
-      ? t("result.late", { count: loan.delayDays ?? 0 })
-      : t(`result.${loan.historyResult}`);
-
-  const duration =
-    loan.durationDays === null
-      ? t("duration.unknown")
-      : t(loan.historyResult === "late" ? "duration.total" : "duration.days", {
-          count: loan.durationDays,
-        });
+function LoanHistoryOutcome({
+  loan,
+  onOpenDetails,
+  titleId,
+}: {
+  loan: LoanHistoryListItemView;
+  onOpenDetails: () => void;
+  titleId: string;
+}) {
+  const t = useTranslations("loans.history.row");
+  const look = LOAN_HISTORY_RESULT_LOOK[loan.historyResult];
+  const outcomeId = useId();
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-0.5 self-start rounded-lg px-3 py-2 @3xl/history-row:w-48 @3xl/history-row:shrink-0",
-        look.surfaceClass,
-      )}
-    >
-      <p className={cn("flex items-start gap-1.5 text-sm font-semibold", look.toneClass)}>
-        <UiIcon aria-hidden className="mt-0.5 shrink-0" name={look.icon} size={16} />
-        <span>{result}</span>
+    <TooltipHint label={t("openDetails")}>
+      <button
+        aria-describedby={`${titleId} ${outcomeId}`}
+        aria-label={t("openDetails")}
+        className={cn(
+          "group/outcome flex cursor-pointer items-center gap-2 self-start rounded-lg border px-3 py-2 text-left transition-colors duration-200 ease-out outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none @3xl/history-row:w-52 @3xl/history-row:shrink-0",
+          look.surfaceClass,
+          look.hoverSurfaceClass,
+        )}
+        data-loan-details-trigger={loan.id}
+        onClick={onOpenDetails}
+        type="button"
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5" id={outcomeId}>
+          <span className={cn("flex items-start gap-1.5 text-sm font-semibold", look.toneClass)}>
+            <UiIcon aria-hidden className="mt-0.5 shrink-0" name={look.icon} size={16} />
+            <span className="min-w-0">
+              <LoanHistoryOutcomeResult loan={loan} />
+            </span>
+          </span>
+          {loan.durationDays === null ? null : (
+            <span className="pl-[1.375rem] text-xs text-muted-foreground tabular-nums">
+              {t("outcome.duration", { count: loan.durationDays })}
+            </span>
+          )}
+        </span>
+
+        <UiIcon
+          aria-hidden
+          className="shrink-0 text-muted-foreground transition-colors group-hover/outcome:text-foreground"
+          name="chevron-right"
+          size={16}
+        />
+      </button>
+    </TooltipHint>
+  );
+}
+
+function LoanHistoryOutcomeResult({ loan }: { loan: LoanHistoryListItemView }) {
+  const t = useTranslations("loans.history");
+
+  if (loan.historyResult === "late") {
+    return <>{t("result.late", { count: loan.delayDays ?? 0 })}</>;
+  }
+  if (loan.historyResult === "no_due_date") {
+    return <>{t("row.outcome.noDueDate")}</>;
+  }
+  return <>{t("result.on_time")}</>;
+}
+
+function LoanHistoryPeriod({ loan }: { loan: LoanHistoryListItemView }) {
+  const t = useTranslations("loans.history.loanPeriod");
+
+  const startDate = formatLoanDate(loan.loanDate);
+  const returnDate = formatLoanDate(loan.returnedDate) ?? loan.returnedDate;
+  const planDate = formatLoanDate(loan.expectedReturnDate);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        <UiIcon aria-hidden className="shrink-0" name="clock" size={14} />
+        {t("title")}
       </p>
-      <p className="pl-[1.375rem] text-xs text-muted-foreground tabular-nums">{duration}</p>
+
+      <p className="min-w-0 text-sm">
+        {startDate === null ? null : (
+          <>
+            <PeriodPoint
+              label={t(loan.type === "borrowed_from_someone" ? "borrowed" : "lent")}
+              value={startDate}
+            />{" "}
+            <span aria-hidden className="text-muted-foreground">
+              &rarr;
+            </span>{" "}
+          </>
+        )}
+        <PeriodPoint label={t("returned")} value={returnDate} />
+      </p>
+
+      <p className="flex min-w-0 flex-col gap-0.5 text-xs text-muted-foreground tabular-nums">
+        {startDate === null ? <span>{t("startUnknown")}</span> : null}
+        <span>{planDate === null ? t("noTerm") : t("plan", { date: planDate })}</span>
+      </p>
     </div>
   );
 }
 
-function LoanHistoryTimeline({ loan }: { loan: LoanHistoryListItemView }) {
-  const t = useTranslations("loans.history.timeline");
-
-  const nodes: TimelineNode[] = [
-    {
-      icon: "clock",
-      label: t(loan.type === "borrowed_from_someone" ? "loanDateBorrowed" : "loanDateLent"),
-      value: formatLoanDate(loan.loanDate) ?? t("unknownDate"),
-    },
-    {
-      icon: "calendar",
-      label: t("expected"),
-      value: formatLoanDate(loan.expectedReturnDate) ?? t("expectedNone"),
-    },
-    {
-      icon: "check-circle",
-      label: t("returned"),
-      value: formatLoanDate(loan.returnedDate) ?? t("unknownDate"),
-    },
-  ];
-
+function PeriodPoint({ label, value }: { label: string; value: string }) {
   return (
-    <ol className="flex min-w-0 flex-1 flex-col gap-2 @5xl/history-row:flex-row @5xl/history-row:items-start @5xl/history-row:gap-1">
-      {nodes.map((node, index) => (
-        <li
-          className="flex min-w-0 items-start gap-1.5 @5xl/history-row:flex-1 @5xl/history-row:basis-0"
-          key={node.label}
-        >
-          {index === 0 ? null : (
-            <UiIcon
-              aria-hidden
-              className="mt-1 hidden shrink-0 text-muted-foreground/50 @5xl/history-row:block"
-              name="arrow-right"
-              size={14}
-            />
-          )}
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex items-start gap-1.5 text-sm font-medium text-foreground tabular-nums">
-              <UiIcon
-                aria-hidden
-                className="mt-0.5 shrink-0 text-icon"
-                name={node.icon}
-                size={14}
-              />
-              <span>{node.value}</span>
-            </span>
-            <span className="pl-5 text-xs text-muted-foreground">{node.label}</span>
-          </span>
-        </li>
-      ))}
-    </ol>
+    <span className="whitespace-nowrap">
+      <span className="text-muted-foreground">{label}</span>{" "}
+      <span className="font-medium text-foreground tabular-nums">{value}</span>
+    </span>
   );
 }

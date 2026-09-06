@@ -34,6 +34,7 @@ import { ReadingQueueModule } from "./modules/reading-queue/index.js";
 import { RealtimeModule } from "./modules/realtime/index.js";
 import { SeriesOrderCheckModule } from "./modules/series-order-check/index.js";
 import { SeriesModule } from "./modules/series/series.module.js";
+import { StatisticsModule } from "./modules/statistics/index.js";
 import { TagsModule } from "./modules/tags/tags.module.js";
 import { TimelineModule } from "./modules/timeline/timeline.module.js";
 import { TrashModule } from "./modules/trash/trash.module.js";
@@ -65,6 +66,7 @@ import { TrashModule } from "./modules/trash/trash.module.js";
     ChangelogModule,
     QuotesModule,
     ReadingGoalsModule,
+    StatisticsModule,
     NotesModule,
     TimelineModule,
     TrashModule,

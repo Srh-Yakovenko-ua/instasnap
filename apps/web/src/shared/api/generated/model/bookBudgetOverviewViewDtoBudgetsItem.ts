@@ -7,12 +7,15 @@
  */
 import type { BookBudgetOverviewViewDtoBudgetsItemCurrency } from "./bookBudgetOverviewViewDtoBudgetsItemCurrency";
 import type { BookBudgetOverviewViewDtoBudgetsItemCurrentMonth } from "./bookBudgetOverviewViewDtoBudgetsItemCurrentMonth";
-import type { BookBudgetOverviewViewDtoBudgetsItemScheduled } from "./bookBudgetOverviewViewDtoBudgetsItemScheduled";
+import type { BookBudgetOverviewViewDtoBudgetsItemSpendCoverage } from "./bookBudgetOverviewViewDtoBudgetsItemSpendCoverage";
+import type { BookBudgetOverviewViewDtoBudgetsItemUpcomingChangesItem } from "./bookBudgetOverviewViewDtoBudgetsItemUpcomingChangesItem";
 
 export type BookBudgetOverviewViewDtoBudgetsItem = {
   currency: BookBudgetOverviewViewDtoBudgetsItemCurrency;
   /** @nullable */
   currentMonth: BookBudgetOverviewViewDtoBudgetsItemCurrentMonth;
-  /** @nullable */
-  scheduled: BookBudgetOverviewViewDtoBudgetsItemScheduled;
+  /** How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero. */
+  spendCoverage: BookBudgetOverviewViewDtoBudgetsItemSpendCoverage;
+  /** Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped. */
+  upcomingChanges: BookBudgetOverviewViewDtoBudgetsItemUpcomingChangesItem[];
 };

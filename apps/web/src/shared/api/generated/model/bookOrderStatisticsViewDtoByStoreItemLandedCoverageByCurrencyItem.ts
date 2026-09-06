@@ -9,20 +9,22 @@ import type { BookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItemC
 
 export type BookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItem = {
   /**
+   * Every book of this currency the period counted, whether or not its cost could be broken down. This is the denominator of coveragePercent.
    * @minimum 0
    * @maximum 9007199254740991
    */
-  countedBooksCount: number;
+  booksInScope: number;
   /**
-   * Share of landed-eligible books that actually received an allocated landed cost. It is 0, never null, when countedBooksCount is 0.
+   * The books whose cost the allocation could actually explain, so they carry a landed cost. This is the numerator of coveragePercent and can never exceed booksInScope.
+   * @minimum 0
+   * @maximum 9007199254740991
+   */
+  booksWithLandedCost: number;
+  /**
+   * booksWithLandedCost over booksInScope. It is 0, never null, when nothing was in scope.
    * @minimum 0
    * @maximum 100
    */
   coveragePercent: number;
   currency: BookOrderStatisticsViewDtoByStoreItemLandedCoverageByCurrencyItemCurrency;
-  /**
-   * @minimum 0
-   * @maximum 9007199254740991
-   */
-  eligibleBooksCount: number;
 };

@@ -1,34 +1,38 @@
 "use client";
 
-import type { LoanContactView } from "@app/shared";
+import type { LoanContactListItemView, LoanContactView, LoanDirection } from "@app/shared";
 
 import { normalizeName } from "@app/shared";
 import { Command as CommandPrimitive } from "cmdk";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { UiIcon } from "@/components/icons";
 import { CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { cn } from "@/lib/utils";
 
 import type { LoanContactSelection } from "../model/loan-contact-selection";
 
 import { useLoanContacts } from "../api/use-loan-contacts";
-import { CreateLoanContactDialog } from "./contact/create-loan-contact-dialog";
 
 type LoanContactOptionProps = {
-  contact: LoanContactView;
+  contact: LoanContactListItemView;
+  direction: LoanDirection;
   onSelect: () => void;
 };
 
 type LoanContactPickerProps = {
   describedBy?: string;
+  direction: LoanDirection;
   id: string;
   invalid: boolean;
   label: string;
   onChange: (selection: LoanContactSelection | null) => void;
+  onRequestCreate?: (name: string) => void;
+  opensOnFocus?: boolean;
   placeholder: string;
   value: LoanContactSelection | null;
 };
@@ -37,21 +41,36 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 export function LoanContactPicker({
   describedBy,
+  direction,
   id,
   invalid,
   label,
   onChange,
+  onRequestCreate,
+  opensOnFocus = true,
   placeholder,
   value,
 }: LoanContactPickerProps) {
   const t = useTranslations("loans.contactPicker");
+  const anchorRef = useRef<HTMLDivElement>(null);
   const selectedName = value?.name ?? "";
   const [query, setQuery] = useState(selectedName);
   const [trackedName, setTrackedName] = useState(selectedName);
   const [open, setOpen] = useState(false);
-  const [creatingName, setCreatingName] = useState<null | string>(null);
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
-  const { data: contacts = [], isFetching } = useLoanContacts(debouncedQuery);
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isFetchingNextPage,
+    items: contacts,
+  } = useLoanContacts(debouncedQuery);
+  const { onScroll, scrollRef } = useInfiniteScroll({
+    hasNextPage,
+    isFetchingNextPage,
+    itemCount: contacts.length,
+    onLoadMore: fetchNextPage,
+  });
 
   if (selectedName !== trackedName) {
     setTrackedName(selectedName);
@@ -60,11 +79,16 @@ export function LoanContactPicker({
 
   const trimmedQuery = query.trim();
   const normalizedQuery = normalizeName(trimmedQuery);
-  const searchSettled = !isFetching && debouncedQuery.trim() === trimmedQuery;
+  const isLoadingResults = isFetching && !isFetchingNextPage;
+  const searchSettled = !isLoadingResults && debouncedQuery.trim() === trimmedQuery;
   const matchesExistingContact = contacts.some(
     (contact) => normalizeName(contact.name) === normalizedQuery,
   );
-  const showCreateOption = trimmedQuery.length > 0 && searchSettled && !matchesExistingContact;
+  const showCreateOption =
+    onRequestCreate !== undefined &&
+    trimmedQuery.length > 0 &&
+    searchSettled &&
+    !matchesExistingContact;
   const showClear = value !== null || query.length > 0;
 
   function pickContact(contact: LoanContactView) {
@@ -86,7 +110,7 @@ export function LoanContactPicker({
       <CommandPrimitive label={label} shouldFilter={false}>
         <Popover onOpenChange={setOpen} open={open}>
           <PopoverAnchor asChild>
-            <div className="relative flex items-center">
+            <div className="relative flex items-center" ref={anchorRef}>
               <UiIcon
                 aria-hidden
                 className={cn(
@@ -109,7 +133,9 @@ export function LoanContactPicker({
                 )}
                 id={id}
                 onClick={() => setOpen(true)}
-                onFocus={() => setOpen(true)}
+                onFocus={() => {
+                  if (opensOnFocus) setOpen(true);
+                }}
                 onValueChange={(next) => {
                   setQuery(next);
                   setOpen(true);
@@ -133,14 +159,20 @@ export function LoanContactPicker({
           <PopoverContent
             align="start"
             className="w-(--radix-popover-trigger-width) max-w-(--radix-popover-trigger-width) p-1"
+            onInteractOutside={(event) => {
+              const target = event.detail.originalEvent.target;
+              if (target instanceof Node && anchorRef.current?.contains(target)) {
+                event.preventDefault();
+              }
+            }}
             onOpenAutoFocus={(event) => event.preventDefault()}
             sideOffset={6}
           >
-            <CommandList>
-              {isFetching && contacts.length === 0 ? (
+            <CommandList onScroll={onScroll} ref={scrollRef}>
+              {isLoadingResults && contacts.length === 0 ? (
                 <CommandEmpty>{t("searching")}</CommandEmpty>
               ) : null}
-              {!isFetching && contacts.length === 0 && !showCreateOption ? (
+              {!isLoadingResults && contacts.length === 0 && !showCreateOption ? (
                 <CommandEmpty>{t("empty")}</CommandEmpty>
               ) : null}
               {contacts.length > 0 ? (
@@ -148,11 +180,17 @@ export function LoanContactPicker({
                   {contacts.map((contact) => (
                     <LoanContactOption
                       contact={contact}
+                      direction={direction}
                       key={contact.id}
                       onSelect={() => pickContact(contact)}
                     />
                   ))}
                 </CommandGroup>
+              ) : null}
+              {isFetchingNextPage ? (
+                <div className="px-2 py-1.5 text-center text-xs text-muted-foreground">
+                  {t("searching")}
+                </div>
               ) : null}
               {showCreateOption ? (
                 <CommandGroup heading={t("createHeading")}>
@@ -160,7 +198,7 @@ export function LoanContactPicker({
                     className="cursor-pointer"
                     onSelect={() => {
                       setOpen(false);
-                      setCreatingName(trimmedQuery);
+                      onRequestCreate?.(trimmedQuery);
                     }}
                     value={`create-${trimmedQuery}`}
                   >
@@ -175,33 +213,25 @@ export function LoanContactPicker({
           </PopoverContent>
         </Popover>
       </CommandPrimitive>
-
-      <CreateLoanContactDialog
-        conflictAction="select"
-        initialName={creatingName ?? ""}
-        onOpenChange={(next) => {
-          if (!next) setCreatingName(null);
-        }}
-        onResolved={({ contact }) => {
-          setCreatingName(null);
-          pickContact(contact);
-        }}
-        open={creatingName !== null}
-      />
     </div>
   );
 }
 
-function LoanContactOption({ contact, onSelect }: LoanContactOptionProps) {
+function LoanContactOption({ contact, direction, onSelect }: LoanContactOptionProps) {
   const t = useTranslations("loans.contactPicker");
+  const activeCount = direction === "lent" ? contact.activeLentCount : contact.activeBorrowedCount;
 
   return (
     <CommandItem className="cursor-pointer" onSelect={onSelect} value={contact.id}>
       <UiIcon className="shrink-0 text-muted-foreground" name="user" size={16} />
       <span className="min-w-0 truncate">{contact.name}</span>
-      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-        {t("loanCount", { count: contact.loanCount })}
-      </span>
+      {activeCount > 0 ? (
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+          {t(direction === "lent" ? "activeLentCount" : "activeBorrowedCount", {
+            count: activeCount,
+          })}
+        </span>
+      ) : null}
     </CommandItem>
   );
 }

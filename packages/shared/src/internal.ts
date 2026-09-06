@@ -22,6 +22,8 @@ export const BOOK_RATING = {
 export const ratingBound = () =>
   z.coerce.number().min(BOOK_RATING.min).max(BOOK_RATING.max).multipleOf(BOOK_RATING.step);
 
+export const ratingAverage = () => z.number().min(BOOK_RATING.min).max(BOOK_RATING.max);
+
 const UTC_DAY = {
   isoDateLength: 10,
   skewToleranceDays: 1,

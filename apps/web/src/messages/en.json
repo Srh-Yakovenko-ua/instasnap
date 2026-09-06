@@ -29,7 +29,8 @@
     "quotes": "Quotes",
     "publishers": "Publishers",
     "settings": "Settings",
-    "loansContacts": "Contacts"
+    "loansContacts": "Contacts",
+    "statistics": "Statistics"
   },
   "readingQueue": {
     "title": "Reading queue",
@@ -1831,25 +1832,20 @@
           "book": "Book"
         },
         "bookStep": {
-          "searchLabel": "Search books",
-          "searchPlaceholder": "Title or author",
-          "searching": "Searching books…",
           "notFound": "Nothing found",
-          "loadError": "Could not load books",
-          "selectBook": "Select a book",
           "next": "Next",
           "createBook": "Add a book",
           "lent": {
-            "title": "Which book are you lending?",
-            "description": "Pick the book you are handing to {name}.",
             "emptyTitle": "No books to lend",
-            "emptyHint": "Add a book to your library first, then lend it to someone."
+            "emptyHint": "Add a book to your library first, then lend it to someone.",
+            "multiTitle": "Which books are you lending?",
+            "multiDescription": "Pick the books you are handing to {name}."
           },
           "borrowed": {
-            "title": "Which book are you borrowing?",
-            "description": "Pick the book you are borrowing from {name}.",
             "emptyTitle": "No books to borrow",
-            "emptyHint": "Add the book to BookNest first, then record the loan."
+            "emptyHint": "Add the book to BookNest first, then record the loan.",
+            "multiTitle": "Which books are you borrowing?",
+            "multiDescription": "Pick the books you are borrowing from {name}."
           }
         },
         "back": "Back",
@@ -1870,6 +1866,27 @@
           "reminderNeedsDate": "Pick a return date for the reminder.",
           "returnBeforeLoan": "Return can’t be before the loan date.",
           "returnRequiresLoan": "This book was never lent, so there is nothing to return."
+        },
+        "booksPicker": {
+          "library": "Your library",
+          "search": "Search by title or author…",
+          "selected": "Selected books: {count}",
+          "clear": "Clear",
+          "emptySelected": "No books selected yet",
+          "removeSelected": "Remove from selection",
+          "loadMore": "Show more"
+        },
+        "batch": {
+          "appliesTo": "These terms will apply to {count, plural, one {# selected book} other {# selected books}}.",
+          "conflictIntro": "These books cannot take a loan right now. Remove them from the selection or change their status:",
+          "lent": {
+            "success": "{count, plural, one {Lent # book} other {Lent # books}}",
+            "description": "Record the terms you are lending these books on."
+          },
+          "borrowed": {
+            "success": "{count, plural, one {Borrowed # book} other {Borrowed # books}}",
+            "description": "Record the terms you are borrowing these books on."
+          }
         }
       },
       "delivery": {
@@ -2711,7 +2728,8 @@
         "expectedDate": "Expected delivery date",
         "structure": "Delivery structure",
         "currency": "Currency",
-        "orderTotal": "Order total"
+        "orderTotal": "Order total",
+        "orderAge": "Time since ordering"
       },
       "range": {
         "from": "From",
@@ -2748,10 +2766,11 @@
         "max": "To",
         "hint": "Filters by the final total of the order.",
         "pickCurrency": "Pick one currency to filter by total."
-      }
+      },
+      "orderAgeHint": "Counted from the order date to today."
     },
     "activeFilters": {
-      "ageBucket": "Age: {value}",
+      "ageBucket": "Since ordering: {value}",
       "attention": "Attention: {label}",
       "booksFrom": "Books: from {min}",
       "booksRange": "Books: {min}–{max}",
@@ -2768,7 +2787,9 @@
       "service": "Service: {value}",
       "store": "Store: {value}",
       "totalKnown": "Total recorded",
-      "totalUnknown": "Total missing"
+      "totalUnknown": "Total missing",
+      "orderId": "A single order",
+      "orderState": "Order state: {value}"
     },
     "attention": {
       "title": "Needs attention",
@@ -3238,7 +3259,9 @@
         "booksTo": "Books: up to {max}",
         "priceRange": "Total: {min}–{max} {currency}",
         "priceFrom": "Total: from {min} {currency}",
-        "priceTo": "Total: up to {max} {currency}"
+        "priceTo": "Total: up to {max} {currency}",
+        "orderId": "A single order",
+        "orderState": "Order state: {value}"
       },
       "card": {
         "cancelReason": "Cancellation reason",
@@ -3379,7 +3402,8 @@
         "compareModes": {
           "previous_period": "Previous period",
           "same_period_last_year": "Same period last year"
-        }
+        },
+        "compareUnavailable": "Comparison needs a period with both ends set."
       },
       "period": {
         "label": "Period",
@@ -3395,7 +3419,8 @@
         "to": "To",
         "caption": "Period: {range}",
         "comparisonCaption": "Compared with: {range}",
-        "allTimeCaption": "Period: all time"
+        "allTimeCaption": "Period: all time",
+        "rangeReversed": "The period must start no later than it ends."
       },
       "filters": {
         "label": "Filters",
@@ -3405,129 +3430,179 @@
         "storePlaceholder": "Exact store name",
         "any": "Any",
         "apply": "Apply",
-        "reset": "Reset"
+        "reset": "Reset",
+        "cancelled": "Cancelled",
+        "includeCancelled": "Count cancelled orders",
+        "storeEmpty": "No stores found",
+        "storeSearch": "Search a store",
+        "chips": {
+          "currency": "Order currency: {value}",
+          "includeCancelled": "Cancelled counted",
+          "status": "Order state: {value}",
+          "store": "Store: {value}"
+        }
       },
       "kpi": {
-        "spend": {
-          "label": "Spent",
-          "hint": "The sum of actual order totals in the selected period. Currencies are counted separately."
-        },
-        "snapshot": {
-          "label": "Money in transit",
-          "hint": "How much money sits in active orders right now. This number ignores the selected period."
-        },
         "average": {
-          "label": "Average book price",
-          "hint": "The average book price as you entered it, before delivery and discounts."
+          "helper": "Before discounts and delivery",
+          "hint": "The average listed price of a book, before discounts, delivery and the order total are spread over it.",
+          "label": "Average book price"
         },
         "basket": {
-          "label": "Average order",
-          "hint": "The average actual total of one order."
+          "helper": "{value} books / order",
+          "hint": "The average final amount of one order.",
+          "label": "Average order"
         },
-        "snapshotBadge": "Right now",
-        "snapshotFact": "{books, plural, one {# book} other {# books}} · {shipments, plural, one {# shipment} other {# shipments}}",
         "booksPerOrder": "{value} books per order",
+        "coverage": {
+          "pricedBooks": "Counted over {counted} of {total} books",
+          "resolvedOrders": "Counted over {counted} of {total} orders",
+          "unresolvedActive": "{count, plural, one {# active order} other {# active orders}} with no known amount",
+          "unresolvedOrders": "{count, plural, one {# order} other {# orders}} with no known amount"
+        },
+        "missingForCurrency": "No data in {currency}",
+        "noChange": "No change",
+        "otherCurrencies": "Other: {value}",
         "previous": "was {value}",
         "previousShort": "was {value}",
-        "noChange": "No change",
+        "scope": {
+          "now": "As of now",
+          "period": "Selected period"
+        },
         "secondary": {
-          "orders": "Orders",
           "books": "Books",
-          "shipments": "Shipments",
-          "received": "Received"
+          "orders": "Orders",
+          "shipments": "Parcels"
+        },
+        "snapshot": {
+          "hint": "The current state of the active orders. It does not follow the selected period.",
+          "label": "Money in transit"
+        },
+        "snapshotFact": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}} · {shipments, plural, one {# parcel} other {# parcels}}",
+        "spend": {
+          "hint": "The sum of the final order totals of the selected period. Currencies are counted apart.",
+          "label": "Spent"
         }
       },
       "dynamics": {
-        "title": "Dynamics",
-        "subtitle": "Grouped by order date. Currencies stay separate, with no conversion.",
-        "metricLabel": "Metric",
-        "currencyLabel": "Currency",
-        "metrics": {
-          "spend": "Spending",
-          "orders": "Orders",
-          "books": "Books"
-        },
-        "current": "Selected period",
+        "aria": "Bar chart: {metric}",
+        "clickHint": "Pick a bar to open its orders",
+        "closeDestinations": "Collapse",
         "comparison": "Comparison",
-        "difference": "Difference",
-        "aria": "Monthly chart of {metric}",
-        "empty": "No dated orders to build a monthly chart from.",
-        "clickHint": "Click a month to see those orders"
+        "current": "Current period",
+        "difference": "Change",
+        "empty": "Nothing to chart for the selected period.",
+        "emptyForCurrency": "No spend in {currency} for the selected period.",
+        "metricLabel": "Metric",
+        "metrics": {
+          "books": "Books",
+          "orders": "Orders",
+          "spend": "Spend"
+        },
+        "noChange": "No change",
+        "subtitles": {
+          "books": "How many books were ordered over the period.",
+          "orders": "How many orders were placed over the period.",
+          "spend": "Spend by order date. Currencies are shown apart."
+        },
+        "title": "Purchase dynamics",
+        "comparisonEmpty": "No purchases in the comparison period."
       },
       "pulse": {
-        "title": "What changed",
-        "subtitle": "A few takeaways from the numbers in this period.",
-        "empty": "Not enough change yet to draw conclusions for this period.",
         "previousPeriod": "the previous period",
-        "spend_change": {
-          "up": "Spending in {currency} is {change} higher than in {comparison}.",
-          "down": "Spending in {currency} is {change} lower than in {comparison}.",
-          "flat": "Spending in {currency} barely moved compared with {comparison}."
+        "labels": {
+          "spend_change": "Spending",
+          "orders_count_change": "Orders",
+          "books_count_change": "Books",
+          "avg_book_price_change": "Average book price",
+          "avg_landed_cost_change": "Actual cost per book",
+          "average_books_per_order_change": "Books per order",
+          "delivery_share": "Delivery",
+          "discount_savings": "Discounts"
         },
-        "avg_book_price_change": {
-          "up": "The average book price in {currency} went up by {change}.",
-          "down": "The average book price in {currency} went down by {change}.",
-          "flat": "The average book price in {currency} stayed the same."
-        },
-        "avg_landed_cost_change": {
-          "up": "The real cost per book in {currency} went up by {change}.",
-          "down": "The real cost per book in {currency} went down by {change}.",
-          "flat": "The real cost per book in {currency} stayed the same."
-        },
-        "store_growth": {
-          "up": "The biggest increase is at {store}: +{change}.",
-          "down": "The biggest drop is at {store}: −{change}."
-        },
-        "delivery_share": {
-          "default": "Delivery took {percent} of your spending — {total}."
-        },
-        "discount_savings": {
-          "plain": "Discounts saved you {total}.",
-          "withPercent": "Discounts saved you {total}, which is {percent} of the book prices."
-        },
-        "record_month": {
-          "period": "{month} is the most expensive month in the selected period: {total}.",
-          "allTime": "{month} is your most expensive month: {total}."
-        }
-      },
-      "costs": {
-        "title": "What the cost is made of",
-        "subtitle": "Delivery, discounts and the real cost per book in the selected currency.",
-        "currencyLabel": "Currency",
-        "delivery": {
-          "title": "Delivery",
-          "perBook": "{value} per book",
-          "shareOfSpend": "{value} of spending",
-          "shareOfBudget": "{value} of budget",
-          "orders": "{count, plural, one {# order with delivery} other {# orders with delivery}}"
-        },
-        "discount": {
-          "title": "Saved",
-          "orders": "{count, plural, one {# order with a discount} other {# orders with a discount}}",
-          "share": "{value} of the book prices"
-        },
-        "landed": {
-          "title": "Real cost per book",
-          "hint": "Includes the discount, the delivery price and the order's actual total.",
-          "below": "{value} below the listed price",
-          "above": "{value} above the listed price",
-          "coverage": "Calculated for {counted} of {eligible} books",
-          "partialCoverage": "Coverage {value} — the average does not include every book."
-        }
-      },
-      "lifecycle": {
-        "title": "Order journey",
-        "subtitle": "The current status split for the selected period.",
-        "modeLabel": "Unit",
-        "modes": {
-          "orders": "Orders",
-          "books": "Books"
+        "helpers": {
+          "againstComparison": "against {comparison}",
+          "noChange": "barely moved against {comparison}",
+          "recordMonthPeriod": "the heaviest month of the period",
+          "recordMonthAllTime": "your heaviest month ever",
+          "recordOrders": "the busiest stretch",
+          "recordBooks": "the most books of the period",
+          "deliveryShare": "of all spending, which is {total}",
+          "discountPlain": "saved on discounts",
+          "discountWithPercent": "saved, {percent} of the book subtotal"
         },
         "units": {
-          "orders": "orders",
-          "books": "books"
+          "orders": "{count, plural, one {# order} other {# orders}}",
+          "books": "{count, plural, one {# book} other {# books}}"
         },
-        "empty": "No orders in this period."
+        "emptyComparison": "No noticeable changes in this period.",
+        "emptyPeriod": "Not enough data for key takeaways.",
+        "subtitleComparison": "The main changes against {period}.",
+        "subtitlePeriod": "The facts that matter most in the selected period.",
+        "titleComparison": "What changed",
+        "titlePeriod": "Key facts of the period"
+      },
+      "costs": {
+        "bridge": {
+          "actual": "Actually per book",
+          "actualHint": "The average cost of a book once discounts, delivery and the final order total are counted in.",
+          "adjustment": "Order adjustments",
+          "adjustmentHint": "The gap between the items plus delivery minus discount and the final order total.",
+          "basePrice": "Average price",
+          "basePriceHint": "The average starting price of the very books the actual cost was computed for.",
+          "deltaAbove": "{value} above the starting average price",
+          "deltaBelow": "{value} below the starting average price",
+          "deltaFlat": "No change from the starting average price",
+          "delivery": "Delivery",
+          "deliveryHint": "The share of delivery that fell on one book in the calculation.",
+          "discount": "Discounts",
+          "discountHint": "The share of the discount that fell on one book in the calculation.",
+          "insufficient": "Not enough data to work out the actual price of a book."
+        },
+        "coverage": {
+          "all": "Counted for all {total} books",
+          "notAllBooks": "The average does not cover every book.",
+          "partial": "Counted for {counted} of {total} books · {percent}",
+          "tooFew": "Too little data for a reliable average"
+        },
+        "delivery": {
+          "orders": "{count, plural, one {# order} other {# orders}} with delivery",
+          "perBook": "{value} per book on average",
+          "shareOfSpend": "{value} of all spend",
+          "title": "Delivery",
+          "zero": "No delivery cost"
+        },
+        "discount": {
+          "orders": "{count, plural, one {# order} other {# orders}} with a discount",
+          "saved": "{value} saved",
+          "share": "{value} of the book price before the discount",
+          "title": "Discounts",
+          "zero": "No discounts"
+        },
+        "emptyForCurrency": "No data in {currency} for the selected period.",
+        "inSelectedPeriod": "In the selected period.",
+        "periodTotals": "Over the selected period",
+        "subtitle": "How discounts, delivery and the final order totals shaped the actual cost of a book.",
+        "title": "How a book price is formed"
+      },
+      "lifecycle": {
+        "allTime": "all time",
+        "cancelledExcluded": "Not counted",
+        "empty": "No orders in this period.",
+        "modeLabel": "Unit",
+        "modes": {
+          "books": "Books",
+          "orders": "Orders"
+        },
+        "subtitles": {
+          "books": "Where the books of the orders placed {period} stand now.",
+          "orders": "Where the orders placed {period} stand now."
+        },
+        "title": "Order journey",
+        "units": {
+          "books": "bk.",
+          "orders": "ord."
+        }
       },
       "orderStatus": {
         "active": "Active",
@@ -3538,136 +3613,215 @@
         "cancelled": "Cancelled"
       },
       "activeAge": {
-        "title": "Money in active orders",
-        "subtitle": "Age is counted from the order date.",
-        "snapshotBadge": "Right now",
+        "asOf": "As of {value}",
         "buckets": {
-          "0_7": "0–7 days",
-          "8_14": "8–14 days",
+          "0_7": "Up to 7 days",
           "15_30": "15–30 days",
-          "31_plus": "31+ days",
-          "unknown_date": "No date set"
+          "31_plus": "31 days and more",
+          "8_14": "8–14 days",
+          "unknown_date": "No order date"
         },
         "counts": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}",
         "empty": "No active orders.",
-        "asOf": "As of {value}"
+        "error": "Could not load the active orders.",
+        "retry": "Try again",
+        "shareOfActive": "{orders} ord. · {value}",
+        "subtitle": "How long ago each order was placed. Amounts are shown per currency.",
+        "title": "Active orders by time since ordering"
       },
       "stores": {
-        "title": "Stores",
-        "subtitle": "Where you buy the most, and what a book really costs there.",
-        "metricLabel": "Metric",
-        "currencyLabel": "Currency",
-        "metrics": {
-          "spend": "Spending",
-          "orders": "Orders",
-          "books": "Books"
-        },
+        "booksPerOrder": "{value} books per order",
         "counts": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}",
-        "perBook": "{value} per book",
-        "perOrder": "{value} per order",
-        "landed": "real {value}",
-        "landedHint": "The average cost per book including the discount, delivery and the order's final total.",
-        "deltaHint": "Difference from the previous period: {value}",
-        "showAll": "Show all ({count})",
-        "showLess": "Show less",
-        "empty": "No stores to show."
+        "countsBooks": "{orders, plural, one {# order} other {# orders}}",
+        "countsOrders": "{books, plural, one {# book} other {# books}}",
+        "empty": "No store data for the selected period.",
+        "emptyForCurrency": "No spend in {currency} for the selected period.",
+        "landed": "Actually per book {value}",
+        "metricLabel": "Metric",
+        "metrics": {
+          "books": "Books",
+          "orders": "Orders",
+          "spend": "Spend"
+        },
+        "perOrder": "Average order {value}",
+        "rawPrice": "Before discounts and delivery",
+        "rawPriceHint": "The average book price before discounts and delivery are spread over it.",
+        "rawPriceValue": "Average book price before discounts and delivery: {value}",
+        "showAll": "Show all {count}",
+        "showLess": "Collapse",
+        "subtitles": {
+          "books": "Where you bought the most books.",
+          "orders": "Where you placed the most orders.",
+          "spend": "Where you spent the most over the selected period."
+        },
+        "title": "Store ranking"
       },
       "storeMap": {
-        "title": "Store map",
-        "subtitle": "Where books come cheaper, and where the orders come bigger.",
-        "currencyLabel": "Currency",
-        "axisX": "Average real cost per book",
+        "aria": "Scatter chart comparing stores",
+        "axisHintX": "← cheaper per book · pricier →",
+        "axisHintY": "↑ bigger average order",
+        "axisX": "Actually per book",
         "axisY": "Average order",
-        "bubble": "Books",
-        "orders": "Orders",
-        "coverage": "Calculation coverage",
-        "legend": "Bubble size is the number of books. Further left means a cheaper book; higher up means bigger orders.",
-        "empty": "Not enough data yet to map stores in this currency.",
-        "insufficient": "Not enough data yet: {stores}",
-        "aria": "Scatter chart of stores: real cost per book against the average order"
+        "booksInCalculation": "Books in the calculation",
+        "coverage": "Counted for {counted} of {total} books",
+        "excluded": "{count, plural, one {# store} other {# stores}} not shown",
+        "excludedHelper": "Not enough data for a fair comparison.",
+        "excludedHide": "Collapse",
+        "excludedRule": "A comparison needs at least {count} books in the selected currency whose actual cost can be worked out.",
+        "excludedShow": "Details",
+        "insufficient": "Not enough data to compare stores",
+        "insufficientHelper": "No store yet carries enough books in the selected currency.",
+        "openStore": "Open the orders of {store} →",
+        "ordersInCurrency": "Orders in {currency}",
+        "singleStore": "Only one store has data so far.",
+        "subtitle": "Compares the actual cost of a book against the average order in the selected currency.",
+        "title": "Store comparison"
       },
       "calendar": {
         "title": "Purchase calendar",
-        "subtitle": "Each square is one day.",
+        "subtitle": {
+          "orders": "Purchases by the date the order was placed. A darker day means more orders.",
+          "books": "Purchases by the date the order was placed. A darker day means more books."
+        },
         "metricLabel": "Metric",
         "metrics": {
           "orders": "Orders",
           "books": "Books"
         },
         "yearLabel": "Year",
-        "counts": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}",
-        "daySummary": "{date}: {orders, plural, one {# order} other {# orders}}, {books, plural, one {# book} other {# books}}",
+        "daySummary": {
+          "orders": "{date}: {orders, plural, one {# order} other {# orders}}, {books, plural, one {# book} other {# books}}",
+          "books": "{date}: {books, plural, one {# book} other {# books}} in {orders, plural, one {# order} other {# orders}}"
+        },
         "dayEmpty": "{date}: no orders",
-        "less": "Less",
-        "more": "More",
-        "empty": "No dated orders to build a calendar from."
+        "tooltipPrimary": {
+          "orders": "{count, plural, one {# order} other {# orders}}",
+          "books": "{count, plural, one {# book} other {# books}}"
+        },
+        "tooltipSecondary": {
+          "orders": "{count, plural, one {# book} other {# books}}",
+          "books": "in {count, plural, one {# order} other {# orders}}"
+        },
+        "tooltipMoney": "Order total",
+        "tooltipMoneyMissing": "No amount recorded",
+        "legendLess": {
+          "orders": "Fewer orders",
+          "books": "Fewer books"
+        },
+        "legendMore": "More",
+        "relativeHint": "Shading shows activity relative to the busiest day of the shown period.",
+        "empty": "No data for the purchase calendar.",
+        "emptyYear": "No purchases in {year}."
       },
       "records": {
         "title": "Records",
-        "currencyLabel": "Currency",
-        "empty": "Not enough data for records yet.",
+        "books": "{count, plural, one {# book} other {# books}}",
         "scope": {
-          "period": "Within the selected period.",
-          "allTime": "All time.",
-          "truncated": "Within the loaded data — possibly not all time."
+          "range": "Records among orders placed {range}.",
+          "from": "Records among orders placed from {value}.",
+          "to": "Records among orders placed up to {value}.",
+          "allTime": "Records of all time."
+        },
+        "truncated": {
+          "title": "Partial data",
+          "helper": "Records were computed on the loaded part of the data only."
+        },
+        "groups": {
+          "financial": "By spending",
+          "quantity": "By count"
         },
         "recordMonth": {
-          "title": "Record month",
-          "helper": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}"
+          "title": "Highest spending month",
+          "helper": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}",
+          "missing": "No spending in {currency} for the selected period."
         },
         "largestOrder": {
-          "title": "Largest order",
-          "helper": "{store} · {books, plural, one {# book} other {# books}}"
+          "title": "Most expensive order",
+          "missing": "No order with a known {currency} amount."
+        },
+        "bestValue": {
+          "title": "Lowest actual book price",
+          "helper": "{store} · averaged over {count, plural, one {# book} other {# books}}",
+          "missing": "Not enough data",
+          "missingHelper": "At least {count, plural, one {# book} other {# books}} from one store are needed.",
+          "action": "See this store's orders",
+          "note": "The record counts only books whose actual price is known."
         },
         "mostBooks": {
           "title": "Most books in one order",
-          "helper": "{store}",
-          "value": "{count, plural, one {# book} other {# books}}"
+          "value": "{count, plural, one {# book} other {# books}}",
+          "missing": "No order with books."
         },
         "mostActive": {
-          "title": "Most active store",
+          "title": "Most orders in one store",
+          "value": "{store} — {count, plural, one {# order} other {# orders}}",
           "helper": "{books, plural, one {# book} other {# books}}",
-          "value": "{store} · {count, plural, one {# order} other {# orders}}"
-        },
-        "bestValue": {
-          "title": "Best value store",
-          "helper": "Based on {count, plural, one {# book} other {# books}}"
+          "missing": "No order with a named store."
         }
       },
       "topOrders": {
         "title": "Most expensive orders",
-        "subtitle": "A separate ranking for each currency.",
-        "currencyLabel": "Currency",
+        "subtitle": "Ranked by order total.",
         "books": "{count, plural, one {# book} other {# books}}",
         "untitledOrder": "Order without a number",
-        "emptyForCurrency": "No orders in {currency}."
+        "emptyForCurrency": "No orders in {currency}.",
+        "expand": "Show {count} more",
+        "collapse": "Collapse"
       },
       "budget": {
-        "title": "Book budget",
-        "currencyLabel": "Currency",
-        "monthCaption": "{month}",
-        "edit": "Change budget",
-        "emptyDescription": "Set a monthly budget to see your progress and a spending forecast.",
+        "available": "{value} available",
+        "cancelScheduled": "Cancel the change",
+        "cancelStop": "Cancel the stop",
+        "currencyLabel": "Budget currency",
+        "edit": "Change the budget",
+        "elapsedDays": "{elapsed} of {days} days of the month have passed",
         "emptyCta": "Set a budget",
+        "emptyDescription": "Set a monthly budget to follow the pace and the forecast.",
+        "exceededBy": "The budget is over by {value}",
+        "forecast": "Forecast ≈{value} by the end of the month",
+        "forecastPartial": "Forecast on partial data",
+        "forecastPending": "The forecast appears after day {day} of the month",
+        "loadFailed": "Could not load the budget.",
+        "monthCaption": "Current month · {month}",
+        "moreChanges": "{count, plural, one {# more change} other {# more changes}}",
+        "nextChangeTitle": "Next change",
+        "notActiveYet": "The budget has not started yet",
+        "outlook": {
+          "at_risk": "This pace risks going over the budget",
+          "exceeded": "The budget is over",
+          "forecast_pending": "The forecast is not available yet",
+          "on_track": "At this pace you stay inside the budget"
+        },
         "progress": "{spent} / {budget}",
-        "progressAria": "Budget usage in {currency}",
+        "progressAria": "Budget use in {currency}",
+        "projectedOverage": "Projected overage ≈{value}",
+        "projectedRemaining": "Projected room ≈{value}",
         "remaining": "{value} left",
-        "exceeded": "Over by {value}",
-        "forecast": "Forecast for the month: ~{value}",
-        "forecastPending": "The forecast appears after {days, plural, one {# day} other {# days}} of data.",
-        "projectedOverage": "Possible overspend: ~{value}",
-        "scheduled": "From {month}: {value}",
-        "cancelScheduled": "Cancel",
+        "retry": "Try again",
+        "scheduled": "From {month} — {value} / month",
         "scheduledCancelled": "The scheduled budget change was cancelled",
-        "notActiveYet": "This budget starts next month.",
+        "scopeBadge": "Current month",
+        "scopeHint": "The budget always counts the current calendar month and never follows the statistics period. Cancelled orders are left out.",
+        "stopCancelled": "The scheduled budget stop was cancelled",
+        "stopping": "The budget stops from {month}",
+        "stopTitle": "Scheduled stop",
+        "title": "Book budget",
+        "uncountedOrders": "{count, plural, one {# order} other {# orders}} with no known amount were left out",
+        "unconfigured": "No budget set in {currency}.",
+        "zeroSpend": "Nothing was spent this month yet.",
         "dialog": {
           "title": "Monthly budget",
-          "description": "Currencies are independent. An empty field means no budget is set for that currency.",
+          "description": "Set a limit for each currency separately.",
+          "amounts": "Budget",
           "amount": "Budget, {currency}",
+          "amountsHint": "Leave a currency empty when it has no budget.",
           "notConfigured": "not set",
-          "effectiveFrom": "Starts from",
-          "effectiveFromHint": "Earlier months keep the budget that applied back then.",
-          "save": "Save",
+          "effectiveFrom": "Apply from",
+          "previousYear": "Previous year",
+          "nextYear": "Next year",
+          "appliesFrom": "Changes apply from {month}.",
+          "earlierMonthsKeep": "Earlier months stay unchanged.",
+          "save": "Save budget",
           "cancel": "Cancel",
           "saved": "Budget saved",
           "failed": "Could not save the budget",
@@ -3675,21 +3829,51 @@
         }
       },
       "states": {
+        "loading": "Loading the statistics…",
+        "refreshing": "Updating the statistics…",
+        "refetchError": "Could not update the statistics. Showing the last loaded data.",
         "error": {
           "title": "Could not load the data",
           "description": "Try refreshing the page.",
           "retry": "Try again"
         },
-        "empty": {
-          "title": "No orders in this period",
-          "description": "Change the period or add orders with prices to see the statistics."
+        "allTimeEmpty": {
+          "title": "No purchases yet",
+          "description": "Add your first book order and the spending statistics will show up here."
+        },
+        "periodEmpty": {
+          "title": "No orders in the selected period",
+          "description": "Pick a wider period to see the purchases.",
+          "action": "Change the period"
         },
         "filteredEmpty": {
           "title": "Nothing matches these filters",
           "description": "Try changing or resetting the filters.",
-          "reset": "Reset filters"
+          "action": "Reset filters"
         },
-        "truncated": "The statistics are built from {loaded} records out of a {max} limit, so they may be incomplete."
+        "truncated": {
+          "title": "Incomplete data",
+          "description": "The statistics are built from the first {loaded} orders out of a {max} limit, so some totals and rankings may be incomplete."
+        }
+      },
+      "displayCurrency": {
+        "fixedByFilter": "{currency} · set by the filter",
+        "help": "Picks the currency for money figures and charts. Amounts are never converted.",
+        "label": "Figures currency",
+        "none": "No amounts in any currency",
+        "noneDescription": "The period has orders, but none of them carries a resolved amount, so there is nothing to compute the money metrics from."
+      },
+      "drilldown": {
+        "destination": {
+          "history_cancelled": "Cancelled",
+          "history_received": "Received",
+          "in_transit": "On the way"
+        },
+        "openOrders": "Open orders",
+        "unit": {
+          "books": "{count, plural, one {# book} other {# books}}",
+          "orders": "{count, plural, one {# order} other {# orders}}"
+        }
       }
     },
     "priceDialog": {
@@ -4795,7 +4979,8 @@
       "createHeading": "New contact",
       "createAction": "Create “{name}”",
       "creating": "Creating…",
-      "loanCount": "{count, plural, one {# loan} other {# loans}}",
+      "activeLentCount": "{count} lent",
+      "activeBorrowedCount": "{count} borrowed",
       "clear": "Clear",
       "required": "Pick a person from the list or create a new one.",
       "errors": {
@@ -4814,6 +4999,7 @@
       "optional": "optional",
       "submit": "Create",
       "cancel": "Cancel",
+      "back": "Back",
       "conflict": {
         "duplicate": "The contact “{name}” already exists",
         "archived": "The contact “{name}” is in the archive",
@@ -4843,14 +5029,24 @@
       },
       "toolbar": {
         "searchLabel": "Search contacts",
-        "searchPlaceholder": "Name or how to reach them",
-        "searchClear": "Clear search",
-        "statusLabel": "Contact state",
-        "status": {
-          "all": "All",
-          "active": "Active",
-          "archived": "Archived"
-        }
+        "searchPlaceholder": "Name or contact details",
+        "searchClear": "Clear search"
+      },
+      "filters": {
+        "trigger": "Filters",
+        "title": "Filters",
+        "description": "Choose which contacts the list should show.",
+        "clear": "Clear filters",
+        "apply": "Apply filters",
+        "sections": {
+          "status": "Contact state"
+        },
+        "statusOptions": {
+          "active": "Regular",
+          "archived": "Archived",
+          "all": "All"
+        },
+        "statusHint": "Normally the list shows regular contacts only. Archived people are still there, with their loans and history untouched."
       },
       "row": {
         "loanCount": "{count, plural, one {# loan} other {# loans}}"
@@ -4883,6 +5079,7 @@
       "archivedBadge": "Archived",
       "totalLoans": "{count, plural, one {# loan} other {# loans}} in total",
       "openContact": "Open the card of {name}",
+      "openPersonCard": "Open the person’s card",
       "actions": {
         "edit": "Edit",
         "archive": "Archive",
@@ -4903,15 +5100,30 @@
         "noReturnDate": "No return date"
       },
       "history": {
-        "title": "History",
-        "empty": "No completed loans yet.",
-        "completed": "Completed",
-        "onTime": "On time",
-        "late": "Late",
-        "averageDuration": "Average duration",
-        "durationUnknown": "—",
+        "title": "Loan history",
+        "completedCount": "{count, plural, one {# completed loan} other {# completed loans}}",
+        "breakdown": {
+          "lent": "{count} you lent",
+          "borrowed": "{count} you borrowed",
+          "onTime": "{count} on time",
+          "late": "{count} late",
+          "noDueDate": "{count} without a due date"
+        },
+        "averageDurationLabel": "Average length",
+        "averageDurationHint": "From the day the book changed hands to the day it came back.",
         "recentTitle": "Latest completed",
-        "returnedOn": "Returned on {date}"
+        "recent": {
+          "lent": "You lent",
+          "borrowed": "You borrowed",
+          "returned": "returned {date}",
+          "late": "returned {count, plural, one {# day} other {# days}} late",
+          "noDueDate": "no due date was set"
+        },
+        "viewAll": "View the whole history",
+        "empty": {
+          "title": "No loan history yet",
+          "description": "Completed loans with this person will show up here once the books come back."
+        }
       },
       "edit": {
         "title": "Edit contact",
@@ -5113,17 +5325,22 @@
     "row": {
       "personBorrowed": "Borrowed from:",
       "personLent": "Lent to:",
-      "contact": "Contact:",
       "loanDateBorrowed": "Loan date:",
       "loanDateLent": "Handover date:",
       "note": "Note",
       "reminderOn": "Reminder on",
+      "hasNote": "Has a note",
+      "viewNote": "View the note",
+      "editNote": "Edit the note",
+      "closeNote": "Close",
       "term": {
         "today": "Return today",
         "tomorrow": "Return tomorrow",
         "inDays": "Return in {days, plural, one {# day} other {# days}}",
         "overdue": "Overdue by {days, plural, one {# day} other {# days}}",
-        "none": "No return date"
+        "none": "No return date",
+        "dueBy": "Due {date}",
+        "wasDue": "Was due {date}"
       }
     },
     "actions": {
@@ -5131,8 +5348,9 @@
       "setReturnDate": "Set a return date",
       "changeReturnDate": "Change the return date",
       "extend": "Extend by {days, plural, one {# day} other {# days}}",
-      "extendSuccess": "Return date pushed to {date}",
-      "extendSuccessPlain": "Return date pushed",
+      "extendOverdue": "New due date in {days, plural, one {# day} other {# days}}",
+      "extendSuccess": "New return date — {date}",
+      "extendSuccessPlain": "Return date updated",
       "extendError": "Couldn’t extend the loan",
       "reminderSetup": "Set up a reminder",
       "reminderCurrent": "Reminder: {days, plural, one {# day} other {# days}} before",
@@ -5241,7 +5459,7 @@
     "loadMore": "Show more",
     "loadMoreError": "Couldn't load more loans",
     "history": {
-      "resultsCount": "Found {count, plural, one {# completed loan} other {# completed loans}}",
+      "shownCount": "Showing {shown} of {total, plural, one {# loan} other {# loans}}",
       "loadMore": "Show more",
       "loadMoreError": "Couldn't load more history records",
       "cards": {
@@ -5257,7 +5475,8 @@
         },
         "onTime": {
           "label": "Returned on time",
-          "microfact": "{percent}% of everything completed",
+          "microfact": "{percent}% of the loans with a deadline",
+          "empty": "No loan with a deadline yet",
           "mobile": {
             "compact": "On time",
             "detailed": "Returned on time"
@@ -5266,7 +5485,7 @@
         "late": {
           "label": "Returned late",
           "microfact": "On average — {count, plural, one {# day} other {# days}} late",
-          "allOnTime": "Every loan with a deadline came back on time",
+          "noDelays": "No late returns",
           "mobile": {
             "compact": "Late",
             "detailed": "Returned late"
@@ -5274,8 +5493,8 @@
         },
         "duration": {
           "label": "Average duration",
-          "microfact": "From the loan or handover to the return",
-          "empty": "No loan with a known duration yet",
+          "microfact": "Across {count, plural, one {# loan} other {# loans}} with a known start",
+          "empty": "Not enough data",
           "mobile": {
             "compact": "Duration",
             "detailed": "Average duration"
@@ -5284,30 +5503,48 @@
       },
       "toolbar": {
         "searchLabel": "Search the loan history",
-        "searchPlaceholder": "Book title, author or person",
+        "searchPlaceholder": "Search by title, author or person…",
         "searchClear": "Clear search",
-        "directionLabel": "Direction",
-        "resultLabel": "Result",
-        "personLabel": "Person",
-        "periodLabel": "Period",
         "sortLabel": "Sort"
       },
-      "direction": {
-        "all": "All directions",
-        "borrowed_from_someone": "Borrowed from others",
-        "lent_to_someone": "Lent out"
-      },
-      "results": {
-        "all": "All results",
+      "quickFilters": {
+        "label": "Return outcome",
+        "all": "All",
         "on_time": "Returned on time",
-        "late": "Returned late",
-        "no_due_date": "No deadline set"
+        "late": "Late",
+        "no_due_date": "No due date"
+      },
+      "direction": {
+        "all": "All",
+        "borrowed_from_someone": "Borrowed from others",
+        "lent_to_someone": "Lent to others"
+      },
+      "advancedFilters": {
+        "trigger": "Filters",
+        "title": "History filters",
+        "description": "They narrow the loan history. Search and quick filters work separately and add on top.",
+        "apply": "Apply",
+        "clear": "Clear",
+        "sections": {
+          "direction": "Direction",
+          "person": "Person",
+          "returned": "Return date",
+          "loanDate": "Loan / handover date"
+        },
+        "range": {
+          "from": "From",
+          "to": "To",
+          "invalid": "The “from” date cannot be later than the “to” date"
+        }
       },
       "person": {
-        "all": "All people",
-        "count": "{count, plural, one {# loan} other {# loans}}",
+        "label": "Person",
+        "placeholder": "Anyone",
+        "heading": "People in your history",
+        "searching": "Searching people…",
         "empty": "No people in the history yet",
-        "loading": "Loading people…"
+        "clear": "Clear the chosen person",
+        "count": "{count, plural, one {# loan} other {# loans}}"
       },
       "period": {
         "all": "All time",
@@ -5316,21 +5553,69 @@
         "custom": "Custom range",
         "from": "From",
         "to": "To",
-        "apply": "Apply",
-        "reset": "Reset the period",
-        "range": "{from} — {to}",
         "invalidRange": "The “from” date cannot be later than the “to” date"
       },
+      "activeFilters": {
+        "search": "Search: {query}",
+        "direction": {
+          "borrowed_from_someone": "Direction: Borrowed from others",
+          "lent_to_someone": "Direction: Lent to others"
+        },
+        "person": "Person: {name}",
+        "personUnknown": "The chosen person",
+        "returnedPreset": {
+          "thisYear": "Returned: this year",
+          "lastYear": "Returned: last year"
+        },
+        "returnedFrom": "Returned: from {value}",
+        "returnedTo": "Returned: to {value}",
+        "returnedRange": "Returned: {from} – {to}",
+        "loanDateFrom": {
+          "all": "Loan / handover date: from {value}",
+          "borrowed_from_someone": "Loan date: from {value}",
+          "lent_to_someone": "Handover date: from {value}"
+        },
+        "loanDateTo": {
+          "all": "Loan / handover date: to {value}",
+          "borrowed_from_someone": "Loan date: to {value}",
+          "lent_to_someone": "Handover date: to {value}"
+        },
+        "loanDateRange": {
+          "all": "Loan / handover date: {from} – {to}",
+          "borrowed_from_someone": "Loan date: {from} – {to}",
+          "lent_to_someone": "Handover date: {from} – {to}"
+        }
+      },
       "sort": {
-        "returned_desc": "Recently returned",
-        "returned_asc": "Returned earliest",
-        "loan_date_desc": "By loan or handover date",
-        "duration_desc": "By duration",
-        "title_asc": "By title",
-        "person_asc": "By person",
+        "options": {
+          "all": {
+            "returned_desc": "Return date: newest first",
+            "returned_asc": "Return date: oldest first",
+            "loan_date_desc": "Loan / handover date: newest first",
+            "duration_desc": "Duration: longest first",
+            "title_asc": "Title: A–Z",
+            "person_asc": "Person: A–Z"
+          },
+          "borrowed_from_someone": {
+            "returned_desc": "Return date: newest first",
+            "returned_asc": "Return date: oldest first",
+            "loan_date_desc": "Loan date: newest first",
+            "duration_desc": "Duration: longest first",
+            "title_asc": "Title: A–Z",
+            "person_asc": "Person: A–Z"
+          },
+          "lent_to_someone": {
+            "returned_desc": "Return date: newest first",
+            "returned_asc": "Return date: oldest first",
+            "loan_date_desc": "Handover date: newest first",
+            "duration_desc": "Duration: longest first",
+            "title_asc": "Title: A–Z",
+            "person_asc": "Person: A–Z"
+          }
+        },
         "mobile": {
           "title": "Sorting",
-          "description": "Choose the order of the history records.",
+          "description": "Choose the order of the history entries.",
           "close": "Close",
           "groups": {
             "returned": "Return",
@@ -5341,7 +5626,7 @@
           },
           "trigger": {
             "returned_desc": "Recent",
-            "returned_asc": "Earliest",
+            "returned_asc": "Oldest",
             "loan_date_desc": "Loan date",
             "duration_desc": "Duration",
             "title_asc": "Title",
@@ -5357,6 +5642,15 @@
         "returned": "Returned",
         "unknownDate": "Date unknown"
       },
+      "loanPeriod": {
+        "title": "Loan period",
+        "lent": "Lent",
+        "borrowed": "Borrowed",
+        "returned": "Returned",
+        "plan": "Due: {date}",
+        "noTerm": "No deadline was set",
+        "startUnknown": "Start date unknown"
+      },
       "result": {
         "on_time": "Returned on time",
         "late": "Late by {count, plural, one {# day} other {# days}}",
@@ -5364,17 +5658,17 @@
       },
       "duration": {
         "days": "{count, plural, one {# day} other {# days}}",
-        "total": "{count, plural, one {# day} other {# days}} in total",
         "unknown": "Duration unknown"
       },
       "row": {
-        "personBorrowed": "Borrowed from:",
-        "personLent": "Lent to:",
-        "openDetails": "Show the loan details"
+        "openDetails": "Show the loan details",
+        "outcome": {
+          "noDueDate": "Returned",
+          "duration": "Duration: {count, plural, one {# day} other {# days}}"
+        }
       },
       "actions": {
         "menu": "History record actions",
-        "details": "Details",
         "openBook": "Go to the book",
         "correctDate": "Fix the return date",
         "editNote": "Edit the note"
@@ -5402,8 +5696,7 @@
           "title": "People you deal with most",
           "count": "{count, plural, one {# loan} other {# loans}}",
           "breakdown": "{lent} lent out · {borrowed} borrowed",
-          "empty": "No completed loans yet",
-          "filter": "Filter by person: {name}"
+          "empty": "No completed loans yet"
         },
         "duration": {
           "title": "Loan duration",
@@ -5414,11 +5707,12 @@
           "empty": "No duration data"
         },
         "reliability": {
-          "title": "Return reliability",
+          "title": "Meeting deadlines",
           "onTimePercent": "{percent}% returned on time",
-          "onTime": "On time",
-          "late": "Late",
-          "noDueDate": "No deadline",
+          "noDueDateOnly": "No loan with a deadline yet",
+          "breakdown": "{onTime} on time · {late} late",
+          "noDueDate": "{count, plural, one {# loan} other {# loans}} with no deadline",
+          "noDueDateNote": "Not counted in the percentage",
           "empty": "No completed loans yet"
         }
       },
@@ -5478,13 +5772,82 @@
         "tooLong": "The note cannot be longer than {max} characters"
       }
     },
+    "advancedFilters": {
+      "trigger": "Filters",
+      "title": "Advanced filters",
+      "description": "They narrow the list of loans. Quick filters work separately and add on top.",
+      "apply": "Apply",
+      "clear": "Reset",
+      "sections": {
+        "person": {
+          "borrowed": "Borrowed from",
+          "lent": "Lent to"
+        },
+        "loanDate": {
+          "borrowed": "Loan date",
+          "lent": "Handover date"
+        },
+        "dueDate": "Return date",
+        "reminder": "Reminder",
+        "note": "Note"
+      },
+      "person": {
+        "placeholder": "Anyone"
+      },
+      "range": {
+        "from": "From",
+        "to": "To",
+        "invalid": "The start of the range is later than its end"
+      },
+      "dueDate": {
+        "hint": "Only loans that have a return date are shown."
+      },
+      "reminderOptions": {
+        "any": "Any",
+        "on": "On",
+        "off": "Off"
+      },
+      "noteOptions": {
+        "any": "Any",
+        "with": "With a note",
+        "without": "Without a note"
+      }
+    },
+    "activeFilters": {
+      "search": "Search: {query}",
+      "person": {
+        "borrowed": "Borrowed from: {name}",
+        "lent": "Lent to: {name}"
+      },
+      "personUnknown": "The chosen person",
+      "loanDateFrom": {
+        "borrowed": "Loan date: from {value}",
+        "lent": "Handover date: from {value}"
+      },
+      "loanDateTo": {
+        "borrowed": "Loan date: to {value}",
+        "lent": "Handover date: to {value}"
+      },
+      "loanDateRange": {
+        "borrowed": "Loan date: {from} – {to}",
+        "lent": "Handover date: {from} – {to}"
+      },
+      "dueDateFrom": "Return date: from {value}",
+      "dueDateTo": "Return date: to {value}",
+      "dueDateRange": "Return date: {from} – {to}",
+      "reminder": {
+        "on": "Reminder: on",
+        "off": "Reminder: off"
+      },
+      "noteWith": "With a note",
+      "noteWithout": "Without a note"
+    },
     "quickFilters": {
       "label": "Quick filters",
       "all": "All",
       "overdue": "Overdue",
       "return_soon": "Returning soon",
-      "no_return_date": "No date",
-      "without_reminder": "No reminder"
+      "no_return_date": "No date"
     },
     "shownCount": "Showing {shown} of {total, plural, one {# book} other {# books}}"
   },
@@ -7292,6 +7655,433 @@
       "deleted": "Goal deleted",
       "conflict": "This list already has an active goal",
       "error": "Something went wrong"
+    }
+  },
+  "statistics": {
+    "metaTitle": "Reading statistics",
+    "title": "Statistics",
+    "subtitle": "How you read in the selected period: dynamics, tastes, progress and records.",
+    "dividers": {
+      "tastes": "Your reading tastes",
+      "progress": "Your progress"
+    },
+    "states": {
+      "loading": "Loading statistics",
+      "refreshing": "Refreshing data",
+      "refetchError": "Could not refresh the statistics. Showing the previous data.",
+      "lowerBound": "Reading history before the day full tracking began may be incomplete. Pages, active days and streaks are shown as the lowest known values.",
+      "error": {
+        "title": "Could not show the statistics",
+        "description": "Try reloading the page. If that does not help, come back a little later.",
+        "retry": "Try again"
+      },
+      "periodEmpty": {
+        "title": "No reading in this period yet",
+        "description": "Pick another period or look at the all-time summary.",
+        "action": "Show all time"
+      },
+      "invalidRange": {
+        "description": "Pick a valid start and end date to see the statistics for that period.",
+        "title": "Choose a period"
+      }
+    },
+    "period": {
+      "toolbarLabel": "Statistics period",
+      "label": "Period",
+      "kinds": {
+        "year": "Calendar year",
+        "last_12_months": "Last 12 months",
+        "custom": "Custom period",
+        "all_time": "All time"
+      },
+      "yearLabel": "Year",
+      "yearClear": "Clear year",
+      "yearPrev": "Earlier years",
+      "yearNext": "Later years",
+      "from": "Period start",
+      "to": "Period end",
+      "issues": {
+        "incomplete": "Pick both dates of the period.",
+        "invalid": "That date is not in a valid format.",
+        "reversed": "The start of the period cannot be later than its end.",
+        "future": "A period cannot reach into the future."
+      },
+      "caption": "Period: {range}",
+      "allTimeCaption": "Period: everything up to today",
+      "comparisonCaption": "Compared with {range}"
+    },
+    "compare": {
+      "toggle": "Compare",
+      "mode": "Comparison mode",
+      "unavailable": "All time cannot be compared with another period.",
+      "modes": {
+        "previous_period": "With the previous period",
+        "same_period_last_year": "With the same period last year"
+      }
+    },
+    "delta": {
+      "unchanged": "No change",
+      "fromZero": "from 0 to {current}",
+      "previous": "vs {previous}",
+      "percentagePoints": "{value} p.p."
+    },
+    "contextActions": {
+      "open_author": "All books by this author",
+      "open_book": "Open the book",
+      "open_goal": "Open the goal",
+      "open_publisher": "Open the publisher",
+      "open_series": "Open the series"
+    },
+    "rankings": {
+      "showMore": "Show {count} more",
+      "showLess": "Show less"
+    },
+    "hero": {
+      "title": {
+        "year": "{year} in books",
+        "last_12_months": "The last 12 months",
+        "custom": "{range}",
+        "all_time": "Your reading, all time"
+      },
+      "subtitle": "A short picture of the period: what you finished and what stands out.",
+      "recentTitle": "Recently finished"
+    },
+    "kpi": {
+      "lowerBoundValue": "≥ {value}",
+      "lowerBoundHint": "Lowest known value",
+      "completedReads": {
+        "label": "Reads finished",
+        "unit": "{count, plural, one {read} other {reads}}",
+        "value": "{count, plural, one {# read} other {# reads}}",
+        "unique": "{count, plural, one {# distinct book} other {# distinct books}}"
+      },
+      "pagesRead": {
+        "label": "Pages read",
+        "unit": "{count, plural, one {page} other {pages}}",
+        "value": "{count, plural, one {# page} other {# pages}}"
+      },
+      "averageRating": {
+        "label": "Average rating",
+        "scale": "/ 10",
+        "coverage": "{knownCount} of {eligibleCount} reads rated",
+        "reason": {
+          "NO_RATINGS": "No rated reads",
+          "INSUFFICIENT_SAMPLE": "Too few ratings for an average"
+        }
+      },
+      "activeDays": {
+        "label": "Active days",
+        "unit": "{count, plural, one {day} other {days}}",
+        "value": "{count, plural, one {# day} other {# days}}",
+        "rate": "{percent}% of the period"
+      }
+    },
+    "insights": {
+      "title": "Insights",
+      "description": "Observations the backend picked as the most notable for this period.",
+      "empty": "No reliable observations for this period yet.",
+      "codes": {
+        "completed_reads_vs_comparison": "{direction, select, up {You finished {currentValue} reads — {absoluteDelta} more than the {comparisonValue} before.} other {You finished {currentValue} reads — {absoluteDelta} fewer than the {comparisonValue} before.}}",
+        "pages_read_vs_comparison": "{direction, select, up {You read {currentValue} pages — {absoluteDelta} more than the {comparisonValue} before.} other {You read {currentValue} pages — {absoluteDelta} fewer than the {comparisonValue} before.}}",
+        "most_active_weekday": "Your most active weekday is {weekday}: {activeDays} active days and {pagesRead} pages.",
+        "longest_streak_in_period": "Your longest streak ran {days} days in a row, from {startDate} to {endDate}.",
+        "top_genre_share": "The most frequent genre is {genreKey}: {completedReadCount} reads, {share} of everything you finished.",
+        "top_author_reads": "You read {authorName} most often — {completedReadCount} reads.",
+        "series_marathon": "Your longest series marathon was {marathonLength} books in a row from “{seriesName}”.",
+        "high_rating_share": "{highRatedReadsCount} of {ratedReadsCount} rated reads scored 8.0 or higher; the average is {averageRating}.",
+        "new_authors_discovered": "You discovered {authorCount} new authors, {firstAuthorName} among them.",
+        "dominant_language": "The most frequent edition language is {language}: {completedReadCount} reads, {share} of the known ones."
+      }
+    },
+    "dynamics": {
+      "title": "Reading dynamics",
+      "metricLabel": "Dynamics metric",
+      "metrics": {
+        "reads": "Reads",
+        "pages": "Pages"
+      },
+      "subtitles": {
+        "day": "Split by day of the period.",
+        "week": "Split by week of the period.",
+        "month": "Split by month of the period.",
+        "year": "Split by year."
+      },
+      "empty": "No data to chart for this period.",
+      "current": "Current period",
+      "comparison": "Comparison period",
+      "peakReads": "Busiest stretch: {range} — {reads, plural, one {# read} other {# reads}}.",
+      "peakPages": "Busiest stretch: {range} — {pages, plural, one {# page} other {# pages}}.",
+      "tooltip": {
+        "reads": "{count, plural, one {# read} other {# reads}}",
+        "uniqueBooks": "{count, plural, one {# distinct book} other {# distinct books}}",
+        "pages": "{count, plural, one {# page} other {# pages}}",
+        "comparison": "{metric} in the comparison period: {value}"
+      },
+      "srBucket": "{range}: {reads, plural, one {# read} other {# reads}} · {pages} pages"
+    },
+    "calendar": {
+      "title": "Reading calendar",
+      "description": "The days you actually read.",
+      "modeLabel": "Calendar mode",
+      "modes": {
+        "activity": "Activity",
+        "books": "Books"
+      },
+      "metricRange": "Figures for {range}",
+      "displayRange": "The calendar shows {range}.",
+      "legacyNote": "Days before full history tracking began are observed facts; an empty cell there does not prove that you did not read.",
+      "empty": "No day with activity in this period.",
+      "unavailable": "The calendar is unavailable",
+      "reason": {
+        "NO_ACTIVITY_HISTORY": "There is not a single recorded page read yet."
+      },
+      "summary": {
+        "activeDays": "Active days",
+        "activeDaysRate": "Share of the period",
+        "longestStreak": "Longest streak",
+        "currentStreak": "Current streak",
+        "mostActiveWeekday": "Most active weekday",
+        "days": "{count, plural, one {# day} other {# days}}",
+        "daysAtLeast": "{count, plural, one {#+ day} other {#+ days}}",
+        "lowerBoundValue": "≥ {value}",
+        "continuesBeforeRange": "The streak started before this period",
+        "weekdayHint": "{days} active days · {pages} pages",
+        "unavailable": "—",
+        "reason": {
+          "LEGACY_HISTORY_INCOMPLETE": "Part of this period predates full history tracking, so the figure would mislead.",
+          "PERIOD_NOT_CURRENT": "A closed period has no running streak."
+        }
+      },
+      "heatmap": {
+        "legendLess": "less",
+        "legendMore": "more",
+        "relativeHint": "Intensity is relative to your own activity in this period.",
+        "dayEmpty": "{date}: no reading",
+        "dayUnknown": "{date}: this day may be missing from the history",
+        "daySummary": "{date}: {pages} pages, {books, plural, one {# book} other {# books}}"
+      },
+      "books": {
+        "more": "+{count}",
+        "empty": "No months to show.",
+        "emptyMonth": "You did not read this month.",
+        "previousMonth": "Previous month",
+        "nextMonth": "Next month",
+        "daySummary": "{date}: {pages} pages, {books, plural, one {# book} other {# books}}",
+        "dayEmpty": "{date}: no reading",
+        "dayUnknown": "{date}: this day may be missing from the history",
+        "diaryMeta": "{books, plural, one {# book} other {# books}} · {pages} pages"
+      }
+    },
+    "details": {
+      "day": {
+        "loading": "Loading the day",
+        "error": "Could not load this day",
+        "retry": "Try again",
+        "summary": "{pages} pages · {books, plural, one {# book} other {# books}}",
+        "empty": "No pages were read on this day.",
+        "bookPages": "{pages} pages",
+        "deletedBook": "This book was removed from the library",
+        "legacyQuality": "This day predates full history tracking, so it may be incomplete."
+      },
+      "completedRead": {
+        "open": "Read details: {title}",
+        "finishedAt": "Finished {date}",
+        "noRating": "Not rated",
+        "deletedBook": "This book was removed from the library",
+        "relatedTitle": "Related"
+      }
+    },
+    "ratings": {
+      "title": "Ratings",
+      "description": "Your ratings of finished reads on the 0.5 to 10 scale.",
+      "unavailable": "No ratings yet",
+      "reason": {
+        "NO_RATINGS": "None of the reads finished in this period carry a rating.",
+        "INSUFFICIENT_SAMPLE": "Too few rated reads for a reliable average."
+      },
+      "averageRating": "Average rating",
+      "scale": "{value} / 10",
+      "highRated": "Rated 8.0 and above",
+      "highRatedValue": "{count} · {percent}%",
+      "ratedReads": "Rated reads",
+      "ratedReadsValue": "{rated} of {total}",
+      "coverage": "{knownCount} of {eligibleCount} reads rated",
+      "distributionRow": "Rating {rating}: {count, plural, one {# read} other {# reads}}",
+      "topRatedTitle": "Highest rated",
+      "topRatedEmpty": "No rated reads yet."
+    },
+    "genres": {
+      "title": "Genres",
+      "description": "Genres of the reads finished in this period.",
+      "modeLabel": "Genre metric",
+      "modes": {
+        "frequency": "Read most often",
+        "rated": "Rated highest"
+      },
+      "empty": "The reads finished in this period carry no genres.",
+      "coverage": "{knownCount} of {eligibleCount} reads carry a genre",
+      "share": "{percent}% of reads",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "ratedReads": "{count, plural, one {# rating} other {# ratings}}",
+      "ratedUnavailable": "Too few ratings",
+      "reason": {
+        "INSUFFICIENT_SAMPLE": "A genre needs at least 3 rated reads to be ranked."
+      },
+      "unavailable": "Genres cannot be measured",
+      "unavailableDescription": "None of the reads finished in this period carry a recorded genre."
+    },
+    "authors": {
+      "title": "Authors",
+      "description": "Authors of the reads finished in this period.",
+      "modeLabel": "Author metric",
+      "modes": {
+        "frequency": "Read most often",
+        "rated": "Rated highest"
+      },
+      "empty": "The reads finished in this period carry no authors.",
+      "coverage": "{knownCount} of {eligibleCount} reads carry an author",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "ratedReads": "{count, plural, one {# rating} other {# ratings}}",
+      "ratedUnavailable": "Too few ratings",
+      "reason": {
+        "INSUFFICIENT_SAMPLE": "An author needs at least 3 rated reads to be ranked."
+      },
+      "returningTitle": "You keep coming back to",
+      "returningMeta": "{years, plural, one {# year} other {# years}} · {reads, plural, one {# read} other {# reads}} · last read {lastRead}",
+      "unavailable": "Authors cannot be measured",
+      "unavailableDescription": "None of the reads finished in this period carry a recorded author."
+    },
+    "publishers": {
+      "title": "Publishers",
+      "description": "Publishers behind the reads finished in this period.",
+      "empty": "The reads finished in this period carry no publishers.",
+      "coverage": "{knownCount} of {eligibleCount} reads carry a publisher",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "summary": "Publishers in total: {total}",
+      "concentration": "The top 3 account for {percent}% of reads",
+      "unavailable": "Publishers cannot be measured",
+      "unavailableDescription": "None of the reads finished in this period carry a recorded publisher."
+    },
+    "languages": {
+      "title": "Languages",
+      "description": "The edition language recorded when each read was finished.",
+      "empty": "The reads finished in this period carry no language.",
+      "coverage": "{knownCount} of {eligibleCount} historical reads carry a reliably recorded edition language",
+      "share": "{percent}% of the known ones",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "sourceHint": "The edition language recorded in BookNest when the read was finished.",
+      "diversity": "{count, plural, one {# language} other {# languages}}",
+      "unavailable": "Languages cannot be measured",
+      "unavailableDescription": "None of the reads finished in this period carry a recorded edition language."
+    },
+    "discoveries": {
+      "title": "New discoveries",
+      "description": "First finished encounters with an author, a genre or a publisher in this period.",
+      "empty": "No new discoveries in this period.",
+      "unavailable": "Discoveries are unavailable",
+      "reason": {
+        "LEGACY_HISTORY_INCOMPLETE": "Some completions were carried over from older history, so a first encounter cannot be proven."
+      },
+      "partialNote": "Some completions in this period cannot be proven to be a first-ever read.",
+      "counts": "New authors: {authors} · genres: {genres} · publishers: {publishers}",
+      "kinds": {
+        "author": "Author",
+        "genre": "Genre",
+        "publisher": "Publisher"
+      },
+      "firstRead": "First finished read: {date}",
+      "afterDiscovery": "{count, plural, one {# read after the discovery} other {# reads after the discovery}}",
+      "averageRating": "average rating {value}"
+    },
+    "goal": {
+      "title": "Reading goal",
+      "description": "The active goal with the nearest deadline.",
+      "empty": "No active goal",
+      "emptyDescription": "Create a goal to see its progress right here.",
+      "create": "Create a goal",
+      "deadline": "By {date}",
+      "fallbackName": "{count, plural, one {# book} other {# books}}",
+      "progress": "{completed} of {target}",
+      "progressLabel": "Goal progress: {percent}%",
+      "status": "Status",
+      "pace": "Pace",
+      "paces": {
+        "ahead": "Ahead of plan",
+        "on_track": "On track",
+        "behind": "Behind plan",
+        "critical": "Needs a noticeably higher pace"
+      },
+      "remaining": "Remaining",
+      "remainingValue": "{count, plural, one {# book} other {# books}}",
+      "forecast": "Projected finish",
+      "forecastUnavailable": "Not enough data",
+      "open": "Open the goal",
+      "otherGoals": "{count, plural, one {# more active goal} other {# more active goals}}"
+    },
+    "series": {
+      "title": "Series reading",
+      "description": "How you moved through book series in this period.",
+      "unavailable": "Series data is unavailable",
+      "share": "{series} of {total} reads came from series · {percent}%",
+      "shareUnknown": "The share of series reading could not be computed.",
+      "lifecycleUnavailable": "Series milestones are unavailable",
+      "reason": {
+        "LEGACY_HISTORY_INCOMPLETE": "Some completions were carried over from older history, so structural transitions cannot be proven."
+      },
+      "lifecycle": {
+        "started": "Started",
+        "continued": "Continued",
+        "completed": "Completed",
+        "caughtUp": "Caught up"
+      },
+      "mostActiveTitle": "Most active series",
+      "attributablePages": "{pages} pages",
+      "reads": "{count, plural, one {# read} other {# reads}}",
+      "empty": "No reads from series were finished in this period.",
+      "topProgressTitle": "Most progress",
+      "firstCompletions": "{count, plural, one {# new book} other {# new books}}",
+      "marathon": "Series marathon: {length} books in a row from “{name}”, finished {date}."
+    },
+    "libraryBalance": {
+      "title": "Library balance",
+      "description": "How many of your own books are still waiting to be read.",
+      "currentTbr": "Unread right now",
+      "currentTbrValue": "{unread} of {total}",
+      "readRatio": "Share already read",
+      "forecast": "Enough for about",
+      "forecastValue": "{months} mo",
+      "forecastPace": "at {rate} books per month",
+      "flowUnavailable": "The unread-library flow is unavailable",
+      "flowReason": {
+        "HISTORY_NOT_TRACKED": "BookNest does not record ownership transitions yet, so the change over a period cannot be computed."
+      },
+      "flow": "In {inflow} · out {outflow} · net {net}",
+      "forecastReason": {
+        "INSUFFICIENT_SAMPLE": "Too little reading history to estimate a pace.",
+        "LOW_CONFIDENCE": "The reading pace is too uneven for a reliable estimate.",
+        "LEGACY_HISTORY_INCOMPLETE": "Part of the history is incomplete, so a pace estimate would mislead."
+      }
+    },
+    "records": {
+      "title": "Your records",
+      "description": "The most notable extremes of this period.",
+      "empty": "No records in this period yet.",
+      "types": {
+        "longest_completed_book": "Longest book finished",
+        "shortest_completed_book": "Shortest book finished",
+        "most_pages_in_day": "Busiest day",
+        "fastest_completed_read": "Fastest read finished",
+        "longest_series_marathon": "Longest series marathon",
+        "longest_streak": "Longest reading streak",
+        "peak_month": "Busiest month"
+      },
+      "values": {
+        "pages": "{count, plural, one {# page} other {# pages}}",
+        "elapsedDays": "finished in {count, plural, one {# day} other {# days}}",
+        "marathon": "{count, plural, one {# book in a row} other {# books in a row}}",
+        "streakDays": "{count, plural, one {# day in a row} other {# days in a row}}",
+        "peakMonthDetail": "{reads, plural, one {# read} other {# reads}} · {pages} pages"
+      }
     }
   }
 }

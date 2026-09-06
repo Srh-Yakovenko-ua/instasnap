@@ -4,6 +4,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { getQueryClient } from "@/lib/query-client";
+import messages from "@/messages/uk.json";
 
 import { CreateBookForm } from "./create-book-form";
 
@@ -195,13 +196,13 @@ export const BorrowedRequiresPersonName: Story = {
   play: async ({ canvas }) => {
     mockFetch(taxonomyHandler());
 
-    await userEvent.click(canvas.getByRole("radio", { name: "Позичив у когось" }));
+    await userEvent.click(canvas.getByRole("radio", { name: "Позичена у когось" }));
     await expect(canvas.getByLabelText("Імʼя людини")).toBeVisible();
 
     await userEvent.click(canvas.getByRole("button", { name: /Додати книгу/ }));
 
     await waitFor(async () => {
-      await expect(canvas.getByText("Enter the person's name")).toBeVisible();
+      await expect(canvas.getByText(messages.loans.contactPicker.required)).toBeVisible();
     });
   },
 };

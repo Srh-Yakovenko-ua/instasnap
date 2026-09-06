@@ -18,7 +18,7 @@ import {
 import { Injectable } from "@nestjs/common";
 import { subDays } from "date-fns";
 
-import { toNullableIsoDate } from "../../../core/iso-date.js";
+import { toCreateDate, toNullableIsoDate } from "../../../core/iso-date.js";
 import { buildPaginator, pageSlice } from "../../../core/paginator.js";
 import { MediaService } from "../../media/index.js";
 import { resolveActiveLoanPerson } from "../domain/loan-person.js";
@@ -69,7 +69,13 @@ export class LoansService {
     const { soonEnd, today } = loanDateBounds(new Date());
     const filter = {
       contactId: query.contactId,
+      expectedReturnDateFrom: toCreateDate(query.expectedReturnDateFrom),
+      expectedReturnDateTo: toCreateDate(query.expectedReturnDateTo),
       filter: query.filter,
+      hasNote: query.hasNote,
+      loanDateFrom: toCreateDate(query.loanDateFrom),
+      loanDateTo: toCreateDate(query.loanDateTo),
+      reminder: query.reminder,
       search: normalizeSearch(query.search),
       soonEnd,
       today,

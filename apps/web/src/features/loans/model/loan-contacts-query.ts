@@ -6,9 +6,13 @@ import { LoanContactsControllerListStatus } from "@/shared/api/generated/model";
 
 export const LOAN_CONTACTS_PAGE_SIZE = 20;
 
-export const LOAN_CONTACTS_STATUS_DEFAULT = LoanContactsControllerListStatus.all;
+export const LOAN_CONTACTS_STATUS_DEFAULT = LoanContactsControllerListStatus.active;
 
-export const LOAN_CONTACTS_STATUS_VALUES = Object.values(LoanContactsControllerListStatus);
+export const LOAN_CONTACTS_STATUS_VALUES = [
+  LoanContactsControllerListStatus.active,
+  LoanContactsControllerListStatus.archived,
+  LoanContactsControllerListStatus.all,
+] as const;
 
 export const loanContactsQueryParsers = {
   q: parseAsString.withDefault(""),
@@ -21,8 +25,12 @@ export type LoanContactsListParams = Omit<LoanContactsControllerListParams, "pag
 
 export type LoanContactsQueryState = inferParserType<typeof loanContactsQueryParsers>;
 
+export function activeLoanContactFilterCount(state: LoanContactsQueryState): number {
+  return state.status === LOAN_CONTACTS_STATUS_DEFAULT ? 0 : 1;
+}
+
 export function hasActiveLoanContactsQuery(state: LoanContactsQueryState): boolean {
-  return state.q.trim() !== "" || state.status !== LOAN_CONTACTS_STATUS_DEFAULT;
+  return state.q.trim() !== "" || activeLoanContactFilterCount(state) > 0;
 }
 
 export function toLoanContactsListParams(state: LoanContactsQueryState): LoanContactsListParams {

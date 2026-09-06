@@ -8,7 +8,7 @@
 import type { BookOrdersControllerStatisticsCompare } from "./bookOrdersControllerStatisticsCompare";
 import type { BookOrdersControllerStatisticsCurrency } from "./bookOrdersControllerStatisticsCurrency";
 import type { BookOrdersControllerStatisticsIncludeCancelled } from "./bookOrdersControllerStatisticsIncludeCancelled";
-import type { BookOrdersControllerStatisticsStatus } from "./bookOrdersControllerStatisticsStatus";
+import type { BookOrdersControllerStatisticsOrderState } from "./bookOrdersControllerStatisticsOrderState";
 
 export type BookOrdersControllerStatisticsParams = {
   compare?: BookOrdersControllerStatisticsCompare;
@@ -18,7 +18,10 @@ export type BookOrdersControllerStatisticsParams = {
    */
   from?: string;
   includeCancelled?: BookOrdersControllerStatisticsIncludeCancelled;
-  status?: BookOrdersControllerStatisticsStatus;
+  /**
+   * Narrows the dataset to orders sitting in one derived lifecycle state. It is the same state the lifecycle chart counts and the same one a drill-down carries to a destination page, so a statistic and the list it opens can never disagree.
+   */
+  orderState?: BookOrdersControllerStatisticsOrderState;
   /**
    * @maxLength 200
    */
@@ -27,4 +30,5 @@ export type BookOrdersControllerStatisticsParams = {
    * @pattern ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
    */
   to?: string;
+  status?: unknown;
 };

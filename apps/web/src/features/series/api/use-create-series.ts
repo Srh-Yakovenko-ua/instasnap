@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { NewSeriesInputDto } from "@/shared/api/generated/model";
 
+import { invalidateStatisticsQueries } from "@/features/statistics/api/statistics-keys";
 import { seriesControllerCreate } from "@/shared/api/generated/endpoints/series/series";
 
 import { seriesKeys } from "./series-keys";
@@ -19,6 +20,7 @@ export function useCreateSeries() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: seriesKeys.root });
+      void invalidateStatisticsQueries(queryClient);
     },
   });
 }

@@ -30,6 +30,10 @@ function buildSnapshotService(snapshotRows: unknown[] = []) {
   return { repository, snapshotService };
 }
 
+function cycleId(index: number): string {
+  return `4444${String(index).padStart(4, "0")}-4444-4444-8444-444444444444`;
+}
+
 function goal(overrides: Partial<ReadingGoalWithList> = {}): ReadingGoalWithList {
   return {
     archivedAt: null,
@@ -47,15 +51,21 @@ function goal(overrides: Partial<ReadingGoalWithList> = {}): ReadingGoalWithList
 }
 
 describe("ReadingGoalSnapshotService.seed", () => {
-  it("qualifies only the books finished inside the goal window", async () => {
-    const { repository, snapshotService } = buildSnapshotService();
+  it("stores positions only and resolves qualification from finished reading cycles", async () => {
+    const { repository, snapshotService } = buildSnapshotService([
+      {
+        bookId: bookId(0),
+        finishedAt: parseIsoDate("2026-08-15"),
+        qualifiedFinishedAt: null,
+        qualifiedReadingCycleId: null,
+        readingCycleId: cycleId(0),
+      },
+    ]);
 
     await snapshotService.seed({
       candidates: [
-        { bookId: bookId(0), finishedAt: parseIsoDate("2026-08-15"), position: 0 },
-        { bookId: bookId(1), finishedAt: parseIsoDate("2026-07-31"), position: 1 },
-        { bookId: bookId(2), finishedAt: parseIsoDate("2026-09-02"), position: 2 },
-        { bookId: bookId(3), finishedAt: null, position: 3 },
+        { bookId: bookId(0), position: 0 },
+        { bookId: bookId(1), position: 1 },
       ],
       goal: goal(),
       tx: TX,
@@ -65,29 +75,20 @@ describe("ReadingGoalSnapshotService.seed", () => {
       {
         goalId: GOAL_ID,
         rows: [
-          { bookId: bookId(0), position: 0, qualifiedFinishedAt: parseIsoDate("2026-08-15") },
-          { bookId: bookId(1), position: 1, qualifiedFinishedAt: null },
-          { bookId: bookId(2), position: 2, qualifiedFinishedAt: null },
-          { bookId: bookId(3), position: 3, qualifiedFinishedAt: null },
+          { bookId: bookId(0), position: 0 },
+          { bookId: bookId(1), position: 1 },
         ],
       },
       TX,
     );
-  });
-
-  it("counts a book finished exactly on the deadline", async () => {
-    const { repository, snapshotService } = buildSnapshotService();
-
-    await snapshotService.seed({
-      candidates: [{ bookId: bookId(0), finishedAt: parseIsoDate("2026-09-01"), position: 0 }],
-      goal: goal(),
-      tx: TX,
-    });
-
-    expect(repository.createMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rows: [{ bookId: bookId(0), position: 0, qualifiedFinishedAt: parseIsoDate("2026-09-01") }],
-      }),
+    expect(repository.updateQualifiedFinishedAt).toHaveBeenCalledWith(
+      {
+        bookId: bookId(0),
+        goalId: GOAL_ID,
+        previousQualifiedFinishedAt: null,
+        qualifiedFinishedAt: parseIsoDate("2026-08-15"),
+        qualifiedReadingCycleId: cycleId(0),
+      },
       TX,
     );
   });
@@ -108,6 +109,8 @@ describe("ReadingGoalSnapshotService.resync", () => {
         bookId: bookId(0),
         finishedAt: parseIsoDate("2026-08-20"),
         qualifiedFinishedAt: parseIsoDate("2026-08-20"),
+        qualifiedReadingCycleId: cycleId(0),
+        readingCycleId: cycleId(0),
       },
     ]);
 
@@ -122,6 +125,7 @@ describe("ReadingGoalSnapshotService.resync", () => {
         goalId: GOAL_ID,
         previousQualifiedFinishedAt: parseIsoDate("2026-08-20"),
         qualifiedFinishedAt: null,
+        qualifiedReadingCycleId: null,
       },
       TX,
     );
@@ -136,7 +140,13 @@ describe("ReadingGoalSnapshotService.resync", () => {
 
   it("counts a book the extended deadline now covers", async () => {
     const { snapshotService } = buildSnapshotService([
-      { bookId: bookId(0), finishedAt: parseIsoDate("2026-09-20"), qualifiedFinishedAt: null },
+      {
+        bookId: bookId(0),
+        finishedAt: parseIsoDate("2026-09-20"),
+        qualifiedFinishedAt: null,
+        qualifiedReadingCycleId: null,
+        readingCycleId: cycleId(0),
+      },
     ]);
 
     const changes = await snapshotService.resync({
@@ -159,8 +169,16 @@ describe("ReadingGoalSnapshotService.resync", () => {
         bookId: bookId(0),
         finishedAt: parseIsoDate("2026-08-15"),
         qualifiedFinishedAt: parseIsoDate("2026-08-15"),
+        qualifiedReadingCycleId: cycleId(0),
+        readingCycleId: cycleId(0),
       },
-      { bookId: bookId(1), finishedAt: null, qualifiedFinishedAt: null },
+      {
+        bookId: bookId(1),
+        finishedAt: null,
+        qualifiedFinishedAt: null,
+        qualifiedReadingCycleId: null,
+        readingCycleId: null,
+      },
     ]);
 
     const changes = await snapshotService.resync({ goal: goal(), tx: TX });
@@ -175,6 +193,8 @@ describe("ReadingGoalSnapshotService.resync", () => {
         bookId: bookId(0),
         finishedAt: parseIsoDate("2026-08-20"),
         qualifiedFinishedAt: parseIsoDate("2026-08-20"),
+        qualifiedReadingCycleId: cycleId(0),
+        readingCycleId: cycleId(0),
       },
     ]);
     repository.updateQualifiedFinishedAt.mockResolvedValue(0);
@@ -190,7 +210,13 @@ describe("ReadingGoalSnapshotService.resync", () => {
 
   it("drops a trashed book out of the counted set", async () => {
     const { snapshotService } = buildSnapshotService([
-      { bookId: bookId(0), finishedAt: null, qualifiedFinishedAt: parseIsoDate("2026-08-15") },
+      {
+        bookId: bookId(0),
+        finishedAt: null,
+        qualifiedFinishedAt: parseIsoDate("2026-08-15"),
+        qualifiedReadingCycleId: cycleId(0),
+        readingCycleId: null,
+      },
     ]);
 
     const changes = await snapshotService.resync({

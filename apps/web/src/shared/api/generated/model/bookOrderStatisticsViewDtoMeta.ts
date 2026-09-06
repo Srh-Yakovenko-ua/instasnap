@@ -5,23 +5,26 @@
  * REST API for the book-nest project
  * OpenAPI spec version: 1.0
  */
+import type { BookOrderStatisticsViewDtoMetaActiveSource } from "./bookOrderStatisticsViewDtoMetaActiveSource";
 import type { BookOrderStatisticsViewDtoMetaComparisonPeriod } from "./bookOrderStatisticsViewDtoMetaComparisonPeriod";
+import type { BookOrderStatisticsViewDtoMetaComparisonSource } from "./bookOrderStatisticsViewDtoMetaComparisonSource";
 import type { BookOrderStatisticsViewDtoMetaCurrentPeriod } from "./bookOrderStatisticsViewDtoMetaCurrentPeriod";
+import type { BookOrderStatisticsViewDtoMetaCurrentSource } from "./bookOrderStatisticsViewDtoMetaCurrentSource";
 
+/**
+ * Each source the response was built from reports its own completeness. One flag for the whole response would hide the case where the current period was read in full but the comparison period was cut, or the other way round.
+ */
 export type BookOrderStatisticsViewDtoMeta = {
+  /** How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter. */
+  activeSource: BookOrderStatisticsViewDtoMetaActiveSource;
   /** @nullable */
   comparisonPeriod: BookOrderStatisticsViewDtoMetaComparisonPeriod;
-  currentPeriod: BookOrderStatisticsViewDtoMetaCurrentPeriod;
-  isTruncated: boolean;
   /**
-   * @minimum 0
-   * @maximum 9007199254740991
-   */
-  loadedOrdersCount: number;
-  /**
-   * @maximum 9007199254740991
-   * @exclusiveMinimum 0
+   * How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter.
    * @nullable
    */
-  maxOrders: number | null;
+  comparisonSource: BookOrderStatisticsViewDtoMetaComparisonSource;
+  currentPeriod: BookOrderStatisticsViewDtoMetaCurrentPeriod;
+  /** How much of one source dataset the aggregates behind it actually saw. isTruncated means the safety cap cut the detail rows, so every total built on that source is a floor rather than the real number. It says nothing about whether a single metric had enough eligible rows: that is metric coverage, which stays a separate counter. */
+  currentSource: BookOrderStatisticsViewDtoMetaCurrentSource;
 };

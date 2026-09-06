@@ -1,3 +1,5 @@
+import type { StatisticsSourceQuality } from "@app/shared";
+
 import type { OrderStatisticsRecord } from "./statistics-scope.js";
 
 export const ORDER_STATISTICS_FETCH = Object.freeze({
@@ -5,25 +7,22 @@ export const ORDER_STATISTICS_FETCH = Object.freeze({
   overshootRows: 1,
 });
 
-export type OrderStatisticsRecordsPage = {
-  isTruncated: boolean;
-  loadedOrdersCount: number;
-  maxOrders: number;
+export type OrderStatisticsIdsPage = StatisticsSourceQuality & {
+  ids: string[];
+};
+
+export type OrderStatisticsRecordsPage = StatisticsSourceQuality & {
   records: OrderStatisticsRecord[];
 };
 
-export function capOrderStatisticsRecords(
-  fetchedRecords: OrderStatisticsRecord[],
-): OrderStatisticsRecordsPage {
-  const isTruncated = fetchedRecords.length > ORDER_STATISTICS_FETCH.maxOrders;
-  const records = isTruncated
-    ? fetchedRecords.slice(0, ORDER_STATISTICS_FETCH.maxOrders)
-    : fetchedRecords;
+export function capOrderStatisticsIds(fetchedIds: string[]): OrderStatisticsIdsPage {
+  const isTruncated = fetchedIds.length > ORDER_STATISTICS_FETCH.maxOrders;
+  const ids = isTruncated ? fetchedIds.slice(0, ORDER_STATISTICS_FETCH.maxOrders) : fetchedIds;
 
   return {
+    ids,
     isTruncated,
-    loadedOrdersCount: records.length,
+    loadedOrdersCount: ids.length,
     maxOrders: ORDER_STATISTICS_FETCH.maxOrders,
-    records,
   };
 }

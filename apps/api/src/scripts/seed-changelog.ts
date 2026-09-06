@@ -811,6 +811,162 @@ const CHANGELOG_ENTRIES: ChangelogSeedEntry[] = [
     titleUk: "Люди, яким ви позичаєте",
     version: null,
   },
+  {
+    bodyEn:
+      "A statistics page now shows how your reading went over a period you choose: how many reads you finished and pages you got through, how that compares with the period before, which genres, authors, publishers and languages you read most, how your ratings are spread, which books were new discoveries and which records you set. Pick a calendar year, the last 12 months, your own dates or all time.",
+    bodyUk:
+      "З'явилася окрема сторінка статистики: за обраний період видно, скільки читань ви завершили і скільки сторінок прочитали, як це виглядає поруч із попереднім періодом, які жанри, авторів, видавництва й мови ви читаєте найчастіше, як розподілилися ваші оцінки, що стало новим відкриттям і які рекорди ви поставили. Період беріть за календарний рік, за останні 12 місяців, за власні дати або за весь час.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:00.000Z",
+    slug: "reading-statistics",
+    titleEn: "Reading statistics",
+    titleUk: "Статистика читання",
+    version: null,
+  },
+  {
+    bodyEn:
+      "Statistics carry a calendar of the days you actually read, with your longest and current streaks and your most active weekday. Click any day to see what you were reading then, or switch the calendar from activity to books to read the period as a diary.",
+    bodyUk:
+      "У статистиці є календар днів, коли ви справді читали: найдовша і поточна серії днів поспіль та найактивніший день тижня. Клік по дню показує, що ви читали того дня, а перемикач з активності на книги перетворює календар на читацький щоденник.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:01.000Z",
+    slug: "reading-calendar",
+    titleEn: "Reading calendar",
+    titleUk: "Читацький календар",
+    version: null,
+  },
+  {
+    bodyEn:
+      "You can now hand over several books to one person in one go: pick every book in the loan dialog and set the date, the return term and the reminder once, and a loan is recorded for each book.",
+    bodyUk:
+      "Тепер можна передати людині кілька книг за один раз: оберіть у вікні позики всі потрібні книги, а дату, термін повернення й нагадування вкажіть один раз, і запис створиться для кожної книги.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:02.000Z",
+    slug: "loan-batch-lend",
+    titleEn: "Lending several books at once",
+    titleUk: "Позика кількох книг одразу",
+    version: null,
+  },
+  {
+    bodyEn:
+      "The lent and borrowed pages now filter by person, by loan date, by return term, by whether a reminder is set and by whether a note is there. Everything you pick shows up as a chip above the list and can be dropped one at a time.",
+    bodyUk:
+      "На сторінках «Треба повернути» та «Передано іншим» з'явилися фільтри за людиною, за датою позики, за терміном повернення, за наявністю нагадування і за наявністю нотатки. Усе обране стоїть чипами над списком, і кожен знімається окремо.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:03.000Z",
+    slug: "loans-advanced-filters",
+    titleEn: "Advanced loan filters",
+    titleUk: "Розширені фільтри позик",
+    version: null,
+  },
+  {
+    bodyEn:
+      "Loan history now filters the way the active loan pages do: by direction, by person, by loan date and by return date, with quick filters for returned on time, returned late and returned with no deadline. A line above the list says how many records you are seeing out of the total.",
+    bodyUk:
+      "Історія позик тепер фільтрується так само, як активні позики: за напрямком, за людиною, за датою позики та за датою повернення, а швидкі фільтри ділять список на повернені вчасно, із запізненням і без визначеного строку. Над списком видно, скільки записів показано із загальної кількості.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:04.000Z",
+    slug: "loan-history-filters",
+    titleEn: "Loan history filters",
+    titleUk: "Фільтри в історії позик",
+    version: null,
+  },
+  {
+    bodyEn:
+      "While you record a loan, the caption next to each name says how many books that person is holding right now, or how many you took from them, instead of counting every loan ever. The list of people also scrolls all the way to the last name instead of stopping at the eighth.",
+    bodyUk:
+      "Коли ви записуєте позику, біля кожного імені видно, скільки книг ця людина тримає зараз або скільки ви взяли в неї, а не скільки позик було за весь час. Список людей тепер гортається до останнього імені, а не обривається на восьмому.",
+    category: "improvement",
+    publishedAt: "2026-09-06T00:00:05.000Z",
+    slug: "loan-contact-holdings",
+    titleEn: "Books a person is holding now",
+    titleUk: "Скільки книг людина тримає зараз",
+    version: null,
+  },
+  {
+    bodyEn:
+      "The people list now opens on your active contacts only. Archived people sit behind the Filters button, and when you bring them back a removable chip above the list says so, so it is always clear why someone is missing.",
+    bodyUk:
+      "Список людей тепер відкривається лише на активних контактах. Архівовані сховані за кнопкою «Фільтри», а коли ви їх вмикаєте, над списком стоїть знімний чип, тож завжди зрозуміло, чому когось не видно.",
+    category: "improvement",
+    publishedAt: "2026-09-06T00:00:06.000Z",
+    slug: "loan-contacts-active-by-default",
+    titleEn: "Contacts without the archived ones",
+    titleUk: "Контакти без архівованих",
+    version: null,
+  },
+  {
+    bodyEn:
+      "The returned-on-time card divided by every finished loan, including the ones that never had a deadline, so the share came out lower than it really was. It now counts only loans that had a deadline, and if none of them did the card says so instead of showing zero. The average duration shows a dash when there is too little data, where it used to read as zero days.",
+    bodyUk:
+      "Картка «Повернуто вчасно» рахувала відсоток від усіх завершених позик, зокрема тих, яким ви ніколи не ставили строку, тож частка виходила меншою за справжню. Тепер вона рахується лише серед позик зі строком, а якщо строку не було в жодної, картка так і каже замість нуля. Середня тривалість показує прочерк, коли даних замало, замість «0 днів».",
+    category: "fix",
+    publishedAt: "2026-09-06T00:00:07.000Z",
+    slug: "loan-on-time-share",
+    titleEn: "The on-time return share",
+    titleUk: "Частка вчасних повернень",
+    version: null,
+  },
+  {
+    bodyEn:
+      "Creating a new person while you record a loan no longer opens a second window on top of the first one: the form appears as a step inside the dialog you are already in. The date, note and reminder you have already filled in are kept, where stepping back used to wipe them.",
+    bodyUk:
+      "Створення нової людини під час запису позики більше не відкриває друге вікно поверх першого: форма з'являється кроком у тому самому вікні. Дата, нотатка й нагадування, які ви вже заповнили, зберігаються, хоча раніше крок назад стирав їх.",
+    category: "fix",
+    publishedAt: "2026-09-06T00:00:08.000Z",
+    slug: "loan-contact-inline-create",
+    titleEn: "Adding a person inside the loan dialog",
+    titleUk: "Нова людина просто у вікні позики",
+    version: null,
+  },
+  {
+    bodyEn:
+      "The spending statistics page now lets you choose the currency the money figures are shown in, and every amount and chart switches together. Nothing is converted: the page shows exactly what you spent in the currency you picked.",
+    bodyUk:
+      "На сторінці статистики витрат можна обрати валюту, у якій показувати гроші, і всі суми та графіки перемикаються разом. Суми не конвертуються: сторінка показує саме те, що ви витратили в обраній валюті.",
+    category: "improvement",
+    publishedAt: "2026-09-06T00:00:09.000Z",
+    slug: "spending-statistics-currency",
+    titleEn: "Currency for the spending statistics",
+    titleUk: "Валюта показників у статистиці витрат",
+    version: null,
+  },
+  {
+    bodyEn:
+      "Figures on the spending statistics page are clickable now: a click opens exactly the orders the figure was built from, split into in transit, received and cancelled, with a count beside each.",
+    bodyUk:
+      "Числа на сторінці статистики витрат тепер клікабельні: клік відкриває саме ті замовлення, з яких це число склалося, поділені на ті, що в дорозі, отримані та скасовані, з кількістю біля кожної групи.",
+    category: "feature",
+    publishedAt: "2026-09-06T00:00:10.000Z",
+    slug: "spending-statistics-drilldown",
+    titleEn: "From a figure to the orders behind it",
+    titleUk: "Від числа до замовлень",
+    version: null,
+  },
+  {
+    bodyEn:
+      "A change to the monthly book budget can now start from a month you choose instead of the current one, and you can just as well plan for a currency to stop having a budget from a given month. Scheduled changes are listed on the budget card, and each one can be cancelled before it takes effect.",
+    bodyUk:
+      "Зміну місячного бюджету на книги тепер можна застосувати з обраного місяця, а не лише з поточного, і так само можна запланувати, що з певного місяця бюджету в цій валюті не буде. Заплановані зміни перелічені на картці бюджету, і кожну можна скасувати, поки вона не набула чинності.",
+    category: "improvement",
+    publishedAt: "2026-09-06T00:00:11.000Z",
+    slug: "book-budget-scheduled-changes",
+    titleEn: "Planning the book budget ahead",
+    titleUk: "Бюджет на книги наперед",
+    version: null,
+  },
+  {
+    bodyEn:
+      "Clicking into the publisher field while you add or edit a book no longer closes the suggestion list that has just opened.",
+    bodyUk:
+      "Клік у поле видавництва, коли ви додаєте чи редагуєте книгу, більше не закриває підказки, які щойно відкрилися.",
+    category: "fix",
+    publishedAt: "2026-09-06T00:00:12.000Z",
+    slug: "publisher-picker-stays-open",
+    titleEn: "The publisher list stays open",
+    titleUk: "Список видавництв не закривається",
+    version: null,
+  },
 ];
 
 type PrismaClientInstance = InstanceType<typeof PrismaClient>;

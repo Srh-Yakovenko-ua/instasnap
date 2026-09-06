@@ -10,11 +10,15 @@ import {
 import type { LoanHistoryListParams } from "./loan-history-query";
 import type { LoansListParams } from "./loans-query";
 
-import { LOAN_PAGES } from "./loan-pages";
+import { LOAN_HISTORY_PAGE_HREF, LOAN_PAGES } from "./loan-pages";
 
 export const LOAN_CONTACT_PREVIEW = {
   limit: 3,
 } as const;
+
+export function toContactHistoryHref(contactId: string): string {
+  return `${LOAN_HISTORY_PAGE_HREF}?${new URLSearchParams({ contactId }).toString()}`;
+}
 
 export function toContactHistoryParams(contactId: string): LoanHistoryListParams {
   return {

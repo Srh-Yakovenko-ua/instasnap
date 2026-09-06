@@ -486,6 +486,9 @@ export const deliveryReadControllerInTransitListQueryOrderedFromRegExp = new Reg
 export const deliveryReadControllerInTransitListQueryOrderedToRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
+export const deliveryReadControllerInTransitListQueryOrderIdRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
 export const deliveryReadControllerInTransitListQueryPageNumberDefault = 1;
 export const deliveryReadControllerInTransitListQueryPageNumberMax = 21474836;
 
@@ -558,6 +561,19 @@ export const DeliveryReadControllerInTransitListQueryParams = zod.object({
     .date()
     .regex(deliveryReadControllerInTransitListQueryOrderedToRegExp)
     .optional(),
+  orderId: zod
+    .uuid()
+    .regex(deliveryReadControllerInTransitListQueryOrderIdRegExp)
+    .optional()
+    .describe(
+      "Opens exactly one order by identity. Statistics navigates here instead of searching for an order number, which is a display label and not a key.",
+    ),
+  orderState: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .optional()
+    .describe(
+      "Keeps only orders in one derived lifecycle state. A state no in-transit order can hold yields an empty list rather than being quietly ignored.",
+    ),
   pageNumber: zod
     .int()
     .min(1)
@@ -697,14 +713,18 @@ export const DeliveryReadControllerInTransitListResponse = zod.object({
           .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
           .nullable(),
         deliveryPrice: zod.number().nullable(),
-        derivedStatus: zod.enum([
-          "active",
-          "partially_shipped",
-          "shipped",
-          "partially_received",
-          "received",
-          "cancelled",
-        ]),
+        derivedStatus: zod
+          .enum([
+            "active",
+            "partially_shipped",
+            "shipped",
+            "partially_received",
+            "received",
+            "cancelled",
+          ])
+          .describe(
+            "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+          ),
         discount: zod.number().nullable(),
         effectiveTotalAmount: zod
           .number()
@@ -1139,6 +1159,9 @@ export const deliveryReadControllerHistoryListQueryCurrencyMax = 100;
 export const deliveryReadControllerHistoryListQueryFromRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
+export const deliveryReadControllerHistoryListQueryOrderIdRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
 export const deliveryReadControllerHistoryListQueryPageNumberDefault = 1;
 export const deliveryReadControllerHistoryListQueryPageNumberMax = 21474836;
 
@@ -1191,6 +1214,19 @@ export const DeliveryReadControllerHistoryListQueryParams = zod.object({
     .max(deliveryReadControllerHistoryListQueryCurrencyMax)
     .optional(),
   from: zod.iso.date().regex(deliveryReadControllerHistoryListQueryFromRegExp).optional(),
+  orderId: zod
+    .uuid()
+    .regex(deliveryReadControllerHistoryListQueryOrderIdRegExp)
+    .optional()
+    .describe(
+      "Opens exactly one order by identity. Statistics navigates here instead of searching for an order number, which is a display label and not a key.",
+    ),
+  orderState: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .optional()
+    .describe(
+      "Keeps only orders in one derived lifecycle state, so a drill-down reproduces the very subset a statistic was built from.",
+    ),
   pageNumber: zod
     .int()
     .min(1)
@@ -1279,14 +1315,18 @@ export const DeliveryReadControllerHistoryListResponse = zod.object({
           .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
           .nullable(),
         deliveryPrice: zod.number().nullable(),
-        derivedStatus: zod.enum([
-          "active",
-          "partially_shipped",
-          "shipped",
-          "partially_received",
-          "received",
-          "cancelled",
-        ]),
+        derivedStatus: zod
+          .enum([
+            "active",
+            "partially_shipped",
+            "shipped",
+            "partially_received",
+            "received",
+            "cancelled",
+          ])
+          .describe(
+            "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+          ),
         discount: zod.number().nullable(),
         effectiveTotalAmount: zod
           .number()

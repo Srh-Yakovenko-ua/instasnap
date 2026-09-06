@@ -28,11 +28,20 @@ export const bookBudgetsControllerCancelScheduledResponseBudgetsItemCurrentMonth
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerCancelScheduledResponseBudgetsItemScheduledValidFromMonthRegExp =
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemCurrentMonthValidToMonthRegExp =
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerCancelScheduledResponseBudgetsItemScheduledValidToMonthRegExp =
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
@@ -76,7 +85,23 @@ export const BookBudgetsControllerCancelScheduledResponse = zod.object({
               .describe(
                 "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
               ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
             projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
             remaining: zod.number(),
             remainingSigned: zod
               .number()
@@ -95,31 +120,249 @@ export const BookBudgetsControllerCancelScheduledResponse = zod.object({
               .regex(
                 bookBudgetsControllerCancelScheduledResponseBudgetsItemCurrentMonthValidFromMonthRegExp,
               ),
-          })
-          .nullable(),
-        scheduled: zod
-          .object({
-            monthlyAmount: zod.number(),
-            validFromMonth: zod.iso
-              .date()
-              .regex(
-                bookBudgetsControllerCancelScheduledResponseBudgetsItemScheduledValidFromMonthRegExp,
-              ),
             validToMonth: zod.iso
               .date()
               .regex(
-                bookBudgetsControllerCancelScheduledResponseBudgetsItemScheduledValidToMonthRegExp,
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemCurrentMonthValidToMonthRegExp,
               )
               .nullable()
               .describe(
-                "The first month this version no longer covers. Null while the version is open ended.",
+                "The first month this budget no longer covers. Null while it runs open ended.",
               ),
           })
           .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersCountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersCountMax,
+              ),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerCancelScheduledResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
       }),
     )
     .describe("Only currencies the user has configured. An unconfigured currency is absent."),
   month: zod.iso.date().regex(bookBudgetsControllerCancelScheduledResponseMonthRegExp),
+});
+
+/**
+ * @summary Cancel a scheduled stop and let the budget keep running
+ */
+export const BookBudgetsControllerCancelScheduledStopParams = zod.object({
+  currency: zod.enum(["UAH", "EUR", "USD"]),
+});
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthDaysInMonthMin = 0;
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthDaysInMonthMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthElapsedDaysMin = 0;
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthElapsedDaysMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthValidFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthValidToMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerCancelScheduledStopResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerCancelScheduledStopResponseMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookBudgetsControllerCancelScheduledStopResponse = zod.object({
+  budgets: zod
+    .array(
+      zod.object({
+        currency: zod.enum(["UAH", "EUR", "USD"]),
+        currentMonth: zod
+          .object({
+            budget: zod.number(),
+            daysInMonth: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthDaysInMonthMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthDaysInMonthMax,
+              ),
+            deliveryShareOfBudgetPercent: zod
+              .number()
+              .nullable()
+              .describe(
+                "Delivery spend of the current month against the configured budget. Null when the budget cannot act as a denominator.",
+              ),
+            elapsedDays: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthElapsedDaysMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthElapsedDaysMax,
+              ),
+            forecast: zod
+              .number()
+              .nullable()
+              .describe(
+                "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
+              ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
+            projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
+            remaining: zod.number(),
+            remainingSigned: zod
+              .number()
+              .describe(
+                "Budget minus spend without a floor, so an overage reads as a negative number.",
+              ),
+            spentToDate: zod.number(),
+            usedPercent: zod.number(),
+            month: zod.iso
+              .date()
+              .regex(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthMonthRegExp,
+              ),
+            validFromMonth: zod.iso
+              .date()
+              .regex(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthValidFromMonthRegExp,
+              ),
+            validToMonth: zod.iso
+              .date()
+              .regex(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemCurrentMonthValidToMonthRegExp,
+              )
+              .nullable()
+              .describe(
+                "The first month this budget no longer covers. Null while it runs open ended.",
+              ),
+          })
+          .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersCountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersCountMax,
+              ),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerCancelScheduledStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerCancelScheduledStopResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
+      }),
+    )
+    .describe("Only currencies the user has configured. An unconfigured currency is absent."),
+  month: zod.iso.date().regex(bookBudgetsControllerCancelScheduledStopResponseMonthRegExp),
 });
 
 /**
@@ -138,11 +381,20 @@ export const bookBudgetsControllerOverviewResponseBudgetsItemCurrentMonthValidFr
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerOverviewResponseBudgetsItemScheduledValidFromMonthRegExp =
+export const bookBudgetsControllerOverviewResponseBudgetsItemCurrentMonthValidToMonthRegExp =
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerOverviewResponseBudgetsItemScheduledValidToMonthRegExp =
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerOverviewResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
@@ -178,7 +430,23 @@ export const BookBudgetsControllerOverviewResponse = zod.object({
               .describe(
                 "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
               ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
             projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
             remaining: zod.number(),
             remainingSigned: zod
               .number()
@@ -195,23 +463,60 @@ export const BookBudgetsControllerOverviewResponse = zod.object({
               .regex(
                 bookBudgetsControllerOverviewResponseBudgetsItemCurrentMonthValidFromMonthRegExp,
               ),
-          })
-          .nullable(),
-        scheduled: zod
-          .object({
-            monthlyAmount: zod.number(),
-            validFromMonth: zod.iso
-              .date()
-              .regex(bookBudgetsControllerOverviewResponseBudgetsItemScheduledValidFromMonthRegExp),
             validToMonth: zod.iso
               .date()
-              .regex(bookBudgetsControllerOverviewResponseBudgetsItemScheduledValidToMonthRegExp)
+              .regex(bookBudgetsControllerOverviewResponseBudgetsItemCurrentMonthValidToMonthRegExp)
               .nullable()
               .describe(
-                "The first month this version no longer covers. Null while the version is open ended.",
+                "The first month this budget no longer covers. Null while it runs open ended.",
               ),
           })
           .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersCountMin)
+              .max(bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersCountMax),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerOverviewResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerOverviewResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
       }),
     )
     .describe("Only currencies the user has configured. An unconfigured currency is absent."),
@@ -249,13 +554,23 @@ export const bookBudgetsControllerUpsertResponseBudgetsItemCurrentMonthValidFrom
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerUpsertResponseBudgetsItemScheduledValidFromMonthRegExp =
+export const bookBudgetsControllerUpsertResponseBudgetsItemCurrentMonthValidToMonthRegExp =
   new RegExp(
     "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
   );
-export const bookBudgetsControllerUpsertResponseBudgetsItemScheduledValidToMonthRegExp = new RegExp(
-  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
-);
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerUpsertResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
 export const bookBudgetsControllerUpsertResponseMonthRegExp = new RegExp(
   "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 );
@@ -288,7 +603,23 @@ export const BookBudgetsControllerUpsertResponse = zod.object({
               .describe(
                 "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
               ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
             projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
             remaining: zod.number(),
             remainingSigned: zod
               .number()
@@ -305,25 +636,422 @@ export const BookBudgetsControllerUpsertResponse = zod.object({
               .regex(
                 bookBudgetsControllerUpsertResponseBudgetsItemCurrentMonthValidFromMonthRegExp,
               ),
-          })
-          .nullable(),
-        scheduled: zod
-          .object({
-            monthlyAmount: zod.number(),
-            validFromMonth: zod.iso
-              .date()
-              .regex(bookBudgetsControllerUpsertResponseBudgetsItemScheduledValidFromMonthRegExp),
             validToMonth: zod.iso
               .date()
-              .regex(bookBudgetsControllerUpsertResponseBudgetsItemScheduledValidToMonthRegExp)
+              .regex(bookBudgetsControllerUpsertResponseBudgetsItemCurrentMonthValidToMonthRegExp)
               .nullable()
               .describe(
-                "The first month this version no longer covers. Null while the version is open ended.",
+                "The first month this budget no longer covers. Null while it runs open ended.",
               ),
           })
           .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersCountMin)
+              .max(bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersCountMax),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerUpsertResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerUpsertResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
       }),
     )
     .describe("Only currencies the user has configured. An unconfigured currency is absent."),
   month: zod.iso.date().regex(bookBudgetsControllerUpsertResponseMonthRegExp),
+});
+
+/**
+ * @summary Save every currency the budget dialog changed as one atomic write
+ */
+export const bookBudgetsControllerSaveBodyChangesItemOneMonthlyAmountMin = 0.01;
+export const bookBudgetsControllerSaveBodyChangesItemOneMonthlyAmountMax = 99999999.99;
+
+export const bookBudgetsControllerSaveBodyEffectiveFromMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookBudgetsControllerSaveBody = zod
+  .object({
+    changes: zod
+      .array(
+        zod.union([
+          zod.object({
+            action: zod.enum(["set"]),
+            currency: zod.enum(["UAH", "EUR", "USD"]),
+            monthlyAmount: zod
+              .number()
+              .min(bookBudgetsControllerSaveBodyChangesItemOneMonthlyAmountMin)
+              .max(bookBudgetsControllerSaveBodyChangesItemOneMonthlyAmountMax),
+          }),
+          zod.object({
+            action: zod.enum(["stop"]),
+            currency: zod.enum(["UAH", "EUR", "USD"]),
+          }),
+        ]),
+      )
+      .min(1),
+    effectiveFromMonth: zod.iso.date().regex(bookBudgetsControllerSaveBodyEffectiveFromMonthRegExp),
+  })
+  .describe(
+    "Every currency the dialog actually changed, saved as one atomic write from the same month. A currency the user left alone is simply absent, so an untouched budget can never be rewritten by a save it was not part of.",
+  );
+
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthDaysInMonthMin = 0;
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthDaysInMonthMax = 9007199254740991;
+
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthElapsedDaysMin = 0;
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthElapsedDaysMax = 9007199254740991;
+
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthValidFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthValidToMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerSaveResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerSaveResponseMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookBudgetsControllerSaveResponse = zod.object({
+  budgets: zod
+    .array(
+      zod.object({
+        currency: zod.enum(["UAH", "EUR", "USD"]),
+        currentMonth: zod
+          .object({
+            budget: zod.number(),
+            daysInMonth: zod
+              .int()
+              .min(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthDaysInMonthMin)
+              .max(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthDaysInMonthMax),
+            deliveryShareOfBudgetPercent: zod
+              .number()
+              .nullable()
+              .describe(
+                "Delivery spend of the current month against the configured budget. Null when the budget cannot act as a denominator.",
+              ),
+            elapsedDays: zod
+              .int()
+              .min(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthElapsedDaysMin)
+              .max(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthElapsedDaysMax),
+            forecast: zod
+              .number()
+              .nullable()
+              .describe(
+                "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
+              ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
+            projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
+            remaining: zod.number(),
+            remainingSigned: zod
+              .number()
+              .describe(
+                "Budget minus spend without a floor, so an overage reads as a negative number.",
+              ),
+            spentToDate: zod.number(),
+            usedPercent: zod.number(),
+            month: zod.iso
+              .date()
+              .regex(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthMonthRegExp),
+            validFromMonth: zod.iso
+              .date()
+              .regex(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthValidFromMonthRegExp),
+            validToMonth: zod.iso
+              .date()
+              .regex(bookBudgetsControllerSaveResponseBudgetsItemCurrentMonthValidToMonthRegExp)
+              .nullable()
+              .describe(
+                "The first month this budget no longer covers. Null while it runs open ended.",
+              ),
+          })
+          .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersCountMin)
+              .max(bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersCountMax),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerSaveResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerSaveResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
+      }),
+    )
+    .describe("Only currencies the user has configured. An unconfigured currency is absent."),
+  month: zod.iso.date().regex(bookBudgetsControllerSaveResponseMonthRegExp),
+});
+
+/**
+ * @summary Stop the budget of one currency from a given month
+ */
+export const BookBudgetsControllerStopParams = zod.object({
+  currency: zod.enum(["UAH", "EUR", "USD"]),
+});
+
+export const bookBudgetsControllerStopBodyEffectiveFromMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookBudgetsControllerStopBody = zod.object({
+  effectiveFromMonth: zod.iso
+    .date()
+    .regex(bookBudgetsControllerStopBodyEffectiveFromMonthRegExp)
+    .describe("The first month this currency stops having a budget. Earlier months keep theirs."),
+});
+
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthDaysInMonthMin = 0;
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthDaysInMonthMax = 9007199254740991;
+
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthElapsedDaysMin = 0;
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthElapsedDaysMax = 9007199254740991;
+
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthValidFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerStopResponseBudgetsItemCurrentMonthValidToMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersCountMin = 0;
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersCountMax = 9007199254740991;
+
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin = 0;
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin = 0;
+export const bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax = 9007199254740991;
+
+export const bookBudgetsControllerStopResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp =
+  new RegExp(
+    "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+  );
+export const bookBudgetsControllerStopResponseMonthRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+
+export const BookBudgetsControllerStopResponse = zod.object({
+  budgets: zod
+    .array(
+      zod.object({
+        currency: zod.enum(["UAH", "EUR", "USD"]),
+        currentMonth: zod
+          .object({
+            budget: zod.number(),
+            daysInMonth: zod
+              .int()
+              .min(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthDaysInMonthMin)
+              .max(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthDaysInMonthMax),
+            deliveryShareOfBudgetPercent: zod
+              .number()
+              .nullable()
+              .describe(
+                "Delivery spend of the current month against the configured budget. Null when the budget cannot act as a denominator.",
+              ),
+            elapsedDays: zod
+              .int()
+              .min(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthElapsedDaysMin)
+              .max(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthElapsedDaysMax),
+            forecast: zod
+              .number()
+              .nullable()
+              .describe(
+                "Month-end spend projected from the pace so far. Null means insufficient data, which is every month before its third day.",
+              ),
+            isForecastComplete: zod
+              .boolean()
+              .describe(
+                "False when an order of this month carried no resolved amount, so the pace behind the forecast was measured on partial spend.",
+              ),
+            outlook: zod
+              .enum(["on_track", "at_risk", "exceeded", "forecast_pending"])
+              .describe(
+                "Where the month is heading. on_track and at_risk both mean the budget still holds today and differ only in where the pace points; exceeded means it already broke; forecast_pending means too few days have elapsed to project anything.",
+              ),
+            projectedOverage: zod.number().nullable(),
+            projectedRemaining: zod
+              .number()
+              .nullable()
+              .describe(
+                "What the pace leaves unspent by month end, floored at zero. Null while pending.",
+              ),
+            remaining: zod.number(),
+            remainingSigned: zod
+              .number()
+              .describe(
+                "Budget minus spend without a floor, so an overage reads as a negative number.",
+              ),
+            spentToDate: zod.number(),
+            usedPercent: zod.number(),
+            month: zod.iso
+              .date()
+              .regex(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthMonthRegExp),
+            validFromMonth: zod.iso
+              .date()
+              .regex(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthValidFromMonthRegExp),
+            validToMonth: zod.iso
+              .date()
+              .regex(bookBudgetsControllerStopResponseBudgetsItemCurrentMonthValidToMonthRegExp)
+              .nullable()
+              .describe(
+                "The first month this budget no longer covers. Null while it runs open ended.",
+              ),
+          })
+          .nullable(),
+        spendCoverage: zod
+          .object({
+            ordersCount: zod
+              .int()
+              .min(bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersCountMin)
+              .max(bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersCountMax),
+            ordersWithoutResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithoutResolvedAmountMax,
+              ),
+            ordersWithResolvedAmount: zod
+              .int()
+              .min(
+                bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMin,
+              )
+              .max(
+                bookBudgetsControllerStopResponseBudgetsItemSpendCoverageOrdersWithResolvedAmountMax,
+              ),
+          })
+          .describe(
+            "How much of this month's spend the budget could actually see. An order whose amount is unknown is counted here and left out of the spend, never folded in as a zero.",
+          ),
+        upcomingChanges: zod
+          .array(
+            zod
+              .object({
+                effectiveFromMonth: zod.iso
+                  .date()
+                  .regex(
+                    bookBudgetsControllerStopResponseBudgetsItemUpcomingChangesItemEffectiveFromMonthRegExp,
+                  ),
+                kind: zod.enum(["set", "change", "stop"]),
+                monthlyAmount: zod.number().nullable().describe("Null exactly when kind is stop."),
+              })
+              .describe(
+                "One scheduled future move of this currency's budget, ascending by month. set opens a budget where there was none, change replaces a running one, stop ends it.",
+              ),
+          )
+          .describe(
+            "Every move already scheduled for this currency, ascending by month. More than one can be waiting, so none of them is silently dropped.",
+          ),
+      }),
+    )
+    .describe("Only currencies the user has configured. An unconfigured currency is absent."),
+  month: zod.iso.date().regex(bookBudgetsControllerStopResponseMonthRegExp),
 });

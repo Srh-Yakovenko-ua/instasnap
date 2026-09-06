@@ -10,17 +10,19 @@ const SERVICE_UNAVAILABLE = {
 export class HttpError extends Error {
   readonly bodyless: boolean;
   readonly code?: string;
+  readonly details?: Record<string, unknown>;
   readonly status: HttpStatus;
 
   constructor(
     status: HttpStatus,
     message: string,
-    options?: { bodyless?: boolean; code?: string },
+    options?: { bodyless?: boolean; code?: string; details?: Record<string, unknown> },
   ) {
     super(message);
     this.name = "HttpError";
     this.status = status;
     this.code = options?.code;
+    this.details = options?.details;
     this.bodyless = options?.bodyless ?? false;
   }
 }
@@ -43,8 +45,11 @@ export class BadRequestError extends HttpError {
 }
 
 export class ConflictError extends HttpError {
-  constructor(message = "Conflict", options?: { code?: string }) {
-    super(HTTP_STATUS.CONFLICT, message, { code: options?.code });
+  constructor(
+    message = "Conflict",
+    options?: { code?: string; details?: Record<string, unknown> },
+  ) {
+    super(HTTP_STATUS.CONFLICT, message, { code: options?.code, details: options?.details });
     this.name = "ConflictError";
   }
 }

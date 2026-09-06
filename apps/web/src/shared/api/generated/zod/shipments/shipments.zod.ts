@@ -53,14 +53,11 @@ export const ShipmentsControllerCreateShipmentResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -139,14 +136,11 @@ export const ShipmentsControllerMoveItemsResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -264,14 +258,11 @@ export const ShipmentsControllerUpdateShipmentResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -345,14 +336,11 @@ export const ShipmentsControllerMarkInTransitResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -425,14 +413,11 @@ export const ShipmentsControllerMarkReadyForPickupResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -502,14 +487,11 @@ export const ShipmentsControllerMarkReceivedResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod
@@ -580,14 +562,11 @@ export const ShipmentsControllerCancelShipmentResponse = zod.object({
     .union([zod.literal("UAH"), zod.literal("EUR"), zod.literal("USD"), zod.literal(null)])
     .nullable(),
   deliveryPrice: zod.number().nullable(),
-  derivedStatus: zod.enum([
-    "active",
-    "partially_shipped",
-    "shipped",
-    "partially_received",
-    "received",
-    "cancelled",
-  ]),
+  derivedStatus: zod
+    .enum(["active", "partially_shipped", "shipped", "partially_received", "received", "cancelled"])
+    .describe(
+      "The one lifecycle state of a whole order, derived from its live books and their parcels. Statistics filters, the lifecycle chart and every drill-down read this same state, so a chart and the list it opens can never disagree. active means nothing has been dispatched yet.",
+    ),
   discount: zod.number().nullable(),
   id: zod.string(),
   isFree: zod

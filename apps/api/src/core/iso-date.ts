@@ -51,3 +51,7 @@ export function toNullableIsoDateTime(value: Nullable<Date>): Nullable<string> {
 export function toUpdateDate(value: Nullable<string> | undefined): Nullable<Date> | undefined {
   return value === undefined || value === null ? value : parseIsoDate(value);
 }
+
+export function toZonedIsoDate({ instant, timeZone }: { instant: Date; timeZone: string }): string {
+  return formatInTimeZone(instant, timeZone, ISO_DATE_FORMAT);
+}

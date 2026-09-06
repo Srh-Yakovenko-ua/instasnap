@@ -49,7 +49,14 @@ export const LoanContactCountsSchema = z.object({
 
 export type LoanContactCounts = z.infer<typeof LoanContactCountsSchema>;
 
-export const LoanContactsViewSchema = createPaginatedSchema(LoanContactViewSchema).extend({
+export const LoanContactListItemViewSchema = LoanContactViewSchema.extend({
+  activeBorrowedCount: z.number().int().nonnegative(),
+  activeLentCount: z.number().int().nonnegative(),
+});
+
+export type LoanContactListItemView = z.infer<typeof LoanContactListItemViewSchema>;
+
+export const LoanContactsViewSchema = createPaginatedSchema(LoanContactListItemViewSchema).extend({
   counts: LoanContactCountsSchema,
 });
 

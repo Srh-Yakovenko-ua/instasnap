@@ -14,6 +14,8 @@ import { LibrarySummaryCards } from "@/features/books/components/library-summary
 
 type HistoryCardKey = "duration" | "late" | "onTime" | "total";
 
+const EMPTY_VALUE = "—";
+
 type LoanHistorySummaryCardsProps = {
   cards: LibrarySummaryCard[];
   isError: boolean;
@@ -72,14 +74,22 @@ export function useLoanHistorySummaryCards(
   const summary = overview?.summary;
   const totalCompleted = summary?.totalCompleted ?? 0;
   const onTimeCount = summary?.onTimeCount ?? 0;
+  const onTimePercent = summary?.onTimePercent ?? null;
   const lateCount = summary?.lateCount ?? 0;
   const averageDelayDays = summary?.averageDelayDays ?? null;
   const averageDurationDays = summary?.averageDurationDays ?? null;
+  const durationCount = summary?.durationCount ?? 0;
 
   const mobileLabels = (key: HistoryCardKey) => ({
     compact: t(`${key}.mobile.compact`),
     detailed: t(`${key}.mobile.detailed`),
   });
+
+  function lateMicrofact() {
+    if (lateCount === 0) return t("late.noDelays");
+    if (averageDelayDays === null) return undefined;
+    return t("late.microfact", { count: averageDelayDays });
+  }
 
   return [
     {
@@ -96,7 +106,10 @@ export function useLoanHistorySummaryCards(
     {
       ...HISTORY_CARD_LOOK.onTime,
       label: t("onTime.label"),
-      microfact: t("onTime.microfact", { percent: summary?.onTimePercent ?? 0 }),
+      microfact:
+        onTimePercent === null
+          ? t("onTime.empty")
+          : t("onTime.microfact", { percent: onTimePercent }),
       mobileLabels: mobileLabels("onTime"),
       unit: t("unitLoans", { count: onTimeCount }),
       value: onTimeCount,
@@ -104,10 +117,7 @@ export function useLoanHistorySummaryCards(
     {
       ...HISTORY_CARD_LOOK.late,
       label: t("late.label"),
-      microfact:
-        lateCount === 0 || averageDelayDays === null
-          ? t("late.allOnTime")
-          : t("late.microfact", { count: averageDelayDays }),
+      microfact: lateMicrofact(),
       mobileLabels: mobileLabels("late"),
       unit: t("unitLoans", { count: lateCount }),
       value: lateCount,
@@ -115,10 +125,14 @@ export function useLoanHistorySummaryCards(
     {
       ...HISTORY_CARD_LOOK.duration,
       label: t("duration.label"),
-      microfact: averageDurationDays === null ? t("duration.empty") : t("duration.microfact"),
+      microfact:
+        averageDurationDays === null
+          ? t("duration.empty")
+          : t("duration.microfact", { count: durationCount }),
       mobileLabels: mobileLabels("duration"),
-      unit: t("unitDays", { count: averageDurationDays ?? 0 }),
-      value: averageDurationDays ?? 0,
+      unit:
+        averageDurationDays === null ? undefined : t("unitDays", { count: averageDurationDays }),
+      value: averageDurationDays ?? EMPTY_VALUE,
     },
   ];
 }
