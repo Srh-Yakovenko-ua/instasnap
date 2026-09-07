@@ -3486,13 +3486,17 @@
       },
       "dynamics": {
         "aria": "Bar chart: {metric}",
-        "clickHint": "Pick a bar to open its orders",
+        "clickHint": "Pick a bar to see the orders from that period",
         "closeDestinations": "Collapse",
         "comparison": "Comparison",
         "current": "Current period",
         "difference": "Change",
         "empty": "Nothing to chart for the selected period.",
         "emptyForCurrency": "No spend in {currency} for the selected period.",
+        "legend": {
+          "comparison": "Previous",
+          "current": "Current"
+        },
         "metricLabel": "Metric",
         "metrics": {
           "books": "Books",
@@ -3757,6 +3761,9 @@
           "value": "{store} — {count, plural, one {# order} other {# orders}}",
           "helper": "{books, plural, one {# book} other {# books}}",
           "missing": "No order with a named store."
+        },
+        "mostActiveByBooks": {
+          "title": "Most books bought in one store"
         }
       },
       "topOrders": {

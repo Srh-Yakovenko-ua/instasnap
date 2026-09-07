@@ -133,14 +133,19 @@ describe("DeliveryStatistics layout", () => {
     });
   });
 
-  it("keeps the insights inside the dynamics section instead of a side column", async () => {
+  it("puts the insights in their own card beside the dynamics chart, at the same height", async () => {
     renderStatistics();
     await settle();
 
-    const dynamics = cardOf("Динаміка покупок");
+    const dynamicsColumn = rowOf("Динаміка покупок");
+    const row = rowOf("Ключове за період");
 
-    expect(dynamics).toContainElement(screen.getByText("Ключове за період"));
-    expect(rowOf("Динаміка покупок").className).not.toContain("grid");
+    expect(cardOf("Динаміка покупок")).not.toContainElement(screen.getByText("Ключове за період"));
+    expect(dynamicsColumn.className).toContain("lg:col-span-2");
+    expect(dynamicsColumn.parentElement).toBe(row);
+    expect(row.className).toContain("lg:grid-cols-3");
+    expect(row).not.toHaveClass("items-start");
+    expect(dynamicsColumn).toHaveClass("grid");
   });
 
   it("pairs the two store cards in one two-column row", async () => {

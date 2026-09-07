@@ -1,9 +1,9 @@
 "use client";
 
 import type { Currency, Nullable, StatisticsDynamics } from "@app/shared";
-import type { ReactNode } from "react";
 
 import { STATISTICS_METRIC_KIND } from "@app/shared";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Bar, CartesianGrid, Cell, BarChart as RechartsBarChart, XAxis, YAxis } from "recharts";
@@ -22,13 +22,15 @@ import type { DynamicsMetric, DynamicsPoint } from "../../model/statistics-dynam
 import { formatMoney } from "../../model/money-format";
 import { statisticsDrilldownLinks } from "../../model/statistics-drilldown";
 import {
+  bucketLabel,
   bucketRange,
   DYNAMICS_METRICS,
   dynamicsPoints,
+  formatSignedPercent,
+  formatSignedValue,
   isMoneyMetric,
   percentChange,
 } from "../../model/statistics-dynamics";
-import { formatPercentValue } from "../../model/statistics-format";
 import { StatisticsCurrencyBadge } from "./statistics-display-currency";
 import { StatisticsMetricTabs, StatisticsSection } from "./statistics-section";
 import { StatisticsSectionState } from "./statistics-states";
@@ -38,9 +40,94 @@ const HIGHLIGHT_FILL = "var(--chart-1)";
 const COMPARISON_FILL = "color-mix(in srgb, var(--chart-4) 18%, var(--card))";
 const COMPARISON_STROKE = "var(--chart-4)";
 
-const PERCENT_MULTIPLIER = 100;
+const DELTA_ICON = { down: ArrowDown, up: ArrowUp } as const;
+
+const CHART_LAYOUT = {
+  chart: "aspect-auto h-[15rem] w-full sm:h-[18rem] lg:h-[19rem]",
+  content: "gap-2",
+  header: "lg:min-h-[4.09rem]",
+  legend: "flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground",
+} as const;
 
 const BucketPointSchema = z.object({ key: z.string() });
+
+export function DynamicsTooltip({
+  active,
+  formatValue,
+  granularity,
+  metric,
+  payload,
+}: {
+  active?: boolean;
+  formatValue: (value: number) => string;
+  granularity: StatisticsDynamics["granularity"];
+  metric: DynamicsMetric;
+  payload?: readonly { payload: DynamicsPoint }[];
+}) {
+  const t = useTranslations("delivery.statistics.dynamics");
+  const locale = useLocale();
+  const point = payload?.[0]?.payload;
+  if (active !== true || point === undefined) return null;
+
+  const comparison = point.bucket.comparison;
+  const difference = point.comparisonValue === null ? null : point.value - point.comparisonValue;
+  const percent = percentChange({ current: point.value, previous: point.comparisonValue });
+  const DeltaIcon = DELTA_ICON[difference !== null && difference > 0 ? "up" : "down"];
+
+  return (
+    <div className="grid min-w-52 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 text-xs shadow-xl">
+      <div className="font-medium text-ink">{point.label}</div>
+
+      {comparison === null ? (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-muted-foreground">{t(`metrics.${metric}`)}</span>
+          <span className="font-semibold text-ink tabular-nums">{formatValue(point.value)}</span>
+        </div>
+      ) : (
+        <>
+          <dl className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1">
+            <dt className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="size-2 rounded-full" style={{ background: CURRENT_FILL }} />
+              {t("legend.current")}
+            </dt>
+            <dd className="text-end font-semibold text-ink tabular-nums">
+              {formatValue(point.value)}
+            </dd>
+            <dt className="flex items-center gap-1.5 text-muted-foreground">
+              <span
+                className="size-2 rounded-full border border-dashed"
+                style={{ background: COMPARISON_FILL, borderColor: COMPARISON_STROKE }}
+              />
+              {bucketLabel({ bucket: comparison, granularity, locale })}
+            </dt>
+            <dd className="text-end font-medium text-foreground tabular-nums">
+              {formatValue(point.comparisonValue ?? 0)}
+            </dd>
+          </dl>
+          <Separator />
+          <p className="flex flex-wrap items-center gap-1 font-medium text-foreground tabular-nums">
+            {difference === null || difference === 0 ? (
+              <span className="text-muted-foreground">{t("noChange")}</span>
+            ) : (
+              <>
+                <DeltaIcon aria-hidden className="size-3.5 text-icon" />
+                {formatSignedValue(difference, formatValue)}
+                {percent === null ? null : (
+                  <>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    {formatSignedPercent(percent, locale)}
+                  </>
+                )}
+              </>
+            )}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function StatisticsDynamics({
   comparisonLabel,
@@ -49,7 +136,6 @@ export function StatisticsDynamics({
   drilldown,
   dynamics,
   highlightedBucketKey,
-  insights,
   metric,
   onHighlightBucket,
   onMetricChange,
@@ -60,7 +146,6 @@ export function StatisticsDynamics({
   drilldown: StatisticsDrilldownContext;
   dynamics: StatisticsDynamics;
   highlightedBucketKey: Nullable<string>;
-  insights: ReactNode;
   metric: DynamicsMetric;
   onHighlightBucket: (bucketKey: Nullable<string>) => void;
   onMetricChange: (metric: DynamicsMetric) => void;
@@ -103,7 +188,9 @@ export function StatisticsDynamics({
           {isMoney ? <StatisticsCurrencyBadge currency={currency} /> : null}
         </div>
       }
+      contentClassName={CHART_LAYOUT.content}
       description={t(`subtitles.${metric}`)}
+      headerClassName={CHART_LAYOUT.header}
       title={t("title")}
     >
       {points.length === 0 ? (
@@ -114,7 +201,7 @@ export function StatisticsDynamics({
         <>
           <ChartContainer
             aria-label={t("aria", { metric: t(`metrics.${metric}`) })}
-            className="aspect-auto h-[16rem] w-full sm:h-[22rem] xl:h-[24rem]"
+            className={CHART_LAYOUT.chart}
             config={config}
             role="img"
           >
@@ -149,9 +236,9 @@ export function StatisticsDynamics({
               <ChartTooltip
                 content={
                   <DynamicsTooltip
-                    comparisonLabel={comparisonLabel}
-                    currentLabel={currentLabel}
                     formatValue={formatValue}
+                    granularity={dynamics.granularity}
+                    metric={metric}
                   />
                 }
                 cursor={{ fill: "var(--muted)" }}
@@ -185,18 +272,18 @@ export function StatisticsDynamics({
             </RechartsBarChart>
           </ChartContainer>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <div className={CHART_LAYOUT.legend}>
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 rounded-[3px]" style={{ background: CURRENT_FILL }} />
-              {t("current")}
+              <span className="size-2 rounded-full" style={{ background: CURRENT_FILL }} />
+              {t("legend.current")}
             </span>
             {hasComparison ? (
               <span className="inline-flex items-center gap-1.5">
                 <span
-                  className="size-2.5 rounded-[3px] border border-dashed"
+                  className="size-2 rounded-full border border-dashed"
                   style={{ background: COMPARISON_FILL, borderColor: COMPARISON_STROKE }}
                 />
-                {t("comparison")}
+                {t("legend.comparison")}
               </span>
             ) : null}
             <span className="ms-auto">{t("clickHint")}</span>
@@ -218,9 +305,6 @@ export function StatisticsDynamics({
           )}
         </>
       )}
-
-      <Separator />
-      {insights}
     </StatisticsSection>
   );
 }
@@ -289,72 +373,4 @@ function BucketDestinations({
 function bucketKeyOf(point: unknown): Nullable<string> {
   const parsed = BucketPointSchema.safeParse(point);
   return parsed.success ? parsed.data.key : null;
-}
-
-function DynamicsTooltip({
-  active,
-  comparisonLabel,
-  currentLabel,
-  formatValue,
-  payload,
-}: {
-  active?: boolean;
-  comparisonLabel: Nullable<string>;
-  currentLabel: Nullable<string>;
-  formatValue: (value: number) => string;
-  payload?: readonly { payload: DynamicsPoint }[];
-}) {
-  const t = useTranslations("delivery.statistics.dynamics");
-  const locale = useLocale();
-  const point = payload?.[0]?.payload;
-  if (active !== true || point === undefined) return null;
-
-  const comparison = point.bucket.comparison;
-  const difference = point.comparisonValue === null ? null : point.value - point.comparisonValue;
-  const percent = percentChange({ current: point.value, previous: point.comparisonValue });
-
-  return (
-    <div className="grid min-w-52 gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-2 text-xs shadow-xl">
-      <div className="font-medium text-ink">
-        {bucketRange({ bucket: point.bucket.current, locale })}
-      </div>
-      <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
-        <dt className="text-muted-foreground">{currentLabel ?? t("current")}</dt>
-        <dd className="text-end font-semibold text-ink tabular-nums">{formatValue(point.value)}</dd>
-        {comparison === null ? null : (
-          <>
-            <dt className="text-muted-foreground">
-              {comparisonLabel === null
-                ? t("comparison")
-                : bucketRange({ bucket: comparison, locale })}
-            </dt>
-            <dd className="text-end font-medium text-foreground tabular-nums">
-              {formatValue(point.comparisonValue ?? 0)}
-            </dd>
-            <dt className="text-muted-foreground">{t("difference")}</dt>
-            <dd className="text-end font-medium text-foreground tabular-nums">
-              {difference === null || difference === 0
-                ? t("noChange")
-                : signed(difference, formatValue)}
-              {percent === null ? null : (
-                <span className="ms-1 text-muted-foreground">
-                  ({signedPercent(percent, locale)})
-                </span>
-              )}
-            </dd>
-          </>
-        )}
-      </dl>
-    </div>
-  );
-}
-
-function signed(value: number, formatValue: (value: number) => string): string {
-  const sign = value > 0 ? "+" : "−";
-  return `${sign}${formatValue(Math.abs(value))}`;
-}
-
-function signedPercent(value: number, locale: string): string {
-  const sign = value > 0 ? "+" : "−";
-  return `${sign}${formatPercentValue(Math.abs(value) / PERCENT_MULTIPLIER, locale)}`;
 }

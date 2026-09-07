@@ -50,7 +50,7 @@ import { StatisticsTopOrders } from "./statistics/statistics-top-orders";
 
 const StatisticsDynamics = dynamic(
   () => import("./statistics/statistics-dynamics").then((m) => m.StatisticsDynamics),
-  { loading: () => <Skeleton className="h-[34rem] w-full rounded-xl" />, ssr: false },
+  { loading: () => <Skeleton className="h-[29rem] w-full rounded-xl" />, ssr: false },
 );
 
 const StatisticsStoreMap = dynamic(
@@ -267,27 +267,30 @@ function StatisticsBody({
 
       {budgetCard}
 
-      <StatisticsDynamics
-        comparisonLabel={comparisonLabel}
-        currency={displayCurrency}
-        currentLabel={currentLabel}
-        drilldown={drilldown}
-        dynamics={view.dynamics}
-        highlightedBucketKey={highlightedBucketKey}
-        insights={
-          <StatisticsPulse
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid lg:col-span-2">
+          <StatisticsDynamics
             comparisonLabel={comparisonLabel}
             currency={displayCurrency}
+            currentLabel={currentLabel}
+            drilldown={drilldown}
+            dynamics={view.dynamics}
             highlightedBucketKey={highlightedBucketKey}
-            insights={view.insights}
             metric={metric}
             onHighlightBucket={setHighlightedBucketKey}
+            onMetricChange={setMetric}
           />
-        }
-        metric={metric}
-        onHighlightBucket={setHighlightedBucketKey}
-        onMetricChange={setMetric}
-      />
+        </div>
+        <StatisticsPulse
+          comparisonLabel={comparisonLabel}
+          currency={displayCurrency}
+          highlightedBucketKey={highlightedBucketKey}
+          insights={view.insights}
+          metric={metric}
+          onHighlightBucket={setHighlightedBucketKey}
+          records={view.records}
+        />
+      </div>
 
       <StatisticsCosts currency={displayCurrency} view={view} />
 

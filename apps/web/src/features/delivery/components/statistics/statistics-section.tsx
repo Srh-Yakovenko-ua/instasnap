@@ -12,6 +12,7 @@ type StatisticsSectionProps = {
   className?: string;
   contentClassName?: string;
   description?: ReactNode;
+  headerClassName?: string;
   snapshotLabel?: ReactNode;
   title: ReactNode;
 };
@@ -45,12 +46,18 @@ export function StatisticsSection({
   className,
   contentClassName,
   description,
+  headerClassName,
   snapshotLabel,
   title,
 }: StatisticsSectionProps) {
   return (
     <Card className={cn("gap-4", className)}>
-      <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2.5">
+      <CardHeader
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-x-4 gap-y-2.5",
+          headerClassName,
+        )}
+      >
         <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-1">
           <CardTitle className="flex flex-wrap items-center gap-2 text-[0.9375rem] font-semibold text-ink">
             {title}
@@ -62,7 +69,7 @@ export function StatisticsSection({
           </CardTitle>
           {description === undefined ? null : <CardDescription>{description}</CardDescription>}
         </div>
-        {action === undefined ? null : <div className="shrink-0">{action}</div>}
+        {action === undefined ? null : <div className="max-w-full">{action}</div>}
       </CardHeader>
       <CardContent className={cn("flex flex-col gap-4", contentClassName)}>{children}</CardContent>
     </Card>

@@ -1,4 +1,8 @@
-import type { BookOrderStatisticsInsights, BookOrderStatisticsPulseSignal } from "@app/shared";
+import type {
+  BookOrderStatisticsInsights,
+  BookOrderStatisticsPulseSignal,
+  BookOrderStatisticsRecords,
+} from "@app/shared";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,6 +16,74 @@ const QUIET_SCOPE = {
   isPeriodFiltered: true,
   isTruncated: false,
   period: { from: null, to: null },
+};
+
+const ALL_TIME_SCOPE = {
+  isPeriodFiltered: false,
+  isTruncated: false,
+  period: { from: null, to: null },
+};
+
+const EMPTY_RECORDS: BookOrderStatisticsRecords = {
+  bestValueStoreByCurrency: [],
+  largestOrderByCurrency: [],
+  mostActiveStore: { byBooks: null, byOrders: null },
+  mostBooksInOrder: null,
+  recordMonthByCurrency: [],
+  scope: QUIET_SCOPE,
+};
+
+const LARGEST_ORDER = {
+  booksCount: 4,
+  currency: "UAH" as const,
+  derivedStatus: "received" as const,
+  id: "order-largest",
+  orderDate: "2026-03-03",
+  orderNumber: "A-1",
+  storeName: "Yakaboo",
+  totalAmount: 5200,
+};
+
+const RICH_RECORDS: BookOrderStatisticsRecords = {
+  ...EMPTY_RECORDS,
+  bestValueStoreByCurrency: [
+    {
+      averageLandedBookCost: 620,
+      currency: "UAH",
+      drilldown: { targets: [] },
+      eligibleBooksCount: 9,
+      store: "Vivat",
+      storeKey: "vivat",
+    },
+  ],
+  largestOrderByCurrency: [{ currency: "UAH", order: LARGEST_ORDER }],
+  mostActiveStore: {
+    byBooks: {
+      booksCount: 20,
+      drilldown: { targets: [] },
+      ordersCount: 9,
+      store: "Yakaboo",
+      storeKey: "yakaboo",
+    },
+    byOrders: {
+      booksCount: 20,
+      drilldown: { targets: [] },
+      ordersCount: 9,
+      store: "Yakaboo",
+      storeKey: "yakaboo",
+    },
+  },
+  mostBooksInOrder: { ...LARGEST_ORDER, booksCount: 11, id: "order-most-books" },
+  recordMonthByCurrency: [
+    {
+      booksCount: 20,
+      currency: "UAH",
+      drilldown: { targets: [] },
+      month: "2026-03",
+      ordersCount: 9,
+      total: 12000,
+    },
+  ],
 };
 
 const SPEND_UAH: BookOrderStatisticsPulseSignal = {
@@ -82,6 +154,7 @@ function renderPulse({
   insights = insightsOf({ spendByCurrency: [{ currency: "UAH", signals: [SPEND_UAH] }] }),
   metric = "spend" as DynamicsMetric,
   onHighlightBucket = vi.fn(),
+  records = EMPTY_RECORDS,
 } = {}) {
   return renderWithProviders(
     <StatisticsPulse
@@ -91,6 +164,7 @@ function renderPulse({
       insights={insights}
       metric={metric}
       onHighlightBucket={onHighlightBucket}
+      records={records}
     />,
   );
 }
@@ -184,6 +258,7 @@ describe("StatisticsPulse", () => {
     const user = userEvent.setup();
     const onHighlightBucket = vi.fn();
     renderPulse({
+      comparisonLabel: null,
       insights: insightsOf({ orders: [ORDERS_BUCKET] }),
       metric: "orders",
       onHighlightBucket,
@@ -196,6 +271,7 @@ describe("StatisticsPulse", () => {
 
   it("marks the row the chart is pointing back at", () => {
     renderPulse({
+      comparisonLabel: null,
       highlightedBucketKey: "2026-07",
       insights: insightsOf({ orders: [ORDERS_BUCKET] }),
       metric: "orders",
@@ -215,6 +291,7 @@ describe("StatisticsPulse", () => {
     const user = userEvent.setup();
     const onHighlightBucket = vi.fn();
     renderPulse({
+      comparisonLabel: null,
       insights: insightsOf({ orders: [ORDERS_BUCKET] }),
       metric: "orders",
       onHighlightBucket,
@@ -224,5 +301,69 @@ describe("StatisticsPulse", () => {
 
     expect(screen.getByRole("button")).toHaveFocus();
     expect(onHighlightBucket).toHaveBeenCalledWith("2026-07");
+  });
+});
+
+describe("StatisticsPulse records preview", () => {
+  it("tops the period card up from the records once the insights run out", () => {
+    renderPulse({ comparisonLabel: null, insights: insightsOf(), records: RICH_RECORDS });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.getByText("найбільше витрат за період")).toBeInTheDocument();
+    expect(screen.getByText("Найдорожче замовлення")).toBeInTheDocument();
+    expect(screen.getByText("Найнижча фактична ціна книги")).toBeInTheDocument();
+  });
+
+  it("keeps the records out of the comparison card", () => {
+    renderPulse({ records: RICH_RECORDS });
+
+    expect(screen.getByText("Витрати")).toBeInTheDocument();
+    expect(screen.queryByText("Найдорожче замовлення")).toBe(null);
+  });
+
+  it("shows the period fact under the comparison title when no change crossed the threshold", () => {
+    renderPulse({
+      insights: insightsOf({ orders: [ORDERS_BUCKET] }),
+      metric: "orders",
+      records: RICH_RECORDS,
+    });
+
+    expect(screen.getByText("Що змінилося")).toBeInTheDocument();
+    expect(screen.getByText("15 замовлень")).toBeInTheDocument();
+    expect(screen.queryByText("Помітних змін за цей період не виявлено.")).toBe(null);
+    expect(screen.queryByText("Найдорожче замовлення")).toBe(null);
+  });
+
+  it("claims an all-time record only when the payload has no period bounds", () => {
+    renderPulse({
+      comparisonLabel: null,
+      insights: insightsOf(),
+      records: { ...RICH_RECORDS, scope: ALL_TIME_SCOPE },
+    });
+
+    expect(screen.getByText("найбільше витрат за весь час")).toBeInTheDocument();
+  });
+
+  it("names the store that sold the most books when the chart is on books", () => {
+    renderPulse({
+      comparisonLabel: null,
+      insights: insightsOf(),
+      metric: "books",
+      records: RICH_RECORDS,
+    });
+
+    expect(screen.getByText("Найбільше книг в одному замовленні")).toBeInTheDocument();
+    expect(screen.getByText("Найбільше книг куплено в магазині")).toBeInTheDocument();
+    expect(screen.getByText("20 книг")).toBeInTheDocument();
+  });
+
+  it("gives each row of a card its own glyph", () => {
+    renderPulse({ comparisonLabel: null, insights: insightsOf(), records: RICH_RECORDS });
+
+    const glyphs = screen
+      .getAllByRole("listitem")
+      .map((row) => row.querySelector("svg")?.getAttribute("class"));
+
+    expect(new Set(glyphs).size).toBe(glyphs.length);
   });
 });

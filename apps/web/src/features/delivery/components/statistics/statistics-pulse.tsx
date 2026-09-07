@@ -4,49 +4,70 @@ import type {
   BookOrderStatisticsInsights,
   BookOrderStatisticsPulseSignal,
   BookOrderStatisticsPulseTone,
+  BookOrderStatisticsRecords,
+  BookOrderStatisticsRecordScope,
   Currency,
   Nullable,
 } from "@app/shared";
+import type { LucideIcon } from "lucide-react";
 
+import {
+  BadgePercent,
+  BookMarked,
+  BookOpen,
+  CalendarDays,
+  Coins,
+  Flame,
+  Library,
+  PiggyBank,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  Trophy,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
-import type { UiIconName } from "@/components/icons";
+import type { StatCardIconTone } from "@/components/ui/stat-card";
 
-import { UiIcon } from "@/components/icons";
+import { statCardIconBadge } from "@/components/ui/stat-card";
 import { cn } from "@/lib/utils";
 
 import type { DynamicsMetric } from "../../model/statistics-dynamics";
+import type { PulseRecordFact } from "../../model/statistics-pulse-selection";
 
 import { formatMoney } from "../../model/money-format";
 import { dayRange, monthLabel } from "../../model/statistics-dynamics";
 import { formatPercentValue } from "../../model/statistics-format";
-import { pulseBucketKey, pulseSignalsFor, signedPercent } from "../../model/statistics-pulse";
+import { pulseBucketKey, signedPercent } from "../../model/statistics-pulse";
+import { selectPulseEntries } from "../../model/statistics-pulse-selection";
+import { StatisticsSection } from "./statistics-section";
 import { StatisticsSectionState } from "./statistics-states";
 
 type PulseRow = {
   bucketKey: Nullable<string>;
   helper: string;
+  icon: LucideIcon;
+  key: string;
   label: string;
-  tone: BookOrderStatisticsPulseTone;
+  tone: StatCardIconTone;
   value: string;
 };
 
 function PulseRowBody({ row }: { row: PulseRow }) {
-  const tone = TONE_STYLE[row.tone];
+  const Icon = row.icon;
 
   return (
     <>
       <span
-        className={cn(
-          "mt-0.5 grid size-7 shrink-0 place-items-center rounded-full",
-          tone.className,
-        )}
+        className={cn(statCardIconBadge({ tone: row.tone }), "mt-0.5 size-7 [&_svg]:size-[15px]")}
       >
-        <UiIcon name={tone.icon} size={15} />
+        <Icon aria-hidden />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-xs text-muted-foreground">{row.label}</span>
-        <span className="text-base font-semibold text-ink tabular-nums">{row.value}</span>
+        <span className="truncate text-base font-semibold text-ink tabular-nums">{row.value}</span>
         <span className="text-xs text-muted-foreground">{row.helper}</span>
       </span>
     </>
@@ -55,10 +76,48 @@ function PulseRowBody({ row }: { row: PulseRow }) {
 
 const SIGN = { down: "−", flat: "", up: "+" } as const;
 
-const TONE_STYLE: Record<BookOrderStatisticsPulseTone, { className: string; icon: UiIconName }> = {
-  attention: { className: "bg-favorite-soft text-favorite", icon: "alert-circle" },
-  neutral: { className: "bg-accent text-icon", icon: "info" },
-  positive: { className: "bg-success-soft text-success", icon: "sparkles" },
+const META_SEPARATOR = " · ";
+
+const PULSE_ROW = {
+  frame: "flex min-h-[4.875rem] w-full items-start gap-2.5 rounded-lg px-1.5 py-2",
+  interactive:
+    "cursor-pointer text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+} as const;
+
+const PULSE_BADGE = {
+  icon: {
+    average_books_per_order_change: ShoppingCart,
+    avg_book_price_change: BookMarked,
+    avg_landed_cost_change: Coins,
+    books_count_change: BookOpen,
+    delivery_share: Truck,
+    discount_savings: BadgePercent,
+    orders_count_change: ShoppingBag,
+    record_books_bucket: Flame,
+    record_month: CalendarDays,
+    record_orders_bucket: Flame,
+    spend_change: Wallet,
+    store_movement: Store,
+  },
+  recordIcon: {
+    best_value_store: PiggyBank,
+    largest_order: Trophy,
+    most_active_store_by_books: Store,
+    most_active_store_by_orders: Store,
+    most_books_in_order: Library,
+    record_month: CalendarDays,
+  },
+  recordTone: "ink",
+  tone: {
+    attention: "favorite",
+    neutral: "ink",
+    positive: "success",
+  },
+} as const satisfies {
+  icon: Record<BookOrderStatisticsPulseSignal["code"], LucideIcon>;
+  recordIcon: Record<PulseRecordFact["code"], LucideIcon>;
+  recordTone: StatCardIconTone;
+  tone: Record<BookOrderStatisticsPulseTone, StatCardIconTone>;
 };
 
 export function StatisticsPulse({
@@ -68,6 +127,7 @@ export function StatisticsPulse({
   insights,
   metric,
   onHighlightBucket,
+  records,
 }: {
   comparisonLabel: Nullable<string>;
   currency: Currency;
@@ -75,18 +135,27 @@ export function StatisticsPulse({
   insights: BookOrderStatisticsInsights;
   metric: DynamicsMetric;
   onHighlightBucket: (bucketKey: Nullable<string>) => void;
+  records: BookOrderStatisticsRecords;
 }) {
   const t = useTranslations("delivery.statistics.pulse");
+  const tRecords = useTranslations("delivery.statistics.records");
   const locale = useLocale();
 
   const hasComparison = comparisonLabel !== null;
   const comparison = comparisonLabel ?? t("previousPeriod");
-  const signals = pulseSignalsFor({ currency, insights, metric });
+  const entries = selectPulseEntries({ currency, hasComparison, insights, metric, records });
 
   const money = (amount: number, signalCurrency: Currency) =>
     formatMoney({ amount, currency: signalCurrency, locale });
   const percent = (value: number) => formatPercentValue(value, locale);
   const range = (from: string, to: string) => dayRange({ from, locale, to });
+  const metaLine = (parts: string[]) => parts.filter((part) => part !== "").join(META_SEPARATOR);
+  const recordMonthHelper = (scope: BookOrderStatisticsRecordScope) =>
+    t(
+      scope.isPeriodFiltered || scope.isTruncated
+        ? "helpers.recordMonthPeriod"
+        : "helpers.recordMonthAllTime",
+    );
 
   const changeRow = (
     signal: Extract<
@@ -101,21 +170,19 @@ export function StatisticsPulse({
           | "spend_change";
       }
     >,
-  ): PulseRow => {
+  ) => {
     const change = signedPercent(signal);
     return {
-      bucketKey: null,
       helper:
         change === null || change.direction === "flat"
           ? t("helpers.noChange", { comparison })
           : t("helpers.againstComparison", { comparison }),
       label: t(`labels.${signal.code}`),
-      tone: signal.tone,
       value: change === null ? "—" : `${SIGN[change.direction]}${percent(change.magnitude)}`,
     };
   };
 
-  const rows: PulseRow[] = signals.map((signal) => {
+  const signalContent = (signal: BookOrderStatisticsPulseSignal) => {
     switch (signal.code) {
       case "average_books_per_order_change":
       case "avg_book_price_change":
@@ -127,18 +194,15 @@ export function StatisticsPulse({
 
       case "delivery_share":
         return {
-          bucketKey: null,
           helper: t("helpers.deliveryShare", {
             total: money(signal.deliveryTotal, signal.currency),
           }),
           label: t("labels.delivery_share"),
-          tone: signal.tone,
           value: percent(signal.deliveryShareOfSpendPercent),
         };
 
       case "discount_savings":
         return {
-          bucketKey: null,
           helper:
             signal.discountShareOfRawSubtotalPercent === null
               ? t("helpers.discountPlain")
@@ -146,48 +210,35 @@ export function StatisticsPulse({
                   percent: percent(signal.discountShareOfRawSubtotalPercent),
                 }),
           label: t("labels.discount_savings"),
-          tone: signal.tone,
           value: money(signal.discountTotal, signal.currency),
         };
 
       case "record_books_bucket":
         return {
-          bucketKey: signal.bucketKey,
           helper: t("helpers.recordBooks"),
           label: range(signal.from, signal.to),
-          tone: signal.tone,
           value: t("units.books", { count: signal.booksCount }),
         };
 
       case "record_month":
         return {
-          bucketKey: null,
-          helper: t(
-            signal.scope.isPeriodFiltered || signal.scope.isTruncated
-              ? "helpers.recordMonthPeriod"
-              : "helpers.recordMonthAllTime",
-          ),
+          helper: recordMonthHelper(signal.scope),
           label: monthLabel(signal.month, locale, true),
-          tone: signal.tone,
           value: money(signal.total, signal.currency),
         };
 
       case "record_orders_bucket":
         return {
-          bucketKey: signal.bucketKey,
           helper: t("helpers.recordOrders"),
           label: range(signal.from, signal.to),
-          tone: signal.tone,
           value: t("units.orders", { count: signal.ordersCount }),
         };
 
       case "store_movement": {
         const change = signedPercent(signal);
         return {
-          bucketKey: null,
           helper: t("helpers.againstComparison", { comparison }),
           label: signal.store,
-          tone: signal.tone,
           value:
             change === null
               ? money(signal.absoluteDelta ?? 0, signal.currency)
@@ -195,47 +246,112 @@ export function StatisticsPulse({
         };
       }
     }
+  };
+
+  const recordContent = (fact: PulseRecordFact, scope: BookOrderStatisticsRecordScope) => {
+    switch (fact.code) {
+      case "best_value_store":
+        return {
+          helper: tRecords("bestValue.helper", {
+            count: fact.bestValue.eligibleBooksCount,
+            store: fact.bestValue.store,
+          }),
+          label: tRecords("bestValue.title"),
+          value: money(fact.bestValue.averageLandedBookCost, currency),
+        };
+
+      case "largest_order":
+        return {
+          helper: metaLine([
+            fact.order.storeName,
+            tRecords("books", { count: fact.order.booksCount }),
+          ]),
+          label: tRecords("largestOrder.title"),
+          value: money(fact.order.totalAmount, currency),
+        };
+
+      case "most_active_store_by_books":
+        return {
+          helper: t("units.books", { count: fact.leader.booksCount }),
+          label: tRecords("mostActiveByBooks.title"),
+          value: fact.leader.store,
+        };
+
+      case "most_active_store_by_orders":
+        return {
+          helper: t("units.orders", { count: fact.leader.ordersCount }),
+          label: tRecords("mostActive.title"),
+          value: fact.leader.store,
+        };
+
+      case "most_books_in_order":
+        return {
+          helper: metaLine([fact.order.storeName]),
+          label: tRecords("mostBooks.title"),
+          value: tRecords("mostBooks.value", { count: fact.order.booksCount }),
+        };
+
+      case "record_month":
+        return {
+          helper: recordMonthHelper(scope),
+          label: monthLabel(fact.recordMonth.month, locale, true),
+          value: money(fact.recordMonth.total, currency),
+        };
+    }
+  };
+
+  const rows: PulseRow[] = entries.map((entry) => {
+    if (entry.source === "record") {
+      return {
+        ...recordContent(entry.fact, entry.scope),
+        bucketKey: null,
+        icon: PULSE_BADGE.recordIcon[entry.fact.code],
+        key: entry.identity,
+        tone: PULSE_BADGE.recordTone,
+      };
+    }
+
+    return {
+      ...signalContent(entry.signal),
+      bucketKey: pulseBucketKey(entry.signal),
+      icon: PULSE_BADGE.icon[entry.signal.code],
+      key: entry.identity,
+      tone: PULSE_BADGE.tone[entry.signal.tone],
+    };
   });
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h3 className="font-heading text-[0.9375rem] font-semibold text-ink">
-          {t(hasComparison ? "titleComparison" : "titlePeriod")}
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          {t(hasComparison ? "subtitleComparison" : "subtitlePeriod", {
-            period: comparisonLabel ?? "",
-          })}
-        </p>
-      </div>
-
+    <StatisticsSection
+      contentClassName="gap-3"
+      description={t(hasComparison ? "subtitleComparison" : "subtitlePeriod", {
+        period: comparisonLabel ?? "",
+      })}
+      title={t(hasComparison ? "titleComparison" : "titlePeriod")}
+    >
       {rows.length === 0 ? (
         <StatisticsSectionState
           kind="insufficient"
           title={t(hasComparison ? "emptyComparison" : "emptyPeriod")}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {signals.map((signal, index) => {
-            const row = rows[index];
-            if (row === undefined) return null;
+        <ul className="flex flex-col gap-3">
+          {rows.map((row) => {
             const isHighlighted = row.bucketKey !== null && row.bucketKey === highlightedBucketKey;
 
             return (
               <li
                 className={cn("rounded-lg transition-colors", isHighlighted && "bg-accent")}
-                key={`${signal.code}-${pulseBucketKey(signal) ?? index}`}
+                key={row.key}
                 onMouseEnter={() => onHighlightBucket(row.bucketKey)}
                 onMouseLeave={() => onHighlightBucket(null)}
               >
                 {row.bucketKey === null ? (
-                  <span className="flex items-start gap-2.5 px-1.5 py-1">
+                  <span className={PULSE_ROW.frame}>
                     <PulseRowBody row={row} />
                   </span>
                 ) : (
                   <button
-                    className="flex w-full cursor-pointer items-start gap-2.5 rounded-lg px-1.5 py-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    className={cn(PULSE_ROW.frame, PULSE_ROW.interactive)}
                     onBlur={() => onHighlightBucket(null)}
                     onClick={() => onHighlightBucket(row.bucketKey)}
                     onFocus={() => onHighlightBucket(row.bucketKey)}
@@ -249,6 +365,6 @@ export function StatisticsPulse({
           })}
         </ul>
       )}
-    </section>
+    </StatisticsSection>
   );
 }

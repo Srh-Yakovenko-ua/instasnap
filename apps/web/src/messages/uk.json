@@ -3486,13 +3486,17 @@
       },
       "dynamics": {
         "aria": "Стовпчикова діаграма: {metric}",
-        "clickHint": "Натисніть на стовпчик, щоб відкрити його замовлення",
+        "clickHint": "Натисніть на стовпчик, щоб переглянути замовлення за цей період",
         "closeDestinations": "Згорнути",
         "comparison": "Для порівняння",
         "current": "Поточний період",
         "difference": "Зміна",
         "empty": "Немає даних для динаміки за вибраний період.",
         "emptyForCurrency": "Немає витрат у {currency} за вибраний період.",
+        "legend": {
+          "comparison": "Попередній",
+          "current": "Поточний"
+        },
         "metricLabel": "Показник",
         "metrics": {
           "books": "Книги",
@@ -3757,6 +3761,9 @@
           "value": "{store} — {count, plural, one {# замовлення} few {# замовлення} many {# замовлень} other {# замовлень}}",
           "helper": "{books, plural, one {# книга} few {# книги} many {# книг} other {# книг}}",
           "missing": "Немає замовлень із вказаним магазином."
+        },
+        "mostActiveByBooks": {
+          "title": "Найбільше книг куплено в магазині"
         }
       },
       "topOrders": {
