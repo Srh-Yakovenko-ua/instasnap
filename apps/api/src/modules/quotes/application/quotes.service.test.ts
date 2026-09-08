@@ -3,7 +3,11 @@ import type { CreateQuoteInput, QuotesQuery } from "@app/shared";
 import { describe, expect, it, vi } from "vitest";
 
 import type { MediaService } from "../../media/index.js";
-import type { OwnedBook, QuoteWithBook } from "../infrastructure/quotes.repository.js";
+import type {
+  OwnedBook,
+  QuoteFilterCounts,
+  QuoteWithBook,
+} from "../infrastructure/quotes.repository.js";
 import type { QuotesRepository } from "../infrastructure/quotes.repository.js";
 import type { QuoteLifecycleService } from "./quote-lifecycle.service.js";
 
@@ -12,6 +16,8 @@ import { QuotesService } from "./quotes.service.js";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const BOOK_ID = "22222222-2222-4222-8222-222222222222";
+const OTHER_BOOK_ID = "33333333-3333-4333-8333-333333333333";
+const AUTHOR_ID = "44444444-4444-4444-8444-444444444444";
 const QUOTE_ID = "33333333-3333-4333-8333-333333333333";
 const NOW = new Date("2026-05-01T10:00:00.000Z");
 
@@ -62,9 +68,12 @@ function buildService(): {
   lifecycleService: { softDelete: ReturnType<typeof vi.fn> };
   mediaService: { buildViewOrNull: ReturnType<typeof vi.fn> };
   repository: {
+    authorQuoteLinks: ReturnType<typeof vi.fn>;
     bookCounts: ReturnType<typeof vi.fn>;
+    bookQuoteCounts: ReturnType<typeof vi.fn>;
     count: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    filterCounts: ReturnType<typeof vi.fn>;
     findOwnedBook: ReturnType<typeof vi.fn>;
     findOwnedQuote: ReturnType<typeof vi.fn>;
     list: ReturnType<typeof vi.fn>;
@@ -75,9 +84,12 @@ function buildService(): {
   service: QuotesService;
 } {
   const repository = {
+    authorQuoteLinks: vi.fn().mockResolvedValue([]),
     bookCounts: vi.fn().mockResolvedValue({ favorites: 0, spoiler: 0, total: 0 }),
+    bookQuoteCounts: vi.fn().mockResolvedValue([]),
     count: vi.fn().mockResolvedValue(0),
     create: vi.fn().mockResolvedValue(quote()),
+    filterCounts: vi.fn().mockResolvedValue(filterCounts()),
     findOwnedBook: vi.fn().mockResolvedValue(ownedBook()),
     findOwnedQuote: vi.fn().mockResolvedValue(quote()),
     list: vi.fn().mockResolvedValue([]),
@@ -113,6 +125,18 @@ function createInput(overrides: Partial<CreateQuoteInput> = {}): CreateQuoteInpu
     isSpoiler: false,
     page: null,
     text: "Fear is the mind-killer",
+    ...overrides,
+  };
+}
+
+function filterCounts(overrides: Partial<QuoteFilterCounts> = {}): QuoteFilterCounts {
+  return {
+    all: 0,
+    favorites: 0,
+    no_spoiler: 0,
+    with_comment: 0,
+    with_spoiler: 0,
+    without_comment: 0,
     ...overrides,
   };
 }
@@ -403,6 +427,94 @@ describe("QuotesService.deleteForBook", () => {
     expect(lifecycleService.softDelete).toHaveBeenCalledWith({
       quoteId: QUOTE_ID,
       userId: USER_ID,
+    });
+  });
+});
+
+describe("QuotesService.facets", () => {
+  it("normalizes the search term and scopes the counts by book only", async () => {
+    const { repository, service } = buildService();
+
+    await service.facets({ query: { bookId: BOOK_ID, q: "  fear   mind  " }, userId: USER_ID });
+
+    expect(repository.filterCounts).toHaveBeenCalledWith({
+      authorIds: undefined,
+      bookIds: [BOOK_ID],
+      createdFrom: undefined,
+      createdTo: undefined,
+      search: "fear mind",
+      userId: USER_ID,
+    });
+  });
+
+  it("folds a legacy bookId and an explicit book list into one set of ids", async () => {
+    const { repository, service } = buildService();
+
+    await service.facets({
+      query: { book: [OTHER_BOOK_ID, BOOK_ID], bookId: BOOK_ID },
+      userId: USER_ID,
+    });
+
+    expect(repository.filterCounts).toHaveBeenCalledWith(
+      expect.objectContaining({ bookIds: [OTHER_BOOK_ID, BOOK_ID] }),
+    );
+  });
+
+  it("leaves each facet dimension out of its own counts", async () => {
+    const { repository, service } = buildService();
+
+    await service.facets({
+      query: { author: [AUTHOR_ID], book: [BOOK_ID] },
+      userId: USER_ID,
+    });
+
+    expect(repository.bookQuoteCounts).toHaveBeenCalledWith(
+      expect.objectContaining({ authorIds: [AUTHOR_ID], bookIds: undefined }),
+    );
+    expect(repository.bookQuoteCounts).toHaveBeenCalledWith(
+      expect.objectContaining({ authorIds: undefined, bookIds: [BOOK_ID] }),
+    );
+  });
+
+  it("drops a blank search term instead of scoping the counts to it", async () => {
+    const { repository, service } = buildService();
+
+    await service.facets({ query: { q: "   " }, userId: USER_ID });
+
+    expect(repository.filterCounts).toHaveBeenCalledWith({
+      authorIds: undefined,
+      bookIds: undefined,
+      createdFrom: undefined,
+      createdTo: undefined,
+      search: undefined,
+      userId: USER_ID,
+    });
+  });
+
+  it("maps each repository filter count onto its own facet field", async () => {
+    const { repository, service } = buildService();
+    repository.filterCounts.mockResolvedValue(
+      filterCounts({
+        all: 9,
+        favorites: 4,
+        no_spoiler: 7,
+        with_comment: 3,
+        with_spoiler: 2,
+        without_comment: 6,
+      }),
+    );
+
+    const view = await service.facets({ query: {}, userId: USER_ID });
+
+    expect(view).toEqual({
+      authors: [],
+      books: [],
+      favoritesCount: 4,
+      spoilerCount: 2,
+      totalCount: 9,
+      withCommentCount: 3,
+      withoutCommentCount: 6,
+      withoutSpoilerCount: 7,
     });
   });
 });

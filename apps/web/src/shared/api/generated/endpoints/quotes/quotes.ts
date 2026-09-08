@@ -25,8 +25,10 @@ import type {
   PaginatedTrashedQuotesDto,
   QuoteDeletionResultDto,
   QuoteViewDto,
+  QuotesControllerFacetsParams,
   QuotesControllerListParams,
   QuotesControllerListTrashParams,
+  QuotesFacetsViewDto,
   QuotesSummaryViewDto,
   UpdateQuoteInputDto,
 } from "../../model";
@@ -1290,6 +1292,180 @@ export function useQuotesControllerSummary<
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+export type quotesControllerFacetsResponse200 = {
+  data: QuotesFacetsViewDto;
+  status: 200;
+};
+
+export type quotesControllerFacetsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type quotesControllerFacetsResponseSuccess = quotesControllerFacetsResponse200 & {
+  headers: Headers;
+};
+export type quotesControllerFacetsResponseError = quotesControllerFacetsResponse401 & {
+  headers: Headers;
+};
+
+export type quotesControllerFacetsResponse =
+  quotesControllerFacetsResponseSuccess | quotesControllerFacetsResponseError;
+
+export const getQuotesControllerFacetsUrl = (params?: QuotesControllerFacetsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["author", "book"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? "null" : String(v));
+      });
+      return;
+    }
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : String(value));
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/quotes/facets?${stringifiedParams}`
+    : `/api/quotes/facets`;
+};
+
+/**
+ * @summary Get the book, author and quick-filter facets of the current user's quotes over the filtered dataset
+ */
+export const quotesControllerFacets = async (
+  params?: QuotesControllerFacetsParams,
+  options?: Parameters<typeof customInstance>[1],
+): Promise<quotesControllerFacetsResponse> => {
+  return customInstance<quotesControllerFacetsResponse>(getQuotesControllerFacetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getQuotesControllerFacetsQueryKey = (params?: QuotesControllerFacetsParams) => {
+  return [`/api/quotes/facets`, ...(params ? [params] : [])] as const;
+};
+
+export const getQuotesControllerFacetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof quotesControllerFacets>>,
+  TError = void,
+>(
+  params?: QuotesControllerFacetsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof quotesControllerFacets>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getQuotesControllerFacetsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof quotesControllerFacets>>> = ({ signal }) =>
+    quotesControllerFacets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof quotesControllerFacets>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type QuotesControllerFacetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof quotesControllerFacets>>
+>;
+export type QuotesControllerFacetsQueryError = void;
+
+export function useQuotesControllerFacets<
+  TData = Awaited<ReturnType<typeof quotesControllerFacets>>,
+  TError = void,
+>(
+  params: undefined | QuotesControllerFacetsParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof quotesControllerFacets>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quotesControllerFacets>>,
+          TError,
+          Awaited<ReturnType<typeof quotesControllerFacets>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useQuotesControllerFacets<
+  TData = Awaited<ReturnType<typeof quotesControllerFacets>>,
+  TError = void,
+>(
+  params?: QuotesControllerFacetsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof quotesControllerFacets>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof quotesControllerFacets>>,
+          TError,
+          Awaited<ReturnType<typeof quotesControllerFacets>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useQuotesControllerFacets<
+  TData = Awaited<ReturnType<typeof quotesControllerFacets>>,
+  TError = void,
+>(
+  params?: QuotesControllerFacetsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof quotesControllerFacets>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+/**
+ * @summary Get the book, author and quick-filter facets of the current user's quotes over the filtered dataset
+ */
+
+export function useQuotesControllerFacets<
+  TData = Awaited<ReturnType<typeof quotesControllerFacets>>,
+  TError = void,
+>(
+  params?: QuotesControllerFacetsParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof quotesControllerFacets>>, TError, TData>
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getQuotesControllerFacetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 export type quotesControllerListResponse200 = {
   data: PaginatedQuotesDto;
   status: 200;
@@ -1314,6 +1490,15 @@ export const getQuotesControllerListUrl = (params?: QuotesControllerListParams) 
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["author", "book"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? "null" : String(v));
+      });
+      return;
+    }
+
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? "null" : String(value));
     }

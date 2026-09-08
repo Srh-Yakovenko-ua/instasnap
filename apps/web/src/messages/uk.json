@@ -6591,9 +6591,16 @@
         }
       }
     },
+    "activeFilters": {
+      "book": "Книга: {title}",
+      "createdFrom": "Додано від {value}",
+      "createdTo": "Додано до {value}",
+      "createdRange": "Додано {from} – {to}"
+    },
+    "counter": "Показано {shown} із {total, plural, one {# цитати} few {# цитат} many {# цитат} other {# цитат}}",
     "toolbar": {
       "searchLabel": "Пошук цитат",
-      "searchPlaceholder": "Пошук за цитатою, книгою, автором або нотаткою…",
+      "searchPlaceholder": "Пошук за цитатою, книгою, автором або коментарем…",
       "searchClear": "Очистити пошук",
       "filterLabel": "Швидкі фільтри цитат",
       "bookPlaceholder": "Книга",
@@ -6610,6 +6617,35 @@
       "hiddenText": "Ця цитата містить спойлер",
       "show": "Показати спойлер",
       "hide": "Приховати спойлер"
+    },
+    "advancedFilters": {
+      "trigger": "Фільтри",
+      "title": "Фільтри",
+      "description": "Уточніть, які цитати показувати.",
+      "clear": "Очистити",
+      "apply": "Застосувати",
+      "sections": {
+        "books": "Книги",
+        "authors": "Автори",
+        "created": "Дата додавання"
+      },
+      "books": {
+        "placeholder": "Оберіть книги...",
+        "search": "Пошук книги",
+        "empty": "Книг із цитатами не знайдено",
+        "selected": "Обрано книг: {count}"
+      },
+      "authors": {
+        "placeholder": "Оберіть авторів...",
+        "search": "Пошук автора",
+        "empty": "Авторів із цитатами не знайдено",
+        "selected": "Обрано авторів: {count}"
+      },
+      "range": {
+        "from": "Від",
+        "to": "До",
+        "invalid": "Дата «Від» не може бути пізнішою за «До»"
+      }
     }
   },
   "timeline": {

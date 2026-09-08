@@ -1,6 +1,8 @@
-import type { QuoteFilter, QuoteSort } from "@app/shared";
+import type { QuoteFilter, QuotesFacetsView, QuoteSort } from "@app/shared";
 
-export const QUOTE_FILTER_OPTIONS = [
+export type QuoteFilterCounts = Record<QuoteFilter, number>;
+
+export const QUOTE_FILTER_VALUES = [
   "all",
   "no_spoiler",
   "with_spoiler",
@@ -8,6 +10,32 @@ export const QUOTE_FILTER_OPTIONS = [
   "with_comment",
   "without_comment",
 ] as const satisfies readonly QuoteFilter[];
+
+const QUOTE_FILTER_VISIBLE_OPTIONS = [
+  "all",
+  "favorites",
+  "with_comment",
+  "no_spoiler",
+  "with_spoiler",
+] as const satisfies readonly QuoteFilter[];
+
+export function quoteFilterCounts(facets: QuotesFacetsView): QuoteFilterCounts {
+  return {
+    all: facets.totalCount,
+    favorites: facets.favoritesCount,
+    no_spoiler: facets.withoutSpoilerCount,
+    with_comment: facets.withCommentCount,
+    with_spoiler: facets.spoilerCount,
+    without_comment: facets.withoutCommentCount,
+  };
+}
+
+export function resolveQuoteFilterOptions(filter: QuoteFilter): readonly QuoteFilter[] {
+  if (QUOTE_FILTER_VISIBLE_OPTIONS.some((option) => option === filter)) {
+    return QUOTE_FILTER_VISIBLE_OPTIONS;
+  }
+  return [...QUOTE_FILTER_VISIBLE_OPTIONS, filter];
+}
 
 export const QUOTE_SORT_VALUES = [
   "newest",

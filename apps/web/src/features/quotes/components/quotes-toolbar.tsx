@@ -1,9 +1,11 @@
 "use client";
 
-import type { Nullable, QuoteFilter, QuoteSort } from "@app/shared";
+import type { QuoteFilter, QuotesFacetsView, QuoteSort } from "@app/shared";
 
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
+
+import type { ActiveFilterChip } from "@/features/books";
 
 import { DebouncedSearchInput } from "@/components/debounced-search-input";
 import { ChipGroup } from "@/components/ui/chip-group";
@@ -16,38 +18,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LibraryActiveFilters } from "@/features/books/components/library-active-filters";
 
-import type { QuoteBookOption } from "../model/quote-book";
-import type { QuotesViewMode } from "../model/quotes-query";
+import type { QuoteFilterCounts } from "../model/quote-options";
+import type { QuotesQueryState, QuotesViewMode } from "../model/quotes-query";
+import type { QuotesAdvancedPatch } from "../model/use-quotes-query";
 
-import { QUOTE_FILTER_OPTIONS, resolveQuoteSortOptions } from "../model/quote-options";
-import { QUOTES_SORT_DEFAULT } from "../model/quotes-query";
-import { BookPicker } from "./book-picker";
+import { resolveQuoteFilterOptions, resolveQuoteSortOptions } from "../model/quote-options";
+import { QUOTES_FILTER_DEFAULT, QUOTES_SORT_DEFAULT } from "../model/quotes-query";
+import { QuotesAdvancedFilters } from "./quotes-advanced-filters";
 import { QuotesSortSheet } from "./quotes-sort-sheet";
 
 type QuotesToolbarProps = {
-  book: Nullable<QuoteBookOption>;
+  activeFilterCount: number;
+  chips: ActiveFilterChip[];
+  counter?: string;
+  counts?: QuoteFilterCounts;
+  facets: QuotesFacetsView | undefined;
   filter: QuoteFilter;
-  onBookChange: (bookId: Nullable<string>) => void;
+  onApplyAdvanced: (patch: QuotesAdvancedPatch) => void;
+  onClearAll: () => void;
   onFilterChange: (filter: QuoteFilter) => void;
   onSearch: (value: string) => void;
   onSortChange: (sort: QuoteSort) => void;
   onViewChange: (view: QuotesViewMode) => void;
   search: string;
   sort: QuoteSort;
+  state: QuotesQueryState;
   view: QuotesViewMode;
 };
 
 export function QuotesToolbar({
-  book,
+  activeFilterCount,
+  chips,
+  counter,
+  counts,
+  facets,
   filter,
-  onBookChange,
+  onApplyAdvanced,
+  onClearAll,
   onFilterChange,
   onSearch,
   onSortChange,
   onViewChange,
   search,
   sort,
+  state,
   view,
 }: QuotesToolbarProps) {
   const t = useTranslations("quotes.toolbar");
@@ -56,6 +72,7 @@ export function QuotesToolbar({
   const tSort = useTranslations("quotes.sort");
   const tView = useTranslations("quotes.view");
 
+  const filterOptions = resolveQuoteFilterOptions(filter);
   const sortOptions = resolveQuoteSortOptions(sort);
 
   return (
@@ -80,33 +97,13 @@ export function QuotesToolbar({
         />
       </div>
 
-      <div className="-mx-1 -my-1 no-scrollbar overflow-x-auto px-1 py-1">
-        <ChipGroup
-          className="flex-nowrap"
-          label={t("filterLabel")}
-          mode="single"
-          onValueChange={(next) => {
-            const match = QUOTE_FILTER_OPTIONS.find((option) => option === next);
-            if (match !== undefined) onFilterChange(match);
-          }}
-          options={QUOTE_FILTER_OPTIONS.map((option) => ({
-            label: tFilter(option),
-            value: option,
-          }))}
-          size="sm"
-          value={filter}
+      <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+        <QuotesAdvancedFilters
+          activeCount={activeFilterCount}
+          facets={facets}
+          onApply={onApplyAdvanced}
+          state={state}
         />
-      </div>
-
-      <div className="flex items-center gap-1.5 sm:flex-col sm:items-stretch sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
-          <BookPicker
-            id="quotes-book-filter"
-            onChange={(next) => onBookChange(next?.id ?? null)}
-            placeholder={t("bookPlaceholder")}
-            value={book}
-          />
-        </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <div className="hidden sm:block sm:w-80">
@@ -156,6 +153,33 @@ export function QuotesToolbar({
           />
         </div>
       </div>
+
+      <div className="-mx-1 -my-1 no-scrollbar overflow-x-auto px-1 py-1">
+        <ChipGroup
+          className="flex-nowrap"
+          label={t("filterLabel")}
+          mode="single"
+          onValueChange={(next) => {
+            const match = filterOptions.find((option) => option === next);
+            if (match !== undefined) onFilterChange(match);
+          }}
+          options={filterOptions.map((option) => ({
+            count: counts?.[option],
+            label: tFilter(option),
+            value: option,
+          }))}
+          size="sm"
+          value={filter}
+        />
+      </div>
+
+      <LibraryActiveFilters chips={chips} onClearAll={onClearAll} />
+
+      {counter === undefined ? null : (
+        <p aria-live="polite" className="mt-1 text-sm text-muted-foreground">
+          {counter}
+        </p>
+      )}
     </div>
   );
 }
@@ -167,17 +191,20 @@ export function QuotesToolbarSkeleton() {
         <Skeleton className="h-10 min-w-0 flex-1 rounded-md" />
         <Skeleton className="h-10 w-[9.5rem] shrink-0 rounded-md sm:hidden" />
       </div>
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: QUOTE_FILTER_OPTIONS.length }, (_, index) => (
-          <Skeleton className="h-8 w-24 rounded-full" key={index} />
-        ))}
-      </div>
-      <div className="flex items-center gap-1.5 sm:flex-col sm:items-stretch sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <Skeleton className="h-10 min-w-0 flex-1 rounded-md sm:w-64 sm:flex-none" />
+      <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+        <Skeleton className="h-10 w-10 shrink-0 rounded-md sm:w-28" />
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <Skeleton className="hidden h-10 rounded-md sm:block sm:w-80" />
           <Skeleton className="h-10 w-20 shrink-0 rounded-full sm:w-40" />
         </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {Array.from(
+          { length: resolveQuoteFilterOptions(QUOTES_FILTER_DEFAULT).length },
+          (_, index) => (
+            <Skeleton className="h-8 w-24 rounded-full" key={index} />
+          ),
+        )}
       </div>
     </div>
   );

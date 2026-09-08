@@ -13,11 +13,12 @@ import { Button } from "@/components/ui/button";
 import { LibrarySummaryMobile } from "@/features/books/components/library-summary-mobile";
 import { useRouter } from "@/i18n/navigation";
 
-import { useQuoteBook } from "../api/use-quote-book";
 import { useQuotes } from "../api/use-quotes";
+import { useQuotesFacets } from "../api/use-quotes-facets";
 import { useQuotesSummary } from "../api/use-quotes-summary";
-import { toQuoteBookOption } from "../model/quote-book";
+import { quoteFilterCounts } from "../model/quote-options";
 import { quotesListIdentity } from "../model/quotes-query";
+import { useQuotesFilterChips } from "../model/use-quotes-filter-chips";
 import { useQuotesQuery } from "../model/use-quotes-query";
 import { QuoteDialog } from "./quote-dialog";
 import { QuotesContent } from "./quotes-content";
@@ -37,10 +38,12 @@ export function QuotesView() {
   const [addOpen, setAddOpen] = useState(false);
 
   const {
+    activeFilterCount,
+    applyAdvanced,
     clearFilters,
+    facetsParams,
     hasActiveFilters,
     listParams,
-    setBookId,
     setFilter,
     setSearch,
     setSort,
@@ -50,12 +53,24 @@ export function QuotesView() {
 
   const quotes = useQuotes(listParams);
   const summary = useQuotesSummary();
-  const filterBook = useQuoteBook(state.bookId);
+  const facets = useQuotesFacets(facetsParams);
 
   const quoteItems = (quotes.data?.pages ?? []).flatMap((page) => page.items);
 
-  const selectedBook = filterBook.data === undefined ? null : toQuoteBookOption(filterBook.data);
   const showSidebar = !quotes.isError;
+
+  const filterCounts = facets.data === undefined ? undefined : quoteFilterCounts(facets.data);
+  const counter =
+    filterCounts === undefined
+      ? undefined
+      : t("counter", { shown: filterCounts[state.filter], total: filterCounts.all });
+
+  const filterChips = useQuotesFilterChips({
+    facets: facets.data,
+    onApplyAdvanced: applyAdvanced,
+    onSearch: setSearch,
+    state,
+  });
 
   const stats = summary.data;
   const topBook = stats?.topBook ?? null;
@@ -162,15 +177,21 @@ export function QuotesView() {
         isPending={quotes.isPending}
         toolbar={
           <QuotesToolbar
-            book={selectedBook}
+            activeFilterCount={activeFilterCount}
+            chips={filterChips}
+            counter={counter}
+            counts={filterCounts}
+            facets={facets.data}
             filter={state.filter}
-            onBookChange={setBookId}
+            onApplyAdvanced={applyAdvanced}
+            onClearAll={clearFilters}
             onFilterChange={setFilter}
             onSearch={setSearch}
             onSortChange={setSort}
             onViewChange={setView}
             search={state.q}
             sort={state.sort}
+            state={state}
             view={state.view}
           />
         }

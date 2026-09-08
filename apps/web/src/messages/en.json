@@ -6591,9 +6591,16 @@
         }
       }
     },
+    "activeFilters": {
+      "book": "Book: {title}",
+      "createdFrom": "Added from {value}",
+      "createdTo": "Added until {value}",
+      "createdRange": "Added {from} – {to}"
+    },
+    "counter": "Showing {shown} of {total, plural, one {# quote} other {# quotes}}",
     "toolbar": {
       "searchLabel": "Search quotes",
-      "searchPlaceholder": "Search by quote, book, author or note…",
+      "searchPlaceholder": "Search by quote, book, author or comment…",
       "searchClear": "Clear search",
       "filterLabel": "Quote quick filters",
       "bookPlaceholder": "Book",
@@ -6610,6 +6617,35 @@
       "hiddenText": "This quote contains a spoiler",
       "show": "Show spoiler",
       "hide": "Hide spoiler"
+    },
+    "advancedFilters": {
+      "trigger": "Filters",
+      "title": "Filters",
+      "description": "Narrow down which quotes to show.",
+      "clear": "Clear",
+      "apply": "Apply",
+      "sections": {
+        "books": "Books",
+        "authors": "Authors",
+        "created": "Date added"
+      },
+      "books": {
+        "placeholder": "Pick books...",
+        "search": "Search a book",
+        "empty": "No books with quotes found",
+        "selected": "Books selected: {count}"
+      },
+      "authors": {
+        "placeholder": "Pick authors...",
+        "search": "Search an author",
+        "empty": "No authors with quotes found",
+        "selected": "Authors selected: {count}"
+      },
+      "range": {
+        "from": "From",
+        "to": "To",
+        "invalid": "The From date cannot be later than To"
+      }
     }
   },
   "timeline": {

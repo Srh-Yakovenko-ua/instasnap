@@ -1,13 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 
-import type { QuotesSummaryView, QuoteView } from "@app/shared";
+import type { QuotesFacetsView, QuotesSummaryView, QuoteView } from "@app/shared";
 import type { OnUrlUpdateFunction, UrlUpdateEvent } from "nuqs/adapters/testing";
 import type { ReactNode } from "react";
 
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { renderWithProviders, screen, userEvent, waitFor } from "@/test-utils";
+import { renderWithProviders, screen, userEvent, waitFor, within } from "@/test-utils";
 
 import { QUOTES_PAGE_SIZE } from "../model/quotes-query";
 import { QuotesView } from "./quotes-view";
@@ -22,6 +22,23 @@ vi.mock("@/i18n/navigation", () => ({
   ),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
+
+const FACETS: QuotesFacetsView = {
+  authors: [
+    { count: 8, id: "author-1", name: "Френк Герберт" },
+    { count: 5, id: "author-2", name: "Марісса Маєр" },
+  ],
+  books: [
+    { count: 8, id: "book-1", title: "Дюна" },
+    { count: 5, id: "book-2", title: "Месія Дюни" },
+  ],
+  favoritesCount: 2,
+  spoilerCount: 1,
+  totalCount: 13,
+  withCommentCount: 3,
+  withoutCommentCount: 10,
+  withoutSpoilerCount: 12,
+};
 
 const SUMMARY: QuotesSummaryView = {
   favoritesCount: 2,
@@ -100,6 +117,172 @@ describe("QuotesView legacy sort links", () => {
   });
 });
 
+describe("QuotesView quick filters", () => {
+  it("offers the five presets with their counts and says how many are shown", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes();
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    const group = screen.getByRole("radiogroup", { name: "Швидкі фільтри цитат" });
+    expect(
+      within(group)
+        .getAllByRole("radio")
+        .map((chip) => chip.textContent),
+    ).toEqual(["Усі13", "Улюблені2", "З коментарем3", "Без спойлерів12", "Зі спойлерами1"]);
+    expect(screen.getByText("Показано 13 із 13 цитат")).toBeInTheDocument();
+  });
+
+  it("counts the active preset against the dataset behind it", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?filter=favorites");
+
+    expect(await screen.findByText("Показано 2 із 13 цитат")).toBeInTheDocument();
+  });
+
+  it("keeps a retired preset usable when an old link pinned it", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?filter=without_comment");
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    expect(listUrl()).toContain("filter=without_comment");
+    const group = screen.getByRole("radiogroup", { name: "Швидкі фільтри цитат" });
+    expect(within(group).getByRole("radio", { checked: true })).toHaveTextContent(
+      "Без коментаря10",
+    );
+    expect(screen.getByText("Показано 10 із 13 цитат")).toBeInTheDocument();
+  });
+});
+
+describe("QuotesView advanced filters", () => {
+  it("reads an old book deep link as a book filter and names it", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?bookId=book-1");
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    expect(listUrl()).toContain("book=book-1");
+    expect(listUrl()).not.toContain("bookId=");
+    expect(screen.getByRole("button", { name: /Фільтри/ })).toHaveTextContent("1");
+    expect(
+      within(screen.getByRole("group", { name: "Активні фільтри" })).getByText("Книга: Дюна"),
+    ).toBeInTheDocument();
+  });
+
+  it("opens with the book of the deep link already picked", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?bookId=book-1");
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Фільтри/ }));
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "Книги" })).toHaveTextContent(
+      "Обрано книг: 1",
+    );
+  });
+
+  it("asks for both books when two are picked", async () => {
+    const { events, onUrlUpdate } = trackUrl();
+    mockQuotes(quotes(13));
+
+    renderQuotes("", onUrlUpdate);
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Фільтри/ }));
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Книги" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Дюна 8/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /Месія Дюни 5/ }));
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Застосувати" }));
+
+    await waitFor(() => expect(events.at(-1)?.searchParams.get("book")).toBe("book-1,book-2"));
+    await waitFor(() => expect(listUrls().some((url) => url.includes("book=book-1"))).toBe(true));
+  });
+
+  it("does not commit a draft that was never applied", async () => {
+    const { events, onUrlUpdate } = trackUrl();
+    mockQuotes(quotes(13));
+
+    renderQuotes("", onUrlUpdate);
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Фільтри/ }));
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Автори" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Френк Герберт 8/ }));
+    await userEvent.keyboard("{Escape}");
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(events.some((event) => event.searchParams.has("author"))).toBe(false);
+  });
+
+  it("drops one filter at a time from the active row", async () => {
+    const { events, onUrlUpdate } = trackUrl();
+    mockQuotes(quotes(13));
+
+    renderQuotes("?author=author-1&book=book-1", onUrlUpdate);
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    const active = screen.getByRole("group", { name: "Активні фільтри" });
+    expect(within(active).getByText("Автор: Френк Герберт")).toBeInTheDocument();
+
+    await userEvent.click(
+      within(active).getByRole("button", { name: "Прибрати фільтр Книга: Дюна" }),
+    );
+
+    await waitFor(() => expect(events.at(-1)?.searchParams.get("book")).toBeNull());
+    expect(events.at(-1)?.searchParams.get("author")).toBe("author-1");
+  });
+
+  it("recounts the quick filters over the narrowed dataset", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?author=author-1&book=book-1&createdFrom=2026-01-01&createdTo=2026-08-31");
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    const facetsUrl = requestedUrls.find((url) => url.includes("/api/quotes/facets"));
+    expect(facetsUrl).toContain("book=book-1");
+    expect(facetsUrl).toContain("author=author-1");
+    expect(facetsUrl).toContain("createdFrom=2026-01-01");
+    expect(facetsUrl).toContain("createdTo=2026-08-31");
+    expect(facetsUrl).not.toContain("filter=");
+    expect(facetsUrl).not.toContain("pageNumber=");
+  });
+
+  it("names the date range in the active row", async () => {
+    mockQuotes(quotes(13));
+
+    renderQuotes("?createdFrom=2026-01-01&createdTo=2026-08-31");
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    const active = screen.getByRole("group", { name: "Активні фільтри" });
+    expect(within(active).getByText(/Додано/)).toBeInTheDocument();
+    expect(listUrl()).toContain("createdFrom=2026-01-01");
+  });
+
+  it("clears every filter but leaves the order alone", async () => {
+    const { events, onUrlUpdate } = trackUrl();
+    mockQuotes(quotes(13));
+
+    renderQuotes("?sort=oldest&book=book-1&filter=favorites&q=дюна", onUrlUpdate);
+
+    expect(await screen.findByText("Цитата 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Очистити все" }));
+
+    await waitFor(() => expect(events.at(-1)?.searchParams.get("book")).toBeNull());
+    const last = events.at(-1)?.searchParams;
+    expect(last?.get("filter")).toBeNull();
+    expect(last?.get("q")).toBeNull();
+    expect(last?.get("sort")).toBe("oldest");
+  });
+});
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
@@ -115,7 +298,10 @@ function listUrl(): string {
 
 function listUrls(): string[] {
   return requestedUrls.filter(
-    (url) => url.includes("/api/quotes") && !url.includes("/api/quotes/summary"),
+    (url) =>
+      url.includes("/api/quotes") &&
+      !url.includes("/api/quotes/summary") &&
+      !url.includes("/api/quotes/facets"),
   );
 }
 
@@ -126,6 +312,7 @@ function mockQuotes(items: QuoteView[]) {
       const url = String(input);
       requestedUrls.push(url);
       if (url.includes("/api/quotes/summary")) return Promise.resolve(jsonResponse(SUMMARY));
+      if (url.includes("/api/quotes/facets")) return Promise.resolve(jsonResponse(FACETS));
       if (url.includes("/api/quotes")) return Promise.resolve(jsonResponse(quotesPage(items, url)));
       if (url.includes("/api/books")) {
         return Promise.resolve(

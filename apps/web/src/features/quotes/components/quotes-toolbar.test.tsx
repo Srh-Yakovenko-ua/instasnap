@@ -18,6 +18,18 @@ const VISIBLE_SORT_LABELS = [
 
 const SORT_LABEL = "Сортування цитат";
 
+const TOOLBAR_STATE = {
+  author: [],
+  book: [],
+  bookId: null,
+  createdFrom: null,
+  createdTo: null,
+  filter: "all",
+  q: "",
+  sort: "newest",
+  view: "grid",
+} as const satisfies ComponentProps<typeof QuotesToolbar>["state"];
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -61,15 +73,19 @@ function renderToolbar(overrides: Partial<ComponentProps<typeof QuotesToolbar>> 
 
   renderWithProviders(
     <QuotesToolbar
-      book={null}
+      activeFilterCount={0}
+      chips={[]}
+      facets={undefined}
       filter="all"
-      onBookChange={vi.fn()}
+      onApplyAdvanced={vi.fn()}
+      onClearAll={vi.fn()}
       onFilterChange={vi.fn()}
       onSearch={vi.fn()}
       onSortChange={onSortChange}
       onViewChange={vi.fn()}
       search=""
       sort="newest"
+      state={TOOLBAR_STATE}
       view="grid"
       {...overrides}
     />,
