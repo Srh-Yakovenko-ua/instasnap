@@ -32,6 +32,7 @@ const SECTION_ORDER = [
   "Бюджет на книги",
   "Динаміка покупок",
   "Що впливає на фактичну вартість книги",
+  "Магазини",
   "Рейтинг магазинів",
   "Порівняння магазинів",
   "Шлях замовлень",
@@ -40,6 +41,8 @@ const SECTION_ORDER = [
   "Рекорди",
   "Найдорожчі замовлення",
 ];
+
+const STRETCHED_CARDS = ["Рейтинг магазинів", "Порівняння магазинів"];
 
 const EMPTY_VIEW = makeStatisticsView({
   summary: { ...makeStatisticsView().summary, ordersCount: 0 },
@@ -148,15 +151,18 @@ describe("DeliveryStatistics layout", () => {
     expect(dynamicsColumn).toHaveClass("grid");
   });
 
-  it("pairs the two store cards in one two-column row", async () => {
+  it("gathers both store cards under one section, with the ranking toggle above them", async () => {
     renderStatistics();
     await settle();
 
-    const row = rowOf("Рейтинг магазинів");
+    const rankingColumn = rowOf("Рейтинг магазинів");
+    const row = rowOf("Порівняння магазинів");
 
-    expect(rowOf("Порівняння магазинів")).toBe(row);
-    expect(row.className).toContain("lg:grid-cols-2");
-    expect(row.className).toContain("items-start");
+    expect(rankingColumn.parentElement).toBe(row);
+    expect(row.className).toContain("lg:grid-cols-[45fr_55fr]");
+    expect(row.className).toContain("items-stretch");
+    expect(cardOf("Магазини")).toContainElement(row);
+    expect(rankingColumn.firstElementChild).toHaveAttribute("data-slot", "segmented");
   });
 
   it("pairs the lifecycle cards in one two-column row", async () => {
@@ -194,13 +200,17 @@ describe("DeliveryStatistics layout", () => {
     expect(topOrders.parentElement).toBe(row);
   });
 
-  it("lets paired cards keep their natural height", async () => {
+  it("lets paired cards keep their natural height, apart from the store pair", async () => {
     renderStatistics();
     await settle();
 
     for (const title of SECTION_ORDER.slice(1)) {
+      if (STRETCHED_CARDS.includes(title)) continue;
       expect(cardOf(title).className).not.toContain("h-full");
     }
+
+    expect(cardOf("Рейтинг магазинів").className).toContain("flex-1");
+    expect(cardOf("Порівняння магазинів").className).toContain("h-full");
   });
 
   it("loads with a skeleton that follows the same order", () => {

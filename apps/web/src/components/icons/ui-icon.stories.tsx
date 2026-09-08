@@ -48,6 +48,7 @@ const ALL_UI_ICONS: readonly UiIconName[] = [
   "external",
   "link",
   "copy",
+  "crown",
   "download",
   "upload",
   "bookmark",

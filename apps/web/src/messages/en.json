@@ -3568,7 +3568,7 @@
         "coverage": {
           "all": "Counted for all {total} books",
           "hint": "The actual cost can only be worked out for books with enough data about the price and the order total.",
-          "partial": "Counted for {counted} of {total} books · {percent} of the data",
+          "partial": "Counted for {counted} of {total} books · {percent} coverage",
           "tooFew": "Too little data for a reliable average"
         },
         "delivery": {
@@ -3655,29 +3655,31 @@
         "title": "Active orders by time since ordering"
       },
       "stores": {
+        "bestValue": {
+          "hint": "The lowest average actual book cost among stores with enough data.",
+          "label": "Best value"
+        },
         "booksPerOrder": "{value} books per order",
         "counts": "{orders, plural, one {# order} other {# orders}} · {books, plural, one {# book} other {# books}}",
         "countsBooks": "{orders, plural, one {# order} other {# orders}}",
         "countsOrders": "{books, plural, one {# book} other {# books}}",
         "empty": "No store data for the selected period.",
         "emptyForCurrency": "No spend in {currency} for the selected period.",
-        "landed": "Actually per book {value}",
+        "landed": "{value} / book",
         "metricLabel": "Metric",
         "metrics": {
           "books": "Books",
           "orders": "Orders",
           "spend": "Spend"
         },
-        "perOrder": "Average order {value}",
-        "rawPrice": "Before discounts and delivery",
-        "rawPriceHint": "The average book price before discounts and delivery are spread over it.",
-        "rawPriceValue": "Average book price before discounts and delivery: {value}",
-        "showAll": "Show all {count}",
-        "showLess": "Collapse",
+        "nextPage": "Next page",
+        "openOrders": "See orders from {store}",
+        "pageRange": "{from}–{to} of {total}",
+        "previousPage": "Previous page",
         "subtitles": {
-          "books": "Where you bought the most books.",
-          "orders": "Where you placed the most orders.",
-          "spend": "Where you spent the most over the selected period."
+          "books": "By the number of books ordered in the selected period.",
+          "orders": "By the number of orders placed in the selected period.",
+          "spend": "By total spend in the selected period."
         },
         "title": "Store ranking"
       },
@@ -3701,6 +3703,10 @@
         "singleStore": "Only one store has data so far.",
         "subtitle": "Compares the actual cost of a book against the average order in the selected currency.",
         "title": "Store comparison"
+      },
+      "storesGroup": {
+        "subtitle": "Where you buy most often, where you spend the most, and where a book actually works out cheaper.",
+        "title": "Stores"
       },
       "calendar": {
         "title": "Purchase calendar",

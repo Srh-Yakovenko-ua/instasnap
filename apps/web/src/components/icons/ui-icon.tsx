@@ -38,6 +38,7 @@ export type UiIconName =
   | "clock"
   | "cloud-up"
   | "copy"
+  | "crown"
   | "download"
   | "edit"
   | "external"

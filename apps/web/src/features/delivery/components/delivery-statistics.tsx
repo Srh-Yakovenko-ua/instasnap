@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { StatisticsDrilldownContext } from "../model/statistics-drilldown";
 import type { DynamicsMetric } from "../model/statistics-dynamics";
 import type { StatisticsScopeState } from "../model/statistics-scope-state";
+import type { StoreMetric } from "../model/statistics-stores";
 import type { UseStatisticsParamsResult } from "../model/use-statistics-params";
 
 import { useActiveMoneyAge } from "../api/use-active-money-age";
@@ -24,16 +25,21 @@ import { statisticsCurrencies } from "../model/statistics-currency";
 import { statisticsEmptyKind } from "../model/statistics-empty";
 import { formatPeriodRange } from "../model/statistics-format";
 import { toStatisticsScopeState } from "../model/statistics-scope-state";
+import { STORE_METRICS } from "../model/statistics-stores";
 import { hasAnyOrders } from "../model/statistics-view-model";
 import { useStatisticsParams } from "../model/use-statistics-params";
 import { StatisticsActiveAge } from "./statistics/statistics-active-age";
 import { StatisticsBudget } from "./statistics/statistics-budget";
 import { StatisticsCosts } from "./statistics/statistics-costs";
-import { StatisticsDisplayCurrency } from "./statistics/statistics-display-currency";
+import {
+  StatisticsCurrencyBadge,
+  StatisticsDisplayCurrency,
+} from "./statistics/statistics-display-currency";
 import { StatisticsKpi } from "./statistics/statistics-kpi";
 import { StatisticsLifecycle } from "./statistics/statistics-lifecycle";
 import { StatisticsPulse } from "./statistics/statistics-pulse";
 import { StatisticsRecords } from "./statistics/statistics-records";
+import { StatisticsMetricTabs, StatisticsSection } from "./statistics/statistics-section";
 import {
   StatisticsAllTimeEmpty,
   StatisticsError,
@@ -197,6 +203,7 @@ function StatisticsBody({
   const t = useTranslations("delivery.statistics");
   const [highlightedBucketKey, setHighlightedBucketKey] = useState<Nullable<string>>(null);
   const [highlightedStoreKey, setHighlightedStoreKey] = useState<Nullable<string>>(null);
+  const [storeMetric, setStoreMetric] = useState<StoreMetric>("spend");
   const view = period.data;
 
   if (period.isInitialError) {
@@ -294,22 +301,40 @@ function StatisticsBody({
 
       <StatisticsCosts currency={displayCurrency} view={view} />
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-        <StatisticsStores
-          currency={displayCurrency}
-          drilldown={drilldown}
-          highlightedStoreKey={highlightedStoreKey}
-          onHighlight={setHighlightedStoreKey}
-          stores={view.byStore}
-        />
-        <StatisticsStoreMap
-          currency={displayCurrency}
-          drilldown={drilldown}
-          highlightedStoreKey={highlightedStoreKey}
-          onHighlight={setHighlightedStoreKey}
-          stores={view.byStore}
-        />
-      </div>
+      <StatisticsSection
+        action={<StatisticsCurrencyBadge currency={displayCurrency} />}
+        description={t("storesGroup.subtitle")}
+        icon="cart"
+        title={t("storesGroup.title")}
+      >
+        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[45fr_55fr]">
+          <div className="flex min-w-0 flex-col gap-3">
+            <StatisticsMetricTabs
+              label={t("stores.metricLabel")}
+              metrics={STORE_METRICS}
+              onChange={setStoreMetric}
+              optionLabel={(value) => t(`stores.metrics.${value}`)}
+              value={storeMetric}
+            />
+            <StatisticsStores
+              bestValueStores={view.bestValueStoreByCurrency}
+              currency={displayCurrency}
+              drilldown={drilldown}
+              highlightedStoreKey={highlightedStoreKey}
+              metric={storeMetric}
+              onHighlight={setHighlightedStoreKey}
+              stores={view.byStore}
+            />
+          </div>
+          <StatisticsStoreMap
+            currency={displayCurrency}
+            drilldown={drilldown}
+            highlightedStoreKey={highlightedStoreKey}
+            onHighlight={setHighlightedStoreKey}
+            stores={view.byStore}
+          />
+        </div>
+      </StatisticsSection>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <StatisticsLifecycle

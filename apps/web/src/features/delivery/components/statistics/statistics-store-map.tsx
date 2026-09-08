@@ -22,7 +22,6 @@ import { formatMoney } from "../../model/money-format";
 import { buildStatisticsDrilldown } from "../../model/statistics-drilldown";
 import { formatPercentValue } from "../../model/statistics-format";
 import { storeScatter } from "../../model/statistics-stores";
-import { StatisticsCurrencyBadge } from "./statistics-display-currency";
 import { StatisticsSection } from "./statistics-section";
 import { StatisticsSectionState } from "./statistics-states";
 
@@ -68,7 +67,7 @@ export function StatisticsStoreMap({
 
   return (
     <StatisticsSection
-      action={<StatisticsCurrencyBadge currency={currency} />}
+      className="h-full border-border/60 bg-background/50 shadow-none"
       description={t("subtitle")}
       title={t("title")}
     >

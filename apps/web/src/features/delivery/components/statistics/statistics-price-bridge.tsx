@@ -8,7 +8,6 @@ import { useLocale, useTranslations } from "next-intl";
 import type { UiIconName } from "@/components/icons";
 
 import { UiIcon } from "@/components/icons";
-import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +23,6 @@ const BRIDGE_LAYOUT = {
 
 const COVERAGE = {
   caution: 50,
-  full: 100,
 } as const;
 
 type PriceFactor = {
@@ -194,30 +192,25 @@ function CoverageInfo({ landed }: { landed: BookOrderStatisticsLandedCost }) {
           total: landed.booksInScope,
         });
 
-  const bar =
-    landed.coveragePercent >= COVERAGE.full ? null : (
-      <Progress aria-hidden className="h-1 max-w-56" value={landed.coveragePercent} />
-    );
-
   if (landed.coveragePercent < COVERAGE.caution) {
     return (
-      <div className="flex flex-col gap-1.5">
-        <StatisticsDataQualityNote kind="partial">
-          {t("coverage.tooFew")} · {counted}
-        </StatisticsDataQualityNote>
-        {bar}
-      </div>
+      <StatisticsDataQualityNote kind="partial">
+        {t("coverage.tooFew")} · {counted}
+      </StatisticsDataQualityNote>
     );
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+    <Tooltip>
+      <TooltipTrigger
+        className="inline-flex w-fit cursor-help items-center gap-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+        type="button"
+      >
+        <UiIcon aria-hidden className="shrink-0" name="info" size={13} />
         {counted}
-        <BridgeHint text={t("coverage.hint")} />
-      </p>
-      {bar}
-    </div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-72">{t("coverage.hint")}</TooltipContent>
+    </Tooltip>
   );
 }
 

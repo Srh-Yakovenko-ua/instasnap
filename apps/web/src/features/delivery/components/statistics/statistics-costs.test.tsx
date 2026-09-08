@@ -175,7 +175,7 @@ describe("StatisticsCosts", () => {
   it("counts the books the average was actually built on", () => {
     renderCosts({ data: BRIDGED });
 
-    expect(screen.getByText(/Розраховано для 55 із 57 книг · 96,5% даних/)).toBeInTheDocument();
+    expect(screen.getByText(/Розраховано для 55 із 57 книг · 96,5% покриття/)).toBeInTheDocument();
   });
 
   it("says nothing about coverage once every book is counted", () => {
