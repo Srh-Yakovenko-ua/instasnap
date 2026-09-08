@@ -6593,7 +6593,7 @@
     },
     "toolbar": {
       "searchLabel": "Search quotes",
-      "searchPlaceholder": "Search quotes...",
+      "searchPlaceholder": "Search by quote, book, author or note…",
       "searchClear": "Clear search",
       "filterLabel": "Quote quick filters",
       "bookPlaceholder": "Book",

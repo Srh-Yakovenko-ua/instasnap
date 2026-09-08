@@ -6593,7 +6593,7 @@
     },
     "toolbar": {
       "searchLabel": "Пошук цитат",
-      "searchPlaceholder": "Пошук цитат...",
+      "searchPlaceholder": "Пошук за цитатою, книгою, автором або нотаткою…",
       "searchClear": "Очистити пошук",
       "filterLabel": "Швидкі фільтри цитат",
       "bookPlaceholder": "Книга",
