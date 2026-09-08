@@ -2,7 +2,7 @@ import type { QuotesQuery } from "@app/shared";
 
 import { type inferParserType, parseAsString, parseAsStringLiteral } from "nuqs/server";
 
-import { QUOTE_FILTER_OPTIONS, QUOTE_SORT_OPTIONS } from "./quote-options";
+import { QUOTE_FILTER_OPTIONS, QUOTE_SORT_VALUES } from "./quote-options";
 
 export type QuotesListParams = Omit<QuotesQuery, "pageNumber">;
 
@@ -18,7 +18,7 @@ export const quotesQueryParsers = {
   bookId: parseAsString,
   filter: parseAsStringLiteral(QUOTE_FILTER_OPTIONS).withDefault(QUOTES_FILTER_DEFAULT),
   q: parseAsString.withDefault(""),
-  sort: parseAsStringLiteral(QUOTE_SORT_OPTIONS).withDefault(QUOTES_SORT_DEFAULT),
+  sort: parseAsStringLiteral(QUOTE_SORT_VALUES).withDefault(QUOTES_SORT_DEFAULT),
   view: parseAsStringLiteral(QUOTE_VIEW_MODES).withDefault(QUOTES_VIEW_DEFAULT),
 };
 

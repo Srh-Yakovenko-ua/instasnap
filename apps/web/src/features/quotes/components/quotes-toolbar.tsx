@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 
 import { DebouncedSearchInput } from "@/components/debounced-search-input";
 import { ChipGroup } from "@/components/ui/chip-group";
-import { MobileSortSheet } from "@/components/ui/mobile-sort-sheet";
 import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
@@ -21,9 +20,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { QuoteBookOption } from "../model/quote-book";
 import type { QuotesViewMode } from "../model/quotes-query";
 
-import { QUOTE_FILTER_OPTIONS, QUOTE_SORT_OPTIONS } from "../model/quote-options";
+import { QUOTE_FILTER_OPTIONS, resolveQuoteSortOptions } from "../model/quote-options";
 import { QUOTES_SORT_DEFAULT } from "../model/quotes-query";
 import { BookPicker } from "./book-picker";
+import { QuotesSortSheet } from "./quotes-sort-sheet";
 
 type QuotesToolbarProps = {
   book: Nullable<QuoteBookOption>;
@@ -54,8 +54,9 @@ export function QuotesToolbar({
   const tCommon = useTranslations("common");
   const tFilter = useTranslations("quotes.filter");
   const tSort = useTranslations("quotes.sort");
-  const tSortMobile = useTranslations("quotes.sortMobile");
   const tView = useTranslations("quotes.view");
+
+  const sortOptions = resolveQuoteSortOptions(sort);
 
   return (
     <div className="flex flex-col gap-3">
@@ -71,21 +72,10 @@ export function QuotesToolbar({
           />
         </div>
 
-        <MobileSortSheet
+        <QuotesSortSheet
           className="max-w-[9.5rem] sm:hidden"
-          closeLabel={tSortMobile("close")}
-          description={tSortMobile("description")}
-          groups={[
-            {
-              key: "sort",
-              options: QUOTE_SORT_OPTIONS.map((value) => ({ label: tSort(value), value })),
-            },
-          ]}
-          id="quotes-sort"
           label={t("sortLabel")}
           onChange={onSortChange}
-          title={tSortMobile("title")}
-          triggerLabel={tSortMobile(`trigger.${sort}`)}
           value={sort}
         />
       </div>
@@ -119,10 +109,10 @@ export function QuotesToolbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <div className="hidden sm:block sm:w-56">
+          <div className="hidden sm:block sm:w-80">
             <Select
               onValueChange={(next) => {
-                const match = QUOTE_SORT_OPTIONS.find((option) => option === next);
+                const match = sortOptions.find((option) => option === next);
                 if (match !== undefined) onSortChange(match);
               }}
               value={sort}
@@ -137,9 +127,9 @@ export function QuotesToolbar({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {QUOTE_SORT_OPTIONS.map((option) => (
+                {sortOptions.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {tSort(option)}
+                    {tSort(`options.${option}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -185,7 +175,7 @@ export function QuotesToolbarSkeleton() {
       <div className="flex items-center gap-1.5 sm:flex-col sm:items-stretch sm:gap-3 xl:flex-row xl:items-center xl:justify-between">
         <Skeleton className="h-10 min-w-0 flex-1 rounded-md sm:w-64 sm:flex-none" />
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <Skeleton className="hidden h-10 rounded-md sm:block sm:w-56" />
+          <Skeleton className="hidden h-10 rounded-md sm:block sm:w-80" />
           <Skeleton className="h-10 w-20 shrink-0 rounded-full sm:w-40" />
         </div>
       </div>

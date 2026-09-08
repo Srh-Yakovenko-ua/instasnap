@@ -6525,28 +6525,46 @@
       }
     },
     "sort": {
-      "newest": "Нові спочатку",
-      "oldest": "Старі спочатку",
-      "book_title": "За назвою книги",
-      "book_author": "За автором",
-      "page": "За сторінкою",
-      "favorites_first": "Спочатку улюблені",
-      "no_spoiler_first": "Спочатку без спойлерів",
-      "with_spoiler_first": "Спочатку зі спойлерами"
-    },
-    "sortMobile": {
-      "title": "Сортування",
-      "description": "Виберіть порядок цитат.",
-      "close": "Закрити",
-      "trigger": {
-        "newest": "Нові",
-        "oldest": "Старі",
-        "book_title": "Книга",
-        "book_author": "Автор",
-        "page": "Сторінка",
-        "favorites_first": "Улюблені",
-        "no_spoiler_first": "Без спойлерів",
-        "with_spoiler_first": "Зі спойлерами"
+      "options": {
+        "newest": "За датою додавання: спочатку нові",
+        "oldest": "За датою додавання: спочатку старі",
+        "book_title": "За назвою книги: А–Я",
+        "book_author": "За автором: А–Я",
+        "page": "За сторінкою: від меншої",
+        "favorites_first": "Спочатку улюблені",
+        "no_spoiler_first": "Спочатку без спойлерів",
+        "with_spoiler_first": "Спочатку зі спойлерами"
+      },
+      "mobile": {
+        "title": "Сортування",
+        "description": "Виберіть порядок цитат.",
+        "close": "Закрити",
+        "groups": {
+          "added": "Дата додавання",
+          "book": "Книга",
+          "page": "Сторінка",
+          "legacy": "Поточне сортування"
+        },
+        "options": {
+          "newest": "Спочатку нові",
+          "oldest": "Спочатку старі",
+          "book_title": "Назва: А–Я",
+          "book_author": "Автор: А–Я",
+          "page": "Від меншої",
+          "favorites_first": "Спочатку улюблені",
+          "no_spoiler_first": "Спочатку без спойлерів",
+          "with_spoiler_first": "Спочатку зі спойлерами"
+        },
+        "trigger": {
+          "newest": "Нові",
+          "oldest": "Старі",
+          "book_title": "Книга А–Я",
+          "book_author": "Автор А–Я",
+          "page": "Сторінка ↑",
+          "favorites_first": "Улюблені",
+          "no_spoiler_first": "Без спойлерів",
+          "with_spoiler_first": "Зі спойлерами"
+        }
       }
     },
     "summary": {
