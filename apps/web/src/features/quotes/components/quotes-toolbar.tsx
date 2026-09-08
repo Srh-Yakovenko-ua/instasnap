@@ -2,13 +2,13 @@
 
 import type { Nullable, QuoteFilter, QuoteSort } from "@app/shared";
 
+import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { DebouncedSearchInput } from "@/components/debounced-search-input";
-import { UiIcon } from "@/components/icons";
-import { Button } from "@/components/ui/button";
 import { ChipGroup } from "@/components/ui/chip-group";
 import { MobileSortSheet } from "@/components/ui/mobile-sort-sheet";
+import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -19,6 +19,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { QuoteBookOption } from "../model/quote-book";
+import type { QuotesViewMode } from "../model/quotes-query";
 
 import { QUOTE_FILTER_OPTIONS, QUOTE_SORT_OPTIONS } from "../model/quote-options";
 import { QUOTES_SORT_DEFAULT } from "../model/quotes-query";
@@ -27,32 +28,34 @@ import { BookPicker } from "./book-picker";
 type QuotesToolbarProps = {
   book: Nullable<QuoteBookOption>;
   filter: QuoteFilter;
-  onAddQuote: () => void;
   onBookChange: (bookId: Nullable<string>) => void;
   onFilterChange: (filter: QuoteFilter) => void;
   onSearch: (value: string) => void;
   onSortChange: (sort: QuoteSort) => void;
+  onViewChange: (view: QuotesViewMode) => void;
   search: string;
   sort: QuoteSort;
+  view: QuotesViewMode;
 };
 
 export function QuotesToolbar({
   book,
   filter,
-  onAddQuote,
   onBookChange,
   onFilterChange,
   onSearch,
   onSortChange,
+  onViewChange,
   search,
   sort,
+  view,
 }: QuotesToolbarProps) {
   const t = useTranslations("quotes.toolbar");
-  const tActions = useTranslations("quotes.actions");
   const tCommon = useTranslations("common");
   const tFilter = useTranslations("quotes.filter");
   const tSort = useTranslations("quotes.sort");
   const tSortMobile = useTranslations("quotes.sortMobile");
+  const tView = useTranslations("quotes.view");
 
   return (
     <div className="flex flex-col gap-3">
@@ -143,10 +146,24 @@ export function QuotesToolbar({
             </Select>
           </div>
 
-          <Button className="h-10 shrink-0 max-sm:w-10 max-sm:px-0" onClick={onAddQuote}>
-            <UiIcon name="plus" size={16} />
-            <span className="max-sm:sr-only">{tActions("add")}</span>
-          </Button>
+          <Segmented
+            className="ml-auto h-10 shrink-0 items-stretch sm:ml-0 [&_[data-slot=segmented-item]]:py-0 max-sm:[&_[data-slot=segmented-item]]:px-2.5"
+            label={tView("label")}
+            onValueChange={(next) => onViewChange(next === "list" ? "list" : "grid")}
+            options={[
+              {
+                icon: <LayoutGrid />,
+                label: <span className="max-sm:sr-only">{tView("grid")}</span>,
+                value: "grid",
+              },
+              {
+                icon: <List />,
+                label: <span className="max-sm:sr-only">{tView("list")}</span>,
+                value: "list",
+              },
+            ]}
+            value={view}
+          />
         </div>
       </div>
     </div>
@@ -169,7 +186,7 @@ export function QuotesToolbarSkeleton() {
         <Skeleton className="h-10 min-w-0 flex-1 rounded-md sm:w-64 sm:flex-none" />
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <Skeleton className="hidden h-10 rounded-md sm:block sm:w-56" />
-          <Skeleton className="h-10 w-10 shrink-0 rounded-md sm:w-36" />
+          <Skeleton className="h-10 w-20 shrink-0 rounded-full sm:w-40" />
         </div>
       </div>
     </div>

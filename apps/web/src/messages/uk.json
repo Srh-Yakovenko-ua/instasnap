@@ -6497,12 +6497,9 @@
         "actions": "Дії"
       }
     },
-    "pagination": {
-      "label": "Сторінки цитат",
-      "previous": "Назад",
-      "next": "Далі",
-      "goToPage": "Перейти до сторінки {page}"
-    },
+    "loadMore": "Показати ще",
+    "loadMoreError": "Не вдалося завантажити ще цитати",
+    "allShown": "Усі цитати показано",
     "sidebar": {
       "label": "Огляд цитат",
       "stats": {
@@ -6583,6 +6580,11 @@
       "filterLabel": "Швидкі фільтри цитат",
       "bookPlaceholder": "Книга",
       "sortLabel": "Сортування цитат"
+    },
+    "view": {
+      "label": "Вигляд",
+      "grid": "Сітка",
+      "list": "Список"
     },
     "spoiler": {
       "badge": "Зі спойлерами",

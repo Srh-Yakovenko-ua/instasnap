@@ -6497,12 +6497,9 @@
         "actions": "Actions"
       }
     },
-    "pagination": {
-      "label": "Quote pages",
-      "previous": "Previous",
-      "next": "Next",
-      "goToPage": "Go to page {page}"
-    },
+    "loadMore": "Load more",
+    "loadMoreError": "Couldn't load more quotes",
+    "allShown": "All quotes shown",
     "sidebar": {
       "label": "Quotes overview",
       "stats": {
@@ -6583,6 +6580,11 @@
       "filterLabel": "Quote quick filters",
       "bookPlaceholder": "Book",
       "sortLabel": "Sort quotes"
+    },
+    "view": {
+      "label": "View",
+      "grid": "Grid",
+      "list": "List"
     },
     "spoiler": {
       "badge": "Contains spoilers",

@@ -1,10 +1,10 @@
 "use client";
 
-import type { Nullable, QuoteFilter, QuoteSort, QuotesQuery } from "@app/shared";
+import type { Nullable, QuoteFilter, QuoteSort } from "@app/shared";
 
 import { useQueryStates } from "nuqs";
 
-import type { QuotesQueryState } from "./quotes-query";
+import type { QuotesListParams, QuotesQueryState, QuotesViewMode } from "./quotes-query";
 
 import {
   hasActiveQuotesFilters,
@@ -16,12 +16,12 @@ import {
 export type UseQuotesQueryResult = {
   clearFilters: () => void;
   hasActiveFilters: boolean;
-  listParams: QuotesQuery;
+  listParams: QuotesListParams;
   setBookId: (value: Nullable<string>) => void;
   setFilter: (value: QuoteFilter) => void;
-  setPage: (value: number) => void;
   setSearch: (value: string) => void;
   setSort: (value: QuoteSort) => void;
+  setView: (value: QuotesViewMode) => void;
   state: QuotesQueryState;
 };
 
@@ -32,11 +32,11 @@ export function useQuotesQuery(): UseQuotesQueryResult {
     clearFilters: () => void setState(QUOTES_FILTERS_RESET),
     hasActiveFilters: hasActiveQuotesFilters(state),
     listParams: toQuotesListParams(state),
-    setBookId: (bookId) => void setState({ bookId, pageNumber: null }),
-    setFilter: (filter) => void setState({ filter, pageNumber: null }),
-    setPage: (pageNumber) => void setState({ pageNumber }),
-    setSearch: (q) => void setState({ pageNumber: null, q }),
-    setSort: (sort) => void setState({ pageNumber: null, sort }),
+    setBookId: (bookId) => void setState({ bookId }),
+    setFilter: (filter) => void setState({ filter }),
+    setSearch: (q) => void setState({ q }),
+    setSort: (sort) => void setState({ sort }),
+    setView: (view) => void setState({ view }),
     state,
   };
 }

@@ -1,43 +1,54 @@
 "use client";
 
+import type { QuoteView } from "@app/shared";
+
 import { useTranslations } from "next-intl";
 
 import type { EmptyStateEntry } from "@/lib/empty-states";
 
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
-import type { QuotesPage } from "../api/use-quotes";
+import type { QuotesViewMode } from "../model/quotes-query";
 
 import { QuoteCard } from "./quote-card";
-import { QuotesPagination } from "./quotes-pagination";
 
 const SKELETON_COUNT = 6;
 
 type QuotesContentProps = {
   hasActiveFilters: boolean;
+  hasNextPage: boolean;
   isError: boolean;
+  isFetchingNextPage: boolean;
+  isLoadMoreError: boolean;
   isPending: boolean;
   listIdentity: string;
   onAddQuote: () => void;
   onClearFilters: () => void;
+  onLoadMore: () => void;
   onOpenBooks: () => void;
-  onPageChange: (page: number) => void;
   onRetry: () => void;
-  quotes: QuotesPage | undefined;
+  quotes: QuoteView[];
+  view: QuotesViewMode;
 };
 
 export function QuotesContent({
   hasActiveFilters,
+  hasNextPage,
   isError,
+  isFetchingNextPage,
+  isLoadMoreError,
   isPending,
   listIdentity,
   onAddQuote,
   onClearFilters,
+  onLoadMore,
   onOpenBooks,
-  onPageChange,
   onRetry,
   quotes,
+  view,
 }: QuotesContentProps) {
   const t = useTranslations("quotes");
 
@@ -55,11 +66,11 @@ export function QuotesContent({
     );
   }
 
-  if (isPending || quotes === undefined) {
-    return <QuotesSkeleton />;
+  if (isPending) {
+    return <QuotesSkeleton view={view} />;
   }
 
-  if (quotes.items.length === 0 && !hasActiveFilters) {
+  if (quotes.length === 0 && !hasActiveFilters) {
     const emptyState: EmptyStateEntry = {
       desc: t("empty.description"),
       illu: "empty-quotes",
@@ -70,7 +81,7 @@ export function QuotesContent({
     return <EmptyState onPrimary={onAddQuote} onSecondary={onOpenBooks} state={emptyState} />;
   }
 
-  if (quotes.items.length === 0) {
+  if (quotes.length === 0) {
     const noResultsState: EmptyStateEntry = {
       desc: t("noResults.description"),
       illu: "empty-search",
@@ -82,28 +93,74 @@ export function QuotesContent({
 
   return (
     <div className="flex flex-col gap-6">
-      <ul className="grid gap-4 md:grid-cols-2" key={listIdentity}>
-        {quotes.items.map((quote) => (
-          <li className="flex" key={quote.id}>
+      <ul
+        className={cn("grid grid-cols-1 gap-4", view === "grid" && "md:grid-cols-2")}
+        key={listIdentity}
+      >
+        {quotes.map((quote) => (
+          <li className="flex min-w-0" key={quote.id}>
             <QuoteCard quote={quote} variant="archive" />
           </li>
         ))}
       </ul>
 
-      <QuotesPagination
-        onPageChange={onPageChange}
-        page={quotes.page}
-        pagesCount={quotes.pagesCount}
+      <LoadMoreFooter
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        isLoadMoreError={isLoadMoreError}
+        onLoadMore={onLoadMore}
       />
     </div>
   );
 }
 
-export function QuotesSkeleton() {
+function LoadMoreFooter({
+  hasNextPage,
+  isFetchingNextPage,
+  isLoadMoreError,
+  onLoadMore,
+}: {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isLoadMoreError: boolean;
+  onLoadMore: () => void;
+}) {
   const t = useTranslations("quotes");
 
   return (
-    <div aria-busy className="grid gap-4 md:grid-cols-2" role="status">
+    <div className="flex flex-col items-center gap-2 pt-2">
+      {hasNextPage ? (
+        <>
+          {isLoadMoreError ? (
+            <p className="text-sm text-error" role="alert">
+              {t("loadMoreError")}
+            </p>
+          ) : null}
+          <Button
+            disabled={isFetchingNextPage}
+            loading={isFetchingNextPage}
+            onClick={onLoadMore}
+            variant="secondary"
+          >
+            {t("loadMore")}
+          </Button>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">{t("allShown")}</p>
+      )}
+    </div>
+  );
+}
+
+function QuotesSkeleton({ view }: { view: QuotesViewMode }) {
+  const t = useTranslations("quotes");
+
+  return (
+    <div
+      aria-busy
+      className={cn("grid grid-cols-1 gap-4", view === "grid" && "md:grid-cols-2")}
+      role="status"
+    >
       <span className="sr-only">{t("loading")}</span>
       {Array.from({ length: SKELETON_COUNT }, (_, index) => (
         <div
