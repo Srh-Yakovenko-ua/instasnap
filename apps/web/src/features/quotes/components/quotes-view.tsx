@@ -7,15 +7,18 @@ import { useState } from "react";
 
 import type { LibrarySummaryCard } from "@/features/books/components/library-summary-cards";
 
+import { UiIcon } from "@/components/icons";
 import { TitleLeaf } from "@/components/title-leaf";
+import { Button } from "@/components/ui/button";
 import { LibrarySummaryMobile } from "@/features/books/components/library-summary-mobile";
 import { useRouter } from "@/i18n/navigation";
 
-import { useQuoteBook } from "../api/use-quote-book";
 import { useQuotes } from "../api/use-quotes";
+import { useQuotesFacets } from "../api/use-quotes-facets";
 import { useQuotesSummary } from "../api/use-quotes-summary";
-import { toQuoteBookOption } from "../model/quote-book";
+import { quoteFilterCounts } from "../model/quote-options";
 import { quotesListIdentity } from "../model/quotes-query";
+import { useQuotesFilterChips } from "../model/use-quotes-filter-chips";
 import { useQuotesQuery } from "../model/use-quotes-query";
 import { QuoteDialog } from "./quote-dialog";
 import { QuotesContent } from "./quotes-content";
@@ -30,27 +33,44 @@ type QuoteSummaryKey =
 
 export function QuotesView() {
   const t = useTranslations("quotes");
+  const tActions = useTranslations("quotes.actions");
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
 
   const {
+    activeFilterCount,
+    applyAdvanced,
     clearFilters,
+    facetsParams,
     hasActiveFilters,
     listParams,
-    setBookId,
     setFilter,
-    setPage,
     setSearch,
     setSort,
+    setView,
     state,
   } = useQuotesQuery();
 
   const quotes = useQuotes(listParams);
   const summary = useQuotesSummary();
-  const filterBook = useQuoteBook(state.bookId);
+  const facets = useQuotesFacets(facetsParams);
 
-  const selectedBook = filterBook.data === undefined ? null : toQuoteBookOption(filterBook.data);
+  const quoteItems = (quotes.data?.pages ?? []).flatMap((page) => page.items);
+
   const showSidebar = !quotes.isError;
+
+  const filterCounts = facets.data === undefined ? undefined : quoteFilterCounts(facets.data);
+  const counter =
+    filterCounts === undefined
+      ? undefined
+      : t("counter", { shown: filterCounts[state.filter], total: filterCounts.all });
+
+  const filterChips = useQuotesFilterChips({
+    facets: facets.data,
+    onApplyAdvanced: applyAdvanced,
+    onSearch: setSearch,
+    state,
+  });
 
   const stats = summary.data;
   const topBook = stats?.topBook ?? null;
@@ -114,16 +134,22 @@ export function QuotesView() {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-4 motion-safe:animate-in motion-safe:duration-500 motion-safe:fill-mode-both motion-safe:fade-in motion-safe:slide-in-from-bottom-1">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-[clamp(1.875rem,4vw,2.75rem)] leading-tight font-semibold text-ink">
-              {t("title")}
-            </h1>
-            <TitleLeaf />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="font-heading text-[clamp(1.875rem,4vw,2.75rem)] leading-tight font-semibold text-ink">
+                {t("title")}
+              </h1>
+              <TitleLeaf />
+            </div>
+            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+              {t("subtitle")}
+            </p>
           </div>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
-            {t("subtitle")}
-          </p>
+          <Button className="self-start sm:self-auto" onClick={() => setAddOpen(true)}>
+            <UiIcon name="plus" size={16} />
+            {tActions("add")}
+          </Button>
         </div>
       </header>
 
@@ -151,15 +177,22 @@ export function QuotesView() {
         isPending={quotes.isPending}
         toolbar={
           <QuotesToolbar
-            book={selectedBook}
+            activeFilterCount={activeFilterCount}
+            chips={filterChips}
+            counter={counter}
+            counts={filterCounts}
+            facets={facets.data}
             filter={state.filter}
-            onAddQuote={() => setAddOpen(true)}
-            onBookChange={setBookId}
+            onApplyAdvanced={applyAdvanced}
+            onClearAll={clearFilters}
             onFilterChange={setFilter}
             onSearch={setSearch}
             onSortChange={setSort}
+            onViewChange={setView}
             search={state.q}
             sort={state.sort}
+            state={state}
+            view={state.view}
           />
         }
       />
@@ -168,15 +201,19 @@ export function QuotesView() {
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <QuotesContent
             hasActiveFilters={hasActiveFilters}
+            hasNextPage={quotes.hasNextPage}
             isError={quotes.isError}
+            isFetchingNextPage={quotes.isFetchingNextPage}
+            isLoadMoreError={quotes.isFetchNextPageError}
             isPending={quotes.isPending}
             listIdentity={quotesListIdentity(listParams)}
             onAddQuote={() => setAddOpen(true)}
             onClearFilters={clearFilters}
+            onLoadMore={() => void quotes.fetchNextPage()}
             onOpenBooks={() => router.push("/books")}
-            onPageChange={setPage}
             onRetry={() => void quotes.refetch()}
-            quotes={quotes.data}
+            quotes={quoteItems}
+            view={state.view}
           />
         </div>
 

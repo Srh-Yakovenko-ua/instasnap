@@ -390,11 +390,155 @@ export const QuotesControllerSummaryResponse = zod.object({
 });
 
 /**
+ * @summary Get the book, author and quick-filter facets of the current user's quotes over the filtered dataset
+ */
+export const quotesControllerFacetsQueryAuthorItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const quotesControllerFacetsQueryAuthorMax = 100;
+
+export const quotesControllerFacetsQueryBookItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const quotesControllerFacetsQueryBookMax = 100;
+
+export const quotesControllerFacetsQueryBookIdRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const quotesControllerFacetsQueryCreatedFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const quotesControllerFacetsQueryCreatedToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const quotesControllerFacetsQueryQMax = 100;
+
+export const QuotesControllerFacetsQueryParams = zod.object({
+  author: zod
+    .array(zod.uuid().regex(quotesControllerFacetsQueryAuthorItemRegExp))
+    .max(quotesControllerFacetsQueryAuthorMax)
+    .optional(),
+  book: zod
+    .array(zod.uuid().regex(quotesControllerFacetsQueryBookItemRegExp))
+    .max(quotesControllerFacetsQueryBookMax)
+    .optional(),
+  bookId: zod.uuid().regex(quotesControllerFacetsQueryBookIdRegExp).optional(),
+  createdFrom: zod.iso.date().regex(quotesControllerFacetsQueryCreatedFromRegExp).optional(),
+  createdTo: zod.iso.date().regex(quotesControllerFacetsQueryCreatedToRegExp).optional(),
+  q: zod.string().max(quotesControllerFacetsQueryQMax).optional(),
+});
+
+export const quotesControllerFacetsResponseAuthorsItemCountMin = 0;
+export const quotesControllerFacetsResponseAuthorsItemCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseBooksItemCountMin = 0;
+export const quotesControllerFacetsResponseBooksItemCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseFavoritesCountMin = 0;
+export const quotesControllerFacetsResponseFavoritesCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseSpoilerCountMin = 0;
+export const quotesControllerFacetsResponseSpoilerCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseTotalCountMin = 0;
+export const quotesControllerFacetsResponseTotalCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseWithCommentCountMin = 0;
+export const quotesControllerFacetsResponseWithCommentCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseWithoutCommentCountMin = 0;
+export const quotesControllerFacetsResponseWithoutCommentCountMax = 9007199254740991;
+
+export const quotesControllerFacetsResponseWithoutSpoilerCountMin = 0;
+export const quotesControllerFacetsResponseWithoutSpoilerCountMax = 9007199254740991;
+
+export const QuotesControllerFacetsResponse = zod.object({
+  authors: zod
+    .array(
+      zod.object({
+        count: zod
+          .int()
+          .min(quotesControllerFacetsResponseAuthorsItemCountMin)
+          .max(quotesControllerFacetsResponseAuthorsItemCountMax),
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .describe(
+      "Authors of books holding a quote of the scope, with how many quotes each one carries. The list answers to every dataset filter except the selected authors, so picking one author never makes another disappear.",
+    ),
+  books: zod
+    .array(
+      zod.object({
+        count: zod
+          .int()
+          .min(quotesControllerFacetsResponseBooksItemCountMin)
+          .max(quotesControllerFacetsResponseBooksItemCountMax),
+        id: zod.string(),
+        title: zod.string(),
+      }),
+    )
+    .describe(
+      "Books holding a quote of the scope, with their quote counts. The list answers to every dataset filter except the selected books, so picking one book never makes another disappear.",
+    ),
+  favoritesCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseFavoritesCountMin)
+    .max(quotesControllerFacetsResponseFavoritesCountMax)
+    .describe("Quotes of the scope that are marked as favorite."),
+  spoilerCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseSpoilerCountMin)
+    .max(quotesControllerFacetsResponseSpoilerCountMax)
+    .describe("Quotes of the scope marked as a spoiler."),
+  totalCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseTotalCountMin)
+    .max(quotesControllerFacetsResponseTotalCountMax)
+    .describe(
+      "Quotes in the scope. The scope answers to the dataset parameters only, never to the primary filter or to pagination, so picking one quick filter never moves the number shown on another one.",
+    ),
+  withCommentCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseWithCommentCountMin)
+    .max(quotesControllerFacetsResponseWithCommentCountMax)
+    .describe("Quotes of the scope that carry a comment."),
+  withoutCommentCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseWithoutCommentCountMin)
+    .max(quotesControllerFacetsResponseWithoutCommentCountMax)
+    .describe("Quotes of the scope that carry no comment."),
+  withoutSpoilerCount: zod
+    .int()
+    .min(quotesControllerFacetsResponseWithoutSpoilerCountMin)
+    .max(quotesControllerFacetsResponseWithoutSpoilerCountMax)
+    .describe("Quotes of the scope that are not marked as a spoiler."),
+});
+
+/**
  * @summary List all quotes across the current user's books
  */
+export const quotesControllerListQueryAuthorItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const quotesControllerListQueryAuthorMax = 100;
+
+export const quotesControllerListQueryBookItemRegExp = new RegExp(
+  "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+);
+export const quotesControllerListQueryBookMax = 100;
+
 export const quotesControllerListQueryBookIdRegExp = new RegExp(
   "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
 );
+export const quotesControllerListQueryCreatedFromRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const quotesControllerListQueryCreatedToRegExp = new RegExp(
+  "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+);
+export const quotesControllerListQueryQMax = 100;
+
 export const quotesControllerListQueryFilterDefault = `all`;
 export const quotesControllerListQueryPageNumberDefault = 1;
 export const quotesControllerListQueryPageNumberMax = 21474836;
@@ -402,12 +546,21 @@ export const quotesControllerListQueryPageNumberMax = 21474836;
 export const quotesControllerListQueryPageSizeDefault = 12;
 export const quotesControllerListQueryPageSizeMax = 100;
 
-export const quotesControllerListQueryQMax = 100;
-
 export const quotesControllerListQuerySortDefault = `newest`;
 
 export const QuotesControllerListQueryParams = zod.object({
+  author: zod
+    .array(zod.uuid().regex(quotesControllerListQueryAuthorItemRegExp))
+    .max(quotesControllerListQueryAuthorMax)
+    .optional(),
+  book: zod
+    .array(zod.uuid().regex(quotesControllerListQueryBookItemRegExp))
+    .max(quotesControllerListQueryBookMax)
+    .optional(),
   bookId: zod.uuid().regex(quotesControllerListQueryBookIdRegExp).optional(),
+  createdFrom: zod.iso.date().regex(quotesControllerListQueryCreatedFromRegExp).optional(),
+  createdTo: zod.iso.date().regex(quotesControllerListQueryCreatedToRegExp).optional(),
+  q: zod.string().max(quotesControllerListQueryQMax).optional(),
   filter: zod
     .enum(["all", "no_spoiler", "with_spoiler", "favorites", "with_comment", "without_comment"])
     .default(quotesControllerListQueryFilterDefault),
@@ -421,7 +574,6 @@ export const QuotesControllerListQueryParams = zod.object({
     .min(1)
     .max(quotesControllerListQueryPageSizeMax)
     .default(quotesControllerListQueryPageSizeDefault),
-  q: zod.string().max(quotesControllerListQueryQMax).optional(),
   sort: zod
     .enum([
       "newest",

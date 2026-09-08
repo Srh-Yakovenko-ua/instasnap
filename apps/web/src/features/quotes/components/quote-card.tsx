@@ -86,7 +86,7 @@ export function QuoteCard({ maxPage, quote, variant = "preview" }: QuoteCardProp
   }
 
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-accent-border bg-accent/25 p-4">
+    <article className="flex w-full min-w-0 flex-col gap-3 rounded-xl border border-accent-border bg-accent/25 p-4">
       <div className="flex items-center gap-2">
         {isArchive ? <QuoteBookHeader book={quote.book} /> : <SpoilerBadge quote={quote} />}
 

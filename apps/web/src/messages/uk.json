@@ -6497,12 +6497,9 @@
         "actions": "Дії"
       }
     },
-    "pagination": {
-      "label": "Сторінки цитат",
-      "previous": "Назад",
-      "next": "Далі",
-      "goToPage": "Перейти до сторінки {page}"
-    },
+    "loadMore": "Показати ще",
+    "loadMoreError": "Не вдалося завантажити ще цитати",
+    "allShown": "Усі цитати показано",
     "sidebar": {
       "label": "Огляд цитат",
       "stats": {
@@ -6528,28 +6525,46 @@
       }
     },
     "sort": {
-      "newest": "Нові спочатку",
-      "oldest": "Старі спочатку",
-      "book_title": "За назвою книги",
-      "book_author": "За автором",
-      "page": "За сторінкою",
-      "favorites_first": "Спочатку улюблені",
-      "no_spoiler_first": "Спочатку без спойлерів",
-      "with_spoiler_first": "Спочатку зі спойлерами"
-    },
-    "sortMobile": {
-      "title": "Сортування",
-      "description": "Виберіть порядок цитат.",
-      "close": "Закрити",
-      "trigger": {
-        "newest": "Нові",
-        "oldest": "Старі",
-        "book_title": "Книга",
-        "book_author": "Автор",
-        "page": "Сторінка",
-        "favorites_first": "Улюблені",
-        "no_spoiler_first": "Без спойлерів",
-        "with_spoiler_first": "Зі спойлерами"
+      "options": {
+        "newest": "За датою додавання: спочатку нові",
+        "oldest": "За датою додавання: спочатку старі",
+        "book_title": "За назвою книги: А–Я",
+        "book_author": "За автором: А–Я",
+        "page": "За сторінкою: від меншої",
+        "favorites_first": "Спочатку улюблені",
+        "no_spoiler_first": "Спочатку без спойлерів",
+        "with_spoiler_first": "Спочатку зі спойлерами"
+      },
+      "mobile": {
+        "title": "Сортування",
+        "description": "Виберіть порядок цитат.",
+        "close": "Закрити",
+        "groups": {
+          "added": "Дата додавання",
+          "book": "Книга",
+          "page": "Сторінка",
+          "legacy": "Поточне сортування"
+        },
+        "options": {
+          "newest": "Спочатку нові",
+          "oldest": "Спочатку старі",
+          "book_title": "Назва: А–Я",
+          "book_author": "Автор: А–Я",
+          "page": "Від меншої",
+          "favorites_first": "Спочатку улюблені",
+          "no_spoiler_first": "Спочатку без спойлерів",
+          "with_spoiler_first": "Спочатку зі спойлерами"
+        },
+        "trigger": {
+          "newest": "Нові",
+          "oldest": "Старі",
+          "book_title": "Книга А–Я",
+          "book_author": "Автор А–Я",
+          "page": "Сторінка ↑",
+          "favorites_first": "Улюблені",
+          "no_spoiler_first": "Без спойлерів",
+          "with_spoiler_first": "Зі спойлерами"
+        }
       }
     },
     "summary": {
@@ -6576,13 +6591,25 @@
         }
       }
     },
+    "activeFilters": {
+      "book": "Книга: {title}",
+      "createdFrom": "Додано від {value}",
+      "createdTo": "Додано до {value}",
+      "createdRange": "Додано {from} – {to}"
+    },
+    "counter": "Показано {shown} із {total, plural, one {# цитати} few {# цитат} many {# цитат} other {# цитат}}",
     "toolbar": {
       "searchLabel": "Пошук цитат",
-      "searchPlaceholder": "Пошук цитат...",
+      "searchPlaceholder": "Пошук за цитатою, книгою, автором або коментарем…",
       "searchClear": "Очистити пошук",
       "filterLabel": "Швидкі фільтри цитат",
       "bookPlaceholder": "Книга",
       "sortLabel": "Сортування цитат"
+    },
+    "view": {
+      "label": "Вигляд",
+      "grid": "Сітка",
+      "list": "Список"
     },
     "spoiler": {
       "badge": "Зі спойлерами",
@@ -6590,6 +6617,35 @@
       "hiddenText": "Ця цитата містить спойлер",
       "show": "Показати спойлер",
       "hide": "Приховати спойлер"
+    },
+    "advancedFilters": {
+      "trigger": "Фільтри",
+      "title": "Фільтри",
+      "description": "Уточніть, які цитати показувати.",
+      "clear": "Очистити",
+      "apply": "Застосувати",
+      "sections": {
+        "books": "Книги",
+        "authors": "Автори",
+        "created": "Дата додавання"
+      },
+      "books": {
+        "placeholder": "Оберіть книги...",
+        "search": "Пошук книги",
+        "empty": "Книг із цитатами не знайдено",
+        "selected": "Обрано книг: {count}"
+      },
+      "authors": {
+        "placeholder": "Оберіть авторів...",
+        "search": "Пошук автора",
+        "empty": "Авторів із цитатами не знайдено",
+        "selected": "Обрано авторів: {count}"
+      },
+      "range": {
+        "from": "Від",
+        "to": "До",
+        "invalid": "Дата «Від» не може бути пізнішою за «До»"
+      }
     }
   },
   "timeline": {

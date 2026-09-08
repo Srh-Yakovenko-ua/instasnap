@@ -4,21 +4,25 @@ import type {
   Nullable,
   Paginator,
   QuoteDeletionResult,
+  QuotesFacetsQuery,
+  QuotesFacetsView,
   QuotesQuery,
   QuotesSummaryView,
   QuoteView,
   UpdateQuoteInput,
 } from "@app/shared";
 
-import { normalizeSearch } from "@app/shared";
+import { normalizeSearch, toQuoteBookIds } from "@app/shared";
 import { Injectable } from "@nestjs/common";
 
 import { BadRequestError, NotFoundError } from "../../../core/exceptions/errors.js";
 import { buildPaginator, pageSlice } from "../../../core/paginator.js";
 import { MediaService } from "../../media/index.js";
+import { buildQuotesFacets, toAuthorFacets, toBookFacets } from "../domain/quotes-facets.js";
 import { buildQuotesSummary } from "../domain/quotes-summary.js";
 import {
   type OwnedBook,
+  type QuotesDatasetInput,
   QuotesRepository,
   type QuoteUpdateData,
   type QuoteWithBook,
@@ -74,6 +78,32 @@ export class QuotesService {
     return this.lifecycleService.softDelete({ quoteId, userId });
   }
 
+  async facets({
+    query,
+    userId,
+  }: {
+    query: QuotesFacetsQuery;
+    userId: string;
+  }): Promise<QuotesFacetsView> {
+    const dataset = toQuotesDataset(query, userId);
+
+    const [counts, bookCounts, authorBookCounts] = await Promise.all([
+      this.quotesRepository.filterCounts(dataset),
+      this.quotesRepository.bookQuoteCounts({ ...dataset, bookIds: undefined }),
+      this.quotesRepository.bookQuoteCounts({ ...dataset, authorIds: undefined }),
+    ]);
+
+    const links = await this.quotesRepository.authorQuoteLinks(
+      authorBookCounts.map((entry) => entry.bookId),
+    );
+
+    return buildQuotesFacets({
+      authors: toAuthorFacets({ bookCounts: authorBookCounts, links }),
+      books: toBookFacets(bookCounts),
+      counts,
+    });
+  }
+
   async list({
     query,
     userId,
@@ -81,12 +111,7 @@ export class QuotesService {
     query: QuotesQuery;
     userId: string;
   }): Promise<Paginator<QuoteView>> {
-    const filter = {
-      bookId: query.bookId,
-      filter: query.filter,
-      search: normalizeSearch(query.q),
-      userId,
-    };
+    const filter = { ...toQuotesDataset(query, userId), filter: query.filter };
 
     const [items, totalCount] = await Promise.all([
       this.quotesRepository.list({
@@ -216,6 +241,17 @@ function normalizeOptionalText(value: Nullable<string> | undefined): Nullable<st
   }
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
+}
+
+function toQuotesDataset(query: QuotesFacetsQuery, userId: string): QuotesDatasetInput {
+  return {
+    authorIds: query.author,
+    bookIds: toQuoteBookIds(query),
+    createdFrom: query.createdFrom,
+    createdTo: query.createdTo,
+    search: normalizeSearch(query.q),
+    userId,
+  };
 }
 
 function toUpdateData(input: UpdateQuoteInput): QuoteUpdateData {

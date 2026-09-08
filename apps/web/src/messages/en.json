@@ -6497,12 +6497,9 @@
         "actions": "Actions"
       }
     },
-    "pagination": {
-      "label": "Quote pages",
-      "previous": "Previous",
-      "next": "Next",
-      "goToPage": "Go to page {page}"
-    },
+    "loadMore": "Load more",
+    "loadMoreError": "Couldn't load more quotes",
+    "allShown": "All quotes shown",
     "sidebar": {
       "label": "Quotes overview",
       "stats": {
@@ -6528,28 +6525,46 @@
       }
     },
     "sort": {
-      "newest": "Newest first",
-      "oldest": "Oldest first",
-      "book_title": "By book title",
-      "book_author": "By author",
-      "page": "By page",
-      "favorites_first": "Favorites first",
-      "no_spoiler_first": "Spoiler-free first",
-      "with_spoiler_first": "Spoilers first"
-    },
-    "sortMobile": {
-      "title": "Sorting",
-      "description": "Choose the order of quotes.",
-      "close": "Close",
-      "trigger": {
-        "newest": "Newest",
-        "oldest": "Oldest",
-        "book_title": "Book",
-        "book_author": "Author",
-        "page": "Page",
-        "favorites_first": "Favorites",
-        "no_spoiler_first": "No spoilers",
-        "with_spoiler_first": "Spoilers"
+      "options": {
+        "newest": "Date added: newest first",
+        "oldest": "Date added: oldest first",
+        "book_title": "Book title: A–Z",
+        "book_author": "Author: A–Z",
+        "page": "Page: lowest first",
+        "favorites_first": "Favorites first",
+        "no_spoiler_first": "Spoiler-free first",
+        "with_spoiler_first": "Spoilers first"
+      },
+      "mobile": {
+        "title": "Sorting",
+        "description": "Choose the order of quotes.",
+        "close": "Close",
+        "groups": {
+          "added": "Date added",
+          "book": "Book",
+          "page": "Page",
+          "legacy": "Current sort"
+        },
+        "options": {
+          "newest": "Newest first",
+          "oldest": "Oldest first",
+          "book_title": "Title: A–Z",
+          "book_author": "Author: A–Z",
+          "page": "Lowest first",
+          "favorites_first": "Favorites first",
+          "no_spoiler_first": "Spoiler-free first",
+          "with_spoiler_first": "Spoilers first"
+        },
+        "trigger": {
+          "newest": "Newest",
+          "oldest": "Oldest",
+          "book_title": "Book A–Z",
+          "book_author": "Author A–Z",
+          "page": "Page ↑",
+          "favorites_first": "Favorites",
+          "no_spoiler_first": "No spoilers",
+          "with_spoiler_first": "Spoilers"
+        }
       }
     },
     "summary": {
@@ -6576,13 +6591,25 @@
         }
       }
     },
+    "activeFilters": {
+      "book": "Book: {title}",
+      "createdFrom": "Added from {value}",
+      "createdTo": "Added until {value}",
+      "createdRange": "Added {from} – {to}"
+    },
+    "counter": "Showing {shown} of {total, plural, one {# quote} other {# quotes}}",
     "toolbar": {
       "searchLabel": "Search quotes",
-      "searchPlaceholder": "Search quotes...",
+      "searchPlaceholder": "Search by quote, book, author or comment…",
       "searchClear": "Clear search",
       "filterLabel": "Quote quick filters",
       "bookPlaceholder": "Book",
       "sortLabel": "Sort quotes"
+    },
+    "view": {
+      "label": "View",
+      "grid": "Grid",
+      "list": "List"
     },
     "spoiler": {
       "badge": "Contains spoilers",
@@ -6590,6 +6617,35 @@
       "hiddenText": "This quote contains a spoiler",
       "show": "Show spoiler",
       "hide": "Hide spoiler"
+    },
+    "advancedFilters": {
+      "trigger": "Filters",
+      "title": "Filters",
+      "description": "Narrow down which quotes to show.",
+      "clear": "Clear",
+      "apply": "Apply",
+      "sections": {
+        "books": "Books",
+        "authors": "Authors",
+        "created": "Date added"
+      },
+      "books": {
+        "placeholder": "Pick books...",
+        "search": "Search a book",
+        "empty": "No books with quotes found",
+        "selected": "Books selected: {count}"
+      },
+      "authors": {
+        "placeholder": "Pick authors...",
+        "search": "Search an author",
+        "empty": "No authors with quotes found",
+        "selected": "Authors selected: {count}"
+      },
+      "range": {
+        "from": "From",
+        "to": "To",
+        "invalid": "The From date cannot be later than To"
+      }
     }
   },
   "timeline": {

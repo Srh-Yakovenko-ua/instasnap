@@ -44,10 +44,10 @@ export function DebouncedSearchInput({
 
   function commit(next: string) {
     const normalized = normalizeQuery(next);
-    if (normalized === lastSent) return;
-    if (!isCommittable(normalized)) return;
-    setLastSent(normalized);
-    onSearch(normalized);
+    const query = isCommittable(normalized) ? normalized : "";
+    if (query === lastSent) return;
+    setLastSent(query);
+    onSearch(query);
   }
 
   function handleChange(next: string) {
