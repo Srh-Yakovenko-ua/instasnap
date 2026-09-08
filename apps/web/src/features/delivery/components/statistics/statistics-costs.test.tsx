@@ -115,41 +115,67 @@ describe("StatisticsCosts", () => {
   it("names the block after the question it answers", () => {
     renderCosts();
 
-    expect(screen.getByText("Як формується ціна книги")).toBeInTheDocument();
-    expect(screen.queryByText("З чого складається вартість")).not.toBeInTheDocument();
+    expect(screen.getByText("Що впливає на фактичну вартість книги")).toBeInTheDocument();
+    expect(screen.queryByText("Як формується ціна книги")).not.toBeInTheDocument();
   });
 
   it("bridges the starting price to what a book actually cost", () => {
     renderCosts({ data: BRIDGED });
 
+    expect(screen.getByText("Початкова ціна")).toBeInTheDocument();
     expect(screen.getByText("725,06 UAH")).toBeInTheDocument();
-    expect(screen.getByText("Фактично за книгу")).toBeInTheDocument();
+    expect(screen.getByText("Фактична вартість")).toBeInTheDocument();
     expect(screen.getByText("710,87 UAH")).toBeInTheDocument();
   });
 
-  it("signs every bridge stage so the colour is never the only clue", () => {
+  it("labels both ends of the bridge as a per-book average", () => {
     renderCosts({ data: BRIDGED });
 
+    expect(screen.getAllByText("у середньому за книгу")).toHaveLength(2);
+  });
+
+  it("signs every factor so the colour is never the only clue", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText("Знижки / книгу")).toBeInTheDocument();
     expect(screen.getByText("−11,4 UAH")).toBeInTheDocument();
+    expect(screen.getByText("Доставка / книгу")).toBeInTheDocument();
     expect(screen.getByText("+10,26 UAH")).toBeInTheDocument();
   });
 
-  it("hides a stage that rounded to nothing", () => {
+  it("hides a factor that rounded to nothing", () => {
     renderCosts({ data: BRIDGED });
 
-    expect(screen.queryByText("Коригування замовлень")).not.toBeInTheDocument();
+    expect(screen.queryByText("Різниця з підсумком замовлення")).not.toBeInTheDocument();
+  });
+
+  it("names the residual by what it actually compares", () => {
+    renderCosts({
+      data: view({ landedCost: [{ ...LANDED, averageAdjustmentShare: 7.16 }] }),
+    });
+
+    expect(screen.getByText("Різниця з підсумком замовлення")).toBeInTheDocument();
+    expect(screen.getByText("+7,16 UAH")).toBeInTheDocument();
   });
 
   it("says how far the actual cost sits from the starting price", () => {
     renderCosts({ data: BRIDGED });
 
-    expect(screen.getByText("на 14,19 UAH дешевше за початкову середню ціну")).toBeInTheDocument();
+    expect(screen.getByText("на 14,19 UAH дешевше за початкову ціну")).toBeInTheDocument();
+  });
+
+  it("calls out a book that ended up dearer than its listed price", () => {
+    renderCosts({
+      data: view({ landedCost: [{ ...LANDED, deltaFromEligibleRawPrice: 6.2 }] }),
+    });
+
+    expect(screen.getByText("на 6,2 UAH дорожче за початкову ціну")).toBeInTheDocument();
   });
 
   it("counts the books the average was actually built on", () => {
     renderCosts({ data: BRIDGED });
 
-    expect(screen.getByText(/Розраховано для 55 із 57 книг/)).toBeInTheDocument();
+    expect(screen.getByText(/Розраховано для 55 із 57 книг · 96,5% даних/)).toBeInTheDocument();
   });
 
   it("says nothing about coverage once every book is counted", () => {
@@ -192,7 +218,53 @@ describe("StatisticsCosts", () => {
 
     expect(screen.getByText("За вибраний період")).toBeInTheDocument();
     expect(screen.getByText("585 UAH")).toBeInTheDocument();
-    expect(screen.getByText("650 UAH заощаджено")).toBeInTheDocument();
+    expect(screen.getByText("Загальна вартість доставки")).toBeInTheDocument();
+    expect(screen.getByText("650 UAH")).toBeInTheDocument();
+    expect(screen.getByText("Загальна сума знижок")).toBeInTheDocument();
+  });
+
+  it("breaks the delivery total into orders, per-book cost and share of spend", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText("з доставкою")).toBeInTheDocument();
+    expect(screen.getByText("10,26 UAH")).toBeInTheDocument();
+    expect(screen.getByText("1,5%")).toBeInTheDocument();
+    expect(screen.getByText("витрат")).toBeInTheDocument();
+  });
+
+  it("breaks the discount total into orders, share of price and per-book saving", () => {
+    renderCosts({ data: BRIDGED });
+
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("зі знижкою")).toBeInTheDocument();
+    expect(screen.getByText("1,8%")).toBeInTheDocument();
+    expect(screen.getByText("від вартості книг")).toBeInTheDocument();
+    expect(screen.getByText("11,4 UAH")).toBeInTheDocument();
+  });
+
+  it("drops a footer metric the period has no denominator for", () => {
+    renderCosts({
+      data: view({
+        costs: [
+          {
+            currency: "UAH",
+            deliveryCostPerBook: null,
+            deliveryShareOfSpendPercent: null,
+            deliveryTotal: 585,
+            discountShareOfRawSubtotalPercent: null,
+            discountTotal: 650,
+            ordersWithDeliveryCount: 7,
+            ordersWithDiscountCount: 4,
+          },
+        ],
+      }),
+    });
+
+    expect(screen.queryByText("витрат")).not.toBeInTheDocument();
+    expect(screen.queryByText("від вартості книг")).not.toBeInTheDocument();
+    expect(screen.getByText("з доставкою")).toBeInTheDocument();
+    expect(screen.getAllByText("на книгу")).toHaveLength(2);
   });
 
   it("says there was no delivery rather than showing four zeros", () => {

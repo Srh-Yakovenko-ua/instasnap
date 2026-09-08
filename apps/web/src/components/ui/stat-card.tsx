@@ -51,6 +51,25 @@ const statCardIconBadge = cva("grid shrink-0 place-items-center rounded-full [&_
 
 type StatCardIconTone = "favorite" | "genre" | "info" | "ink" | "primary" | "success" | "tag";
 
+const statCardFooter = {
+  columns: {
+    1: "",
+    2: "@xs/stat-card-footer:grid-cols-2",
+    3: "@xs/stat-card-footer:grid-cols-3",
+  },
+  container: "@container/stat-card-footer",
+  grid: "grid grid-cols-1",
+  section:
+    "flex min-w-0 flex-col gap-0.5 border-t border-border py-2.5 first:border-t-0 first:pt-0 last:pb-0 @xs/stat-card-footer:border-t-0 @xs/stat-card-footer:border-s @xs/stat-card-footer:px-3 @xs/stat-card-footer:py-0 @xs/stat-card-footer:first:border-s-0 @xs/stat-card-footer:first:ps-0 @xs/stat-card-footer:last:pe-0",
+} as const satisfies {
+  columns: Record<StatCardFooterColumns, string>;
+  container: string;
+  grid: string;
+  section: string;
+};
+
+type StatCardFooterColumns = 1 | 2 | 3;
+
 const valueVariants = cva("font-heading leading-[1.12] font-bold text-ink tabular-nums", {
   variants: {
     size: {
@@ -67,6 +86,7 @@ type StatCardProps = Omit<React.ComponentProps<typeof Card>, "children" | "size"
   Pick<VariantProps<typeof statCardVariants>, "size"> & {
     caption?: React.ReactNode;
     footer?: React.ReactNode;
+    footerClassName?: string;
     icon: UiIconName;
     iconSlot?: React.ReactNode;
     iconTone?: StatCardIconTone;
@@ -83,6 +103,12 @@ type StatTrend = {
   label: React.ReactNode;
 };
 
+function footerColumnsOf(count: number): StatCardFooterColumns {
+  if (count >= 3) return 3;
+  if (count === 2) return 2;
+  return 1;
+}
+
 function StatCard({
   className,
   size = "default",
@@ -94,6 +120,7 @@ function StatCard({
   caption,
   microfact,
   footer,
+  footerClassName,
   trend,
   unit,
   valueClassName,
@@ -170,12 +197,61 @@ function StatCard({
             {header}
             {microfactBlock}
           </div>
-          <div className="mt-auto border-t border-border pt-2.5">{footer}</div>
+          <div className={cn("mt-auto border-t border-border pt-2.5", footerClassName)}>
+            {footer}
+          </div>
         </>
       )}
     </Card>
   );
 }
 
-export { StatCard, statCardIconBadge };
+function StatCardFooterGrid({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const sections = React.Children.toArray(children);
+
+  return (
+    <div className={cn(statCardFooter.container, className)}>
+      <div
+        className={cn(
+          statCardFooter.grid,
+          statCardFooter.columns[footerColumnsOf(sections.length)],
+        )}
+      >
+        {sections}
+      </div>
+    </div>
+  );
+}
+
+function StatCardFooterItem({
+  helper,
+  label,
+  value,
+}: {
+  helper?: React.ReactNode;
+  label?: React.ReactNode;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className={statCardFooter.section}>
+      <span className="font-heading text-base leading-tight font-semibold text-ink tabular-nums">
+        {value}
+      </span>
+      {label === undefined ? null : (
+        <span className="text-xs leading-tight text-muted-foreground">{label}</span>
+      )}
+      {helper === undefined ? null : (
+        <span className="text-xs leading-tight text-muted-foreground">{helper}</span>
+      )}
+    </div>
+  );
+}
+
+export { StatCard, StatCardFooterGrid, StatCardFooterItem, statCardIconBadge };
 export type { StatCardIconTone, StatTrend };

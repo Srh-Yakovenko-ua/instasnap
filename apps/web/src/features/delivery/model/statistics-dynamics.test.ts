@@ -1,10 +1,18 @@
-import type { StatisticsDynamics, StatisticsDynamicsFacts } from "@app/shared";
+import type { Nullable, StatisticsDynamics, StatisticsDynamicsFacts } from "@app/shared";
 
 import { describe, expect, it } from "vitest";
 
-import { dynamicsPoints, percentChange } from "./statistics-dynamics";
+import {
+  dynamicsPoints,
+  formatSignedPercent,
+  formatSignedValue,
+  isMoneyMetric,
+  percentChange,
+} from "./statistics-dynamics";
 
 const LOCALE = "uk";
+
+const GROUP_SPACE = "\u00a0";
 
 function dynamics(buckets: StatisticsDynamics["buckets"]): StatisticsDynamics {
   return { buckets, granularity: "month" };
@@ -20,6 +28,11 @@ function facts(overrides: Partial<StatisticsDynamicsFacts> = {}): StatisticsDyna
     totalsByCurrency: [],
     ...overrides,
   };
+}
+
+function signedChange(current: number, previous: Nullable<number>): Nullable<string> {
+  const percent = percentChange({ current, previous });
+  return percent === null ? null : formatSignedPercent(percent, LOCALE);
 }
 
 describe("dynamicsPoints", () => {
@@ -171,5 +184,56 @@ describe("percentChange", () => {
 
   it("reports a full drop when the current value fell to zero", () => {
     expect(percentChange({ current: 0, previous: 100 })).toBe(-100);
+  });
+
+  it("keeps growth many times over as a percent rather than a ratio", () => {
+    expect(percentChange({ current: 20163, previous: 380 })).toBeCloseTo(5206.05, 2);
+  });
+});
+
+describe("formatSignedPercent", () => {
+  it("prints growth many times over at its real size", () => {
+    expect(signedChange(20163, 380)).toBe(`+5${GROUP_SPACE}206,1%`);
+  });
+
+  it("prints a modest rise without inflating it", () => {
+    expect(signedChange(150, 100)).toBe("+50%");
+  });
+
+  it("marks a fall with a real minus sign", () => {
+    expect(signedChange(50, 100)).toBe("−50%");
+  });
+
+  it("has no percent to print when the previous value was zero", () => {
+    expect(signedChange(20163, 0)).toBeNull();
+  });
+
+  it("has no percent to print when there is nothing to compare against", () => {
+    expect(signedChange(20163, null)).toBeNull();
+  });
+});
+
+describe("formatSignedValue", () => {
+  const money = (value: number) => `${new Intl.NumberFormat(LOCALE).format(value)} UAH`;
+  const count = (value: number) => new Intl.NumberFormat(LOCALE).format(value);
+
+  it("signs a money delta without letting the sign reach the formatter", () => {
+    expect(formatSignedValue(19783, money)).toBe(`+19${GROUP_SPACE}783 UAH`);
+  });
+
+  it("signs a money drop with a real minus sign", () => {
+    expect(formatSignedValue(-19783, money)).toBe(`−19${GROUP_SPACE}783 UAH`);
+  });
+
+  it("signs a plain count the same way", () => {
+    expect(formatSignedValue(12, count)).toBe("+12");
+  });
+});
+
+describe("isMoneyMetric", () => {
+  it("treats spend as money and the counting metrics as plain numbers", () => {
+    expect(isMoneyMetric("spend")).toBe(true);
+    expect(isMoneyMetric("orders")).toBe(false);
+    expect(isMoneyMetric("books")).toBe(false);
   });
 });

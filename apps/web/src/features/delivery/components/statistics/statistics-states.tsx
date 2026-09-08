@@ -208,10 +208,13 @@ export function StatisticsSkeleton({
         ))}
       </div>
       {budget}
-      <Skeleton
-        className="h-[34rem] w-full rounded-xl"
+      <div
+        className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3"
         data-testid="statistics-skeleton-dynamics"
-      />
+      >
+        <Skeleton className="h-[29rem] w-full rounded-xl lg:col-span-2" />
+        <Skeleton className="h-[25rem] w-full rounded-xl" />
+      </div>
       <Skeleton className="h-72 w-full rounded-xl" data-testid="statistics-skeleton-costs" />
       <div
         className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2"

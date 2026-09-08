@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 
 import { expect } from "storybook/test";
 
-import { StatCard } from "./stat-card";
+import { StatCard, StatCardFooterGrid, StatCardFooterItem } from "./stat-card";
 
 const meta = {
   title: "UI/StatCard",
@@ -83,6 +83,55 @@ export const WithFooter: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText("↑ 163.9% · was 15,162 UAH")).toBeVisible();
   },
+};
+
+export const WithFooterMetrics: Story = {
+  args: {
+    icon: "truck",
+    label: "Delivery",
+    value: "805 UAH",
+    caption: undefined,
+    footer: (
+      <StatCardFooterGrid>
+        <StatCardFooterItem helper="with delivery" label="orders" value={10} />
+        <StatCardFooterItem helper="per book" label="on average" value="12.84 UAH" />
+        <StatCardFooterItem helper="of all spend" label="share" value="1.8%" />
+      </StatCardFooterGrid>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[26rem]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("12.84 UAH")).toBeVisible();
+    await expect(canvas.getByText("of all spend")).toBeVisible();
+  },
+};
+
+export const WithTwoFooterMetrics: Story = {
+  args: {
+    icon: "tag",
+    label: "Discounts",
+    value: "800 UAH saved",
+    caption: undefined,
+    footer: (
+      <StatCardFooterGrid>
+        <StatCardFooterItem helper="with a discount" label="orders" value={5} />
+        <StatCardFooterItem helper="before the discount" label="of the price" value="2%" />
+      </StatCardFooterGrid>
+    ),
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[26rem]">
+        <Story />
+      </div>
+    ),
+  ],
 };
 
 export const Compact: Story = {

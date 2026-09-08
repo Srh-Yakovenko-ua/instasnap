@@ -9,6 +9,7 @@ import type {
 import { parseISO } from "date-fns";
 
 import { currencyTotalOf } from "./statistics-currency";
+import { formatPercentValue } from "./statistics-format";
 
 export const DYNAMICS_METRICS = ["spend", "orders", "books"] as const;
 
@@ -23,6 +24,8 @@ export type DynamicsPoint = {
 };
 
 const MONTH_KEY_LENGTH = 7;
+
+const SIGN = { down: "−", up: "+" } as const;
 
 export function bucketLabel({
   bucket,
@@ -90,6 +93,14 @@ export function dynamicsPoints({
     label: bucketLabel({ bucket: bucket.current, granularity: dynamics.granularity, locale }),
     value: metricValue({ currency, facts: bucket.current, metric }),
   }));
+}
+
+export function formatSignedPercent(value: number, locale: string): string {
+  return `${SIGN[value > 0 ? "up" : "down"]}${formatPercentValue(Math.abs(value), locale)}`;
+}
+
+export function formatSignedValue(value: number, formatValue: (value: number) => string): string {
+  return `${SIGN[value > 0 ? "up" : "down"]}${formatValue(Math.abs(value))}`;
 }
 
 export function isMoneyMetric(metric: DynamicsMetric): boolean {

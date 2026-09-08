@@ -3486,13 +3486,17 @@
       },
       "dynamics": {
         "aria": "Bar chart: {metric}",
-        "clickHint": "Pick a bar to open its orders",
+        "clickHint": "Pick a bar to see the orders from that period",
         "closeDestinations": "Collapse",
         "comparison": "Comparison",
         "current": "Current period",
         "difference": "Change",
         "empty": "Nothing to chart for the selected period.",
         "emptyForCurrency": "No spend in {currency} for the selected period.",
+        "legend": {
+          "comparison": "Previous",
+          "current": "Current"
+        },
         "metricLabel": "Metric",
         "metrics": {
           "books": "Books",
@@ -3544,46 +3548,67 @@
       },
       "costs": {
         "bridge": {
-          "actual": "Actually per book",
-          "actualHint": "The average cost of a book once discounts, delivery and the final order total are counted in.",
-          "adjustment": "Order adjustments",
-          "adjustmentHint": "The gap between the items plus delivery minus discount and the final order total.",
-          "basePrice": "Average price",
+          "actual": "Actual cost",
+          "actualHint": "The average cost of a book once discounts, delivery and the order total are counted in.",
+          "adjustment": "Gap with the order total",
+          "adjustmentHint": "The gap between the items plus delivery minus discount and the actual order total.",
+          "basePrice": "Starting price",
           "basePriceHint": "The average starting price of the very books the actual cost was computed for.",
-          "deltaAbove": "{value} above the starting average price",
-          "deltaBelow": "{value} below the starting average price",
-          "deltaFlat": "No change from the starting average price",
-          "delivery": "Delivery",
+          "deltaAbove": "{value} above the starting price",
+          "deltaBelow": "{value} below the starting price",
+          "deltaFlat": "No change from the starting price",
+          "delivery": "Delivery / book",
           "deliveryHint": "The share of delivery that fell on one book in the calculation.",
-          "discount": "Discounts",
+          "discount": "Discounts / book",
           "discountHint": "The share of the discount that fell on one book in the calculation.",
-          "insufficient": "Not enough data to work out the actual price of a book."
+          "insufficient": "Not enough data to work out the actual price of a book.",
+          "noFactors": "The price did not move: no discounts and no delivery in the calculation.",
+          "perBook": "per book on average"
         },
         "coverage": {
           "all": "Counted for all {total} books",
-          "notAllBooks": "The average does not cover every book.",
-          "partial": "Counted for {counted} of {total} books · {percent}",
+          "hint": "The actual cost can only be worked out for books with enough data about the price and the order total.",
+          "partial": "Counted for {counted} of {total} books · {percent} of the data",
           "tooFew": "Too little data for a reliable average"
         },
         "delivery": {
-          "orders": "{count, plural, one {# order} other {# orders}} with delivery",
-          "perBook": "{value} per book on average",
-          "shareOfSpend": "{value} of all spend",
+          "helper": "Total delivery cost",
+          "orders": {
+            "helper": "with delivery",
+            "label": "{count, plural, one {order} other {orders}}"
+          },
+          "perBook": {
+            "helper": "per book",
+            "label": "on average"
+          },
+          "share": {
+            "helper": "of all spend",
+            "label": "share"
+          },
           "title": "Delivery",
           "zero": "No delivery cost"
         },
         "discount": {
-          "orders": "{count, plural, one {# order} other {# orders}} with a discount",
-          "saved": "{value} saved",
-          "share": "{value} of the book price before the discount",
+          "helper": "Total discounts",
+          "orders": {
+            "helper": "with a discount",
+            "label": "{count, plural, one {order} other {orders}}"
+          },
+          "perBook": {
+            "helper": "per book",
+            "label": "on average"
+          },
+          "share": {
+            "helper": "before the discount",
+            "label": "of the book price"
+          },
           "title": "Discounts",
           "zero": "No discounts"
         },
         "emptyForCurrency": "No data in {currency} for the selected period.",
-        "inSelectedPeriod": "In the selected period.",
         "periodTotals": "Over the selected period",
-        "subtitle": "How discounts, delivery and the final order totals shaped the actual cost of a book.",
-        "title": "How a book price is formed"
+        "subtitle": "How discounts, delivery and the order totals move the average cost of a single book.",
+        "title": "What drives the actual cost of a book"
       },
       "lifecycle": {
         "allTime": "all time",
@@ -3757,6 +3782,9 @@
           "value": "{store} — {count, plural, one {# order} other {# orders}}",
           "helper": "{books, plural, one {# book} other {# books}}",
           "missing": "No order with a named store."
+        },
+        "mostActiveByBooks": {
+          "title": "Most books bought in one store"
         }
       },
       "topOrders": {

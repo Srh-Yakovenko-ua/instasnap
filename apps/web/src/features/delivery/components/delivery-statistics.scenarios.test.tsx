@@ -219,7 +219,9 @@ describe("Scenario F — incomplete money", () => {
     renderStatistics();
     await settle();
 
-    expect(within(cardOf("Як формується ціна книги")).getByText(/9 із 10/)).toBeInTheDocument();
+    expect(
+      within(cardOf("Що впливає на фактичну вартість книги")).getByText(/9 із 10/),
+    ).toBeInTheDocument();
   });
 
   it("leaves an order without a resolved amount out of the totals rather than as a zero", async () => {
